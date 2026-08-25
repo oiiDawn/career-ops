@@ -1044,7 +1044,7 @@ export function injectPrintPageCss(html, format = 'a4') {
  * CVs supersede stale entries). The file is gitignored: it references
  * gitignored output/ artifacts and is meaningless on another machine.
  */
-function updatePDFManifest(reportNum, pdfPath, htmlPath, format) {
+export function updatePDFManifest(reportNum, pdfPath, htmlPath, format) {
   const manifestPath = resolvePdfIndexPath(trackerPath);
   const toRel = (p) => relative(workspaceRoot, p).split(sep).join('/');
   const relPDF = toRel(pdfPath);

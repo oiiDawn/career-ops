@@ -18,8 +18,8 @@ import (
 type PDFManifestEntry struct {
 	ReportNumber string
 	PDFPath      string // relative to the career-ops root
-	HTMLPath     string // relative to the career-ops root, "" if unknown
-	Format       string // "letter" or "a4"
+	HTMLPath     string // renderer source path, relative to the career-ops root
+	Format       string // "letter", "a4", or "reactive-resume"
 	Date         string // YYYY-MM-DD generation date
 }
 

@@ -45,12 +45,14 @@ export function applicationArtifactPaths({ reportNum, company, role, version = 1
       previous: join(applicationRoot, 'jd', 'previous.md'),
     },
     cv: {
+      reactiveResume: join(applicationRoot, 'cv', 'reactive-resume.json'),
       source: {
         html: join(applicationRoot, 'cv', 'source', 'original.html'),
         pdf: join(applicationRoot, 'cv', 'source', 'original.pdf'),
       },
       tailored: {
         root: tailoredRoot,
+        json: join(tailoredRoot, 'cv.json'),
         html: join(tailoredRoot, 'cv.html'),
         pdf: join(tailoredRoot, 'cv.pdf'),
         changes: join(tailoredRoot, 'changes.md'),

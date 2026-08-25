@@ -260,14 +260,14 @@ func openCmd(target string) tea.Cmd {
 	}
 }
 
-// runGeneratePDF shells out to node generate-pdf.mjs in the career-ops root,
-// opens the resulting PDF on success, and reports the outcome back to the
-// pipeline screen as a PipelinePDFGeneratedMsg. Runs in a tea.Cmd goroutine,
-// so the UI stays responsive while Chromium renders.
+// runGeneratePDF dispatches the renderer recorded in the PDF manifest, opens
+// the result, and reports the outcome while the UI remains responsive.
 func runGeneratePDF(msg screens.PipelineGeneratePDFMsg) tea.Cmd {
 	return func() tea.Msg {
 		args := []string{"generate-pdf.mjs", msg.HTMLPath, msg.PDFPath}
-		if msg.Format != "" {
+		if msg.Format == "reactive-resume" {
+			args = []string{"reactive-resume.mjs", msg.HTMLPath, msg.PDFPath}
+		} else if msg.Format != "" {
 			args = append(args, "--format="+msg.Format)
 		}
 		if msg.ReportNumber != "" {
@@ -350,7 +350,7 @@ func main() {
 		theme:           t,
 		progressMetrics: progressMetrics,
 		statsMetrics:    statsMetrics,
-		evaluatedCount:  func() int {
+		evaluatedCount: func() int {
 			n := 0
 			for _, a := range apps {
 				if a.Score > 0 {

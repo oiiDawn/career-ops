@@ -55,7 +55,8 @@ Include Block G in the saved report. Add **URL:** {url} and **Legitimacy:** {tie
 Read `config/profile.yml`. Check `cv.output_format`:
 
 - If `"latex"`, execute the full pipeline from `modes/latex.md`
-- Otherwise (default), execute the full pipeline from `modes/pdf.md`
+- If `"reactive-resume"`, execute `modes/pdf.md` with its Reactive Resume backend
+- Otherwise (default), execute `modes/pdf.md` with its HTML backend
 
 ## Step 4 — Draft Application Answers (only if score >= 4.5)
 

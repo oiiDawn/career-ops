@@ -146,6 +146,7 @@ const SYSTEM_PATHS = [
   'KIMI.md',
   'build-dashboard.mjs',
   'generate-pdf.mjs',
+  'reactive-resume.mjs',
   'theme-style.mjs',
   'generate-latex.mjs',
   'extract-latex-content.mjs',
