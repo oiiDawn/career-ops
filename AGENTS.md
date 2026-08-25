@@ -457,3 +457,17 @@ One TSV file per evaluation at `batch/tracker-additions/{num}-{company-slug}.tsv
 - No markdown bold (`**`) in status field
 - No dates in status field (use the date column)
 - No extra text (use the notes column)
+
+## Agent skills
+
+### Issue tracker
+
+Issues are tracked in the Linear project `Career Ops Customization`. See `docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+Linear uses the five canonical triage labels. See `docs/agents/triage-labels.md`.
+
+### Domain docs
+
+This repository uses a single-context domain-doc layout. See `docs/agents/domain.md`.
