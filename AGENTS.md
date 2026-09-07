@@ -91,7 +91,7 @@ AI-powered, CLI-agnostic job search automation: pipeline tracking, offer evaluat
 | File | Function |
 |------|----------|
 | `data/applications.md` | Application tracker |
-| `data/pipeline.md` | Inbox of pending URLs |
+| `data/pipeline.md` | Opportunity inbox/database used by the internal pipeline orchestrator |
 | `data/scan-history.tsv` | Scanner dedup history |
 | `data/scan-runs.tsv` | Per-run scan counters (appended by `scan.mjs`, read by `stats.mjs`) |
 | `data/follow-ups.md` | Follow-up history tracker |
@@ -291,8 +291,8 @@ Two separate axes:
 
 | If the user... | Mode |
 |----------------|------|
-| Pastes JD or URL | auto-pipeline (evaluate + report + PDF + tracker) |
-| Asks to evaluate offer | `oferta` |
+| Pastes JD or URL | auto-pipeline (verify + pre-screen + evaluate → Scored; no Stage 2 artifacts) |
+| Asks to evaluate offer | `evaluate` alias → `oferta` |
 | Asks to compare offers | `ofertas` |
 | Wants LinkedIn outreach | `contacto` — identifies hiring manager, recruiter, or team peers via web search; drafts a message tailored to the contact type (recruiter / hiring manager / peer / interviewer), within LinkedIn's connection-request character limit for the account's tier (200 free, 300 Premium/Sales Navigator) |
 | Wants a formal application email | `email` — draft-only subject, body, attachment checklist, and contact block from a report or JD; never sends, submits, or clicks anything |
@@ -314,7 +314,8 @@ Two separate axes:
 | Asks about application status | `tracker` |
 | Fills out application form | `apply` |
 | Searches for new offers | `scan` |
-| Processes pending URLs | `pipeline` |
+| Processes pending URLs | `pipeline` — internal module-A orchestrator |
+| Wants to view viable scored roles | `shortlist` — read-only current Scored pool |
 | Wants a fast first-pass filter before full evaluation | `triage` |
 | Batch processes offers | `batch` |
 | Asks about rejection patterns, wants to improve targeting, or wants to match interview answers to best-fit roles | `patterns` |

@@ -4,9 +4,15 @@
 
 Interactive mode for when the candidate is filling out an application form in Chrome. It reads what is on the screen, loads the previous context of the job, and generates personalized responses for each form question.
 
-## Stage 2 drafter-reviewer gate
+## B — 申请准备与投递 / Stage 2
 
-For a pipeline role, do not draft until that exact role has an explicit `Proceed`. Initialize its application bundle and read `preparation/plan.json`. The drafter writes answers and role-specific CV artifacts without changing `cv.md` or the configured Reactive Resume mother resume. A separate reviewer must produce `review/application-review.json` with:
+The user starts this module by selecting a specific Scored role and invoking
+`apply`; that invocation is the Stage 2 trigger. Follow Select →
+Prepare/Preparation Plan → Tailor/Reactive Resume → Review/Drafter-Reviewer →
+Verify/PDF-ATS → Submit (user only). If no specific Scored role is identified,
+ask which role to use before drafting.
+
+Initialize its application bundle and read `preparation/plan.json`. The drafter writes answers and role-specific CV artifacts without changing `cv.md` or the configured Reactive Resume mother resume. A separate reviewer must produce `review/application-review.json` with:
 
 ```json
 {"schema":"career-ops/application-review","schema_version":1,"verdict":"approve|revise|blocked","checks":[{"id":"source-grounding","status":"pass|fail|uncertain","finding":"...","evidence":"..."}],"unsupported_claims":[],"required_changes":[]}

@@ -16,7 +16,7 @@ Conductor (headed browser mode)
   ├─ Job 2: click next, read JD + URL
   │    └─► headless worker → Stage 0 result + Stage 1 report
   │
-  └─ End: publish confirmation review; wait for per-role Proceed
+  └─ End: publish the consolidated Scored list
 ```
 
 Each worker is a headless child process with a clean 200K token context. The conductor only orchestrates. See the **Headless / Batch Mode** table in `AGENTS.md` for the correct command per CLI.
@@ -60,7 +60,7 @@ batch/
    f. Log to `logs/{report_num}-{id}.log`
    g. Chrome: go back → next job
 5. **Pagination**: If no more jobs → click "Next" → repeat
-6. **End**: Publish the Stage 1 confirmation review. Do not merge tracker additions or create Stage 2 artifacts.
+6. **End**: Publish the Stage 1 Scored list. Do not merge tracker additions or create Stage 2 artifacts.
 
 ### What to watch during a run
 
@@ -131,7 +131,7 @@ Valid statuses include `pending`, `processing`, `completed`, `failed`, `skipped`
 
 Each worker receives `batch-prompt.md` as a system prompt. It is self-contained. Use your CLI's headless command — see the **Headless / Batch Mode** table in `AGENTS.md`.
 
-For a `pass`/`uncertain` result the worker produces a Stage 1 `.md` report and result JSON via stdout. It produces no CV, PDF, application answer, or tracker line until the user explicitly says `Proceed` for that role. A Stage 0 `fail` produces only the skipped JSON result.
+For a `pass`/`uncertain` result the worker produces a Stage 1 `.md` report and result JSON via stdout. It produces no CV, PDF, application answer, or tracker line. A Stage 0 `fail` produces only the skipped JSON result. The coordinator publishes survivors as Scored; only a later user-invoked Stage 2 prepares a selected role.
 
 ## Error handling
 
@@ -143,4 +143,4 @@ For a `pass`/`uncertain` result the worker produces a Stage 1 `.md` report and r
 | Worker crashes | Conductor marks `failed`, continues. Retry with `--retry-failed` |
 | Claude session/usage limit | Runner marks the current offer `paused_rate_limit`, stops scheduling new offers, preserves retries. Resume with `--resume-paused` after reset. |
 | Conductor crashes | Re-run → reads state → skip completed jobs |
-| Stage 2 requested without `Proceed` | Stop; keep the Stage 1 report awaiting confirmation |
+| Stage 2 invoked without a specific Scored role | Stop; ask the user to select one role |

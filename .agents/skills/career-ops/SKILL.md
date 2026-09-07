@@ -8,13 +8,22 @@ description: >-
 arguments: mode
 user_invocable: true
 user-invocable: true
-argument-hint: "[scan | discover | deep | pdf | latex | latex-tex | cover | email | add | expand | eu-swe | oferta | ofertas | apply | batch | tracker | agent-inbox | pipeline | contacto | training | project | interview-prep | interview | interview/plan | interview/practice | interview/debrief | interview-redflag | patterns | offer-prep | titles | upskill | followup | reply-watch | outcome | update]"
+argument-hint: "[scan | discover | evaluate | shortlist | deep | pdf | latex | latex-tex | cover | email | add | expand | eu-swe | oferta | ofertas | apply | batch | tracker | agent-inbox | pipeline | contacto | training | project | interview-prep | interview | interview/plan | interview/practice | interview/debrief | interview-redflag | patterns | offer-prep | titles | upskill | followup | reply-watch | outcome | update]"
 license: MIT
 ---
 
 # career-ops -- Router
 
 career-ops is a multi-CLI job-search command center. The routing below is shared across supported agent CLIs even when the invocation surface differs.
+
+The user-facing workflow has two top-level modules:
+
+- **A — 机会搜寻与评估:** Discover/scan → Verify/Liveness → Pre-screen/Stage 0 → Evaluate/Stage 1 → Shortlist/Scored.
+- **B — 申请准备与投递:** Select → Prepare/Preparation Plan → Tailor/Reactive Resume → Review/Drafter-Reviewer → Verify/PDF-ATS → Submit (user only).
+
+`pipeline` is module A's internal orchestrator; `data/pipeline.md` is the
+opportunity inbox/database. Stage 1 ends at Scored. A user-selected role and a
+manual Stage 2 invocation start module B. Nothing submits automatically.
 
 ## Invocation Notes
 
@@ -43,6 +52,7 @@ Determine the mode from `$mode`:
 | (empty / no args) | `discovery` -- Show command menu |
 | JD text or URL (no sub-command) | **`auto-pipeline`** |
 | `oferta` | `oferta` |
+| `evaluate` | `oferta` (compatibility alias) |
 | `ofertas` | `ofertas` |
 | `contacto` | `contacto` |
 | `deep` | `deep` |
@@ -65,6 +75,7 @@ Determine the mode from `$mode`:
 | `agent-inbox` | `agent-inbox` |
 | `inbox` | `agent-inbox` |
 | `pipeline` | `pipeline` |
+| `shortlist` | `shortlist` |
 | `apply` | `apply` |
 | `scan` | `scan` |
 | `discover` | `discover` |
@@ -122,9 +133,11 @@ Show this menu:
 career-ops -- Command Center
 
 Available commands:
-  /career-ops {JD}      → AUTO-PIPELINE: evaluate + report, then wait for Proceed before Stage 2
-  /career-ops pipeline  → Process pending URLs from inbox (data/pipeline.md)
+  /career-ops {JD}      → Verify + pre-screen + evaluate → Scored
+  /career-ops pipeline  → Run module A's internal orchestrator over data/pipeline.md
   /career-ops oferta    → Evaluation only A-F (no auto PDF)
+  /career-ops evaluate  → Alias for oferta
+  /career-ops shortlist → Show current valid Scored roles (read-only)
   /career-ops ofertas   → Compare and rank multiple offers
   /career-ops contacto  → LinkedIn power move: find contacts + draft message
   /career-ops deep      → Deep research prompt about company
@@ -146,7 +159,7 @@ Available commands:
   /career-ops project   → Evaluate portfolio project idea
   /career-ops tracker   → Application status overview
   /career-ops agent-inbox → Queue/drain requests for the next session (data/agent-inbox.md)
-  /career-ops apply     → Live application assistant (reads form + generates answers)
+  /career-ops apply     → Prepare a selected Scored role; user submits
   /career-ops scan      → Scan portals and discover new offers
   /career-ops discover  → Resolve a company list to scannable ATS boards + append to portals.yml (zero-token)
   /career-ops batch     → Batch processing with parallel workers
@@ -159,7 +172,7 @@ Available commands:
   /career-ops update    → Update career-ops system files with diff preview + compat check
 
 Inbox: add URLs to data/pipeline.md → /career-ops pipeline
-Or paste a JD directly to run the full pipeline.
+Or paste a JD directly to run module A through Scored.
 ```
 
 ---
@@ -180,7 +193,7 @@ Applies to: `auto-pipeline`, `oferta`, `ofertas`, `pdf`, `contacto`, `apply`, `p
 
 Read `modes/_profile.md` (if exists) + `modes/_custom.md` (if exists) + `modes/{mode}.md`
 
-Applies to: `tracker`, `agent-inbox`, `deep`, `interview-prep`, `interview`, `regional/eu-swe`, `interview/plan`, `interview/practice`, `interview/debrief`, `latex`, `latex-tex`, `training`, `project`, `patterns`, `titles`, `upskill`, `followup`, `reply-watch`, `outcome`, `cover`, `email`, `add`, `offer-prep`, `discover`
+Applies to: `tracker`, `shortlist`, `agent-inbox`, `deep`, `interview-prep`, `interview`, `regional/eu-swe`, `interview/plan`, `interview/practice`, `interview/debrief`, `latex`, `latex-tex`, `training`, `project`, `patterns`, `titles`, `upskill`, `followup`, `reply-watch`, `outcome`, `cover`, `email`, `add`, `offer-prep`, `discover`
 
 ### Modes delegated to subagent
 

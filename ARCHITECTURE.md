@@ -29,6 +29,15 @@ The repo keeps its ~70 scripts at the root deliberately ([#1386](https://github.
 
 ## Component map
 
+The product surface is two modules. Internal names remain stable for existing
+scripts and prompts:
+
+1. **A — 机会搜寻与评估:** Discover/scan → Verify/Liveness → Pre-screen/Stage 0 → Evaluate/Stage 1 → Shortlist/Scored.
+2. **B — 申请准备与投递:** Select → Prepare/Preparation Plan → Tailor/Reactive Resume → Review/Drafter-Reviewer → Verify/PDF-ATS → Submit (user only).
+
+`pipeline` is the internal module-A orchestrator. `data/pipeline.md` is its
+human-readable opportunity inbox/database, not the product-level workflow.
+
 ```
 AI coding CLI  ─┐
 (or scripts)    │  reads prompt files
@@ -51,7 +60,7 @@ The heart of the tool. `oferta.md` defines the A–H evaluation blocks (H is con
 
 **Standalone evaluators** let you run the same scoring without an interactive CLI, against cheaper/local models: `gemini-eval.mjs` (Google free tier), `ollama-eval.mjs` (fully local), and `openai-eval.mjs` (any OpenAI-compatible endpoint).
 
-### Generation — PDFs, CVs, cover letters
+### Application preparation — PDFs, CVs, cover letters
 `generate-pdf.mjs` (Playwright HTML→PDF), `generate-latex.mjs` / `build-cv-latex.mjs`, `generate-cover-letter.mjs`. ATS-safe templates live in `templates/` and `fonts/`.
 
 ### Tracking — `data/` + `reports/` + tracker scripts
@@ -72,11 +81,12 @@ A standalone Go TUI under `dashboard/` for browsing the pipeline. Isolated from 
 ## Data flow (a typical run)
 
 ```
-scan ──► data/pipeline.md ──► evaluate (oferta + cv) ──► reports/NNN-*.md
-                                          │                      │
-                                          └──► data/applications.md (tracker)
-                                                         │
-                                          apply (human reviews + clicks)
+Discover/scan → Verify/Liveness → Pre-screen/Stage 0 → Evaluate/Stage 1
+       │                                                     │
+       └──────── data/pipeline.md inbox/database ─────→ Shortlist/Scored
+                                                              │ user selects
+                                                              ▼
+Select → Prepare → Tailor → Review → Verify/PDF-ATS → Submit (user only)
 ```
 
 ## Quality gates

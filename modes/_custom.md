@@ -43,10 +43,18 @@
 - For every scan, run enabled `search_queries` with `method: playwright_listing` before WebSearch. Use `browser-extract.mjs` against the configured live LinkedIn Jobs URLs, keep only `/jobs/view/` links, canonicalize and deduplicate across cities. Fall back to the Playwright MCP on the same URL if the CLI extractor fails; never silently treat browser failure as zero LinkedIn results.
 - Keep LinkedIn mainland China and Hong Kong discovery as separate searches. Public search-engine `site:linkedin.com` queries are fallback-only because their index under-represents mainland listings.
 
-## Pipeline Rules
+## Workflow Authority
 
-Pipeline is a two-stage review workflow. Never generate a CV, PDF, cover letter,
-application answer, or tracker addition during Stage 1.
+The user-facing workflow has exactly two top-level modules:
+
+1. **A — 机会搜寻与评估 (Opportunity Discovery & Evaluation):** Discover/scan → Verify/Liveness → Pre-screen/Stage 0 → Evaluate/Stage 1 → Shortlist/Scored.
+2. **B — 申请准备与投递 (Application Preparation & Submission):** Select → Prepare/Preparation Plan → Tailor/Reactive Resume → Review/Drafter-Reviewer → Verify/PDF-ATS → Submit (user only).
+
+`scan`, `pipeline`, Stage 0, Stage 1, and Stage 2 remain internal compatibility
+terms. `pipeline` is the internal orchestrator; `data/pipeline.md` is the
+opportunity inbox/database. Stage 1 never generates a CV, PDF, cover letter,
+application answer, or tracker addition. It ends at Scored. The user selects a
+specific scored role and manually starts Stage 2. Nothing submits automatically.
 
 ### Stage 0 — Canonical terminal pre-screen
 
@@ -97,7 +105,7 @@ the user explicitly asks to override that specific discard.
    full evaluation.
    If an interrupted run already created a report for the same URL, reuse that
    report number and finish its checklist instead of reserving a duplicate.
-2. Every report must end with a `## Confirmation Checklist` containing:
+2. Every report must end with an `## Evaluation Checklist` containing:
    - Company gates: location, legal employer and employment type, company size,
      five-day workweek/WLB, compensation, and posting legitimacy. Mark each
      `Pass`, `Fail`, or `Unknown`, cite the evidence, and name what must be
@@ -114,20 +122,15 @@ the user explicitly asks to override that specific discard.
 4. Maintain one consolidated `reports/pipeline-review-{YYYY-MM-DD}.md` table
    listing report number, company, role, score, company-gate result, material
    gaps, recommendation, and report link.
-5. After all Stage 1 evaluations, output the scored list and STOP. Do NOT
-   advance to Stage 2 automatically. The user reviews the scored list and
-   manually triggers an application for the roles they choose.
+5. After all Stage 1 evaluations, output the scored list and STOP. The user
+   manually starts Stage 2 for a selected scored role.
 
-
-Existing reports or PDFs created before this workflow are not implicitly
-approved. If they lack a completed Confirmation Checklist and an explicit user
-decision, backfill the checklist, include them in the consolidated review, and
-treat their CV/PDF artifacts as provisional rather than application-ready.
-Before surfacing any existing Awaiting Confirmation role, reapply Stage 0 using
-the complete JD and current candidate evidence. Move a terminal mismatch to
-Processed and `data/discard.log` without asking for human confirmation; only
-survivors are backfilled into the review. Re-extract the JD when no snapshot
-exists.
+Existing reports or PDFs created before this workflow are not application-ready
+by default. If they lack a completed Evaluation Checklist, backfill it and
+include them in the consolidated review. Reapply Stage 0 using the complete JD
+and current candidate evidence before moving any legacy `[~]` role to Scored.
+Move a terminal mismatch to Processed and `data/discard.log`; re-extract the JD
+when no snapshot exists.
 
 ### Stage 1 parallel orchestration
 
@@ -164,7 +167,7 @@ Stage 1 in waves of up to three jobs, matching the available worker-agent slots.
 6. One worker failure never blocks successful siblings. Retry it once on another
    worker; after that keep it Pending with `needs attention` and continue.
 7. Checkpoint after every wave and report progress at least every 60 seconds.
-   Reruns resume by canonical URL and completed Confirmation Checklist, never by
+   Reruns resume by canonical URL and completed Evaluation Checklist, never by
    worker completion order, so interruption cannot duplicate reports.
 
 The expensive evaluation work is parallel; shared-state publication remains
@@ -178,17 +181,16 @@ confirm it, correct it, mark it narrative-only, or `I don't know`. Never turn a
 
 ### Stage 2 — User-triggered application only
 
-Stage 2 is invoked manually for a specific scored role. There is no per-role
-confirmation queue. The user chooses a role from the scored list and triggers
-its application workflow explicitly.
+Stage 2 starts only when the user invokes the application workflow for a
+specific scored role. Selecting that role is the trigger; there is no per-role
+queue or approval keyword.
 
-- `Proceed`: generate the selected role's preparation plan and application
-  artifacts using the confirmed report/checklist, then run the drafter-reviewer
-  gate below.
+- Generate the selected role's preparation plan and application artifacts using
+  its scored report/checklist, then run the drafter-reviewer gate below.
 - A scored role is never discarded merely because the user has not chosen it.
 - No Stage 2 work is run by the daily scan/evaluation cron.
 
-For `Proceed`, write the single-role `preparation/plan.json`, then use a drafter-reviewer handoff. The drafter may create the role-specific Reactive Resume payload, PDF, and application answers; it must not mutate `cv.md` or the configured Reactive Resume mother resume. A separate reviewer writes `review/application-review.json` using the validated `approve|revise|blocked` contract in `application-artifacts.mjs`. Required fixes go to `review/change-plan.json`; apply them and rerun validation before presenting an application as ready. Never submit.
+After manual selection, write the single-role `preparation/plan.json`, then use a drafter-reviewer handoff. The drafter may create the role-specific Reactive Resume payload, PDF, and application answers; it must not mutate `cv.md` or the configured Reactive Resume mother resume. A separate reviewer writes `review/application-review.json` using the validated `approve|revise|blocked` contract in `application-artifacts.mjs`. Required fixes go to `review/change-plan.json`; apply them and rerun validation before presenting an application as ready. Never submit.
 
 Before rendering a role-specific CV, write its actual changes to the application
 bundle's `cv/tailored/vNNN/changes.md`. The experience section must reflect the

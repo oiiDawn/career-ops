@@ -1,6 +1,9 @@
-# Mode: auto-pipeline — Evaluate, Review, Then Prepare
+# Mode: auto-pipeline — Evaluate to Scored
 
-When the user pastes a JD (text or URL) without an explicit sub-command, execute the ENTIRE pipeline in sequence:
+When the user pastes a JD (text or URL) without an explicit sub-command, run
+**A — 机会搜寻与评估** through Scored only: Verify/Liveness → Pre-screen/Stage 0
+→ Evaluate/Stage 1 → Shortlist/Scored. A pasted JD already supplies the
+discovery input. Do not start **B — 申请准备与投递** automatically.
 
 ## Step 0 — Extract JD
 
@@ -50,11 +53,19 @@ The evaluation inherits `oferta`'s bounded research budget. Company, compensatio
 Save the full evaluation in `reports/{###}-{company-slug}-{YYYY-MM-DD}.md` (see format in `modes/oferta.md`).
 Include Block G in the saved report. Add **URL:** {url} and **Legitimacy:** {tier} to the report header.
 
-End the report with `## Confirmation Checklist`: company gates, capability mapping, material gaps, CV change plan, and the choices `Proceed`, `Reject`, or `Provide more evidence`. Stop here and wait. Steps 3–5 are Stage 2 and run only after the user explicitly says `Proceed` for this role.
+End the report with `## Evaluation Checklist`: company gates, capability
+mapping, material gaps, and CV change plan. Publish the role as Scored and stop.
+The scored role stays available until the user selects it or it expires.
 
-## Step 3 — Generate PDF
+## Stage 2 handoff — user-invoked only
 
-Precondition: explicit per-role `Proceed`. Initialize the application bundle and generate its preparation plan before tailoring.
+When the user later names this scored role and invokes `apply` or another
+preparation command, follow Select → Prepare/Preparation Plan →
+Tailor/Reactive Resume → Review/Drafter-Reviewer → Verify/PDF-ATS → Submit
+(user only). Initialize the application bundle and generate its preparation
+plan before tailoring.
+
+### Generate PDF
 
 Read `config/profile.yml`. Check `cv.output_format`:
 
@@ -62,7 +73,7 @@ Read `config/profile.yml`. Check `cv.output_format`:
 - If `"reactive-resume"`, execute `modes/pdf.md` with its Reactive Resume backend
 - Otherwise (default), execute `modes/pdf.md` with its HTML backend
 
-## Step 4 — Draft Application Answers (only if score >= 4.5)
+### Draft Application Answers (only if score >= 4.5)
 
 If the final score is >= 4.5, generate a draft of responses for the application form:
 
@@ -98,8 +109,10 @@ If the final score is >= 4.5, generate a draft of responses for the application 
 
 **Language**: Always in the language of the JD (EN default). Apply `/tech-translate`.
 
-## Step 5 — Update Tracker
+### Update Tracker after user submission
 
-Record it in `data/applications.md` with all columns including Report and PDF as ✅.
+Do not add a Stage 1 result to the application tracker. After the user confirms
+manual submission, record it in `data/applications.md` with the applicable
+Report and PDF fields.
 
 **If any step fails**, continue with the next ones and mark the failed step as pending in the tracker.

@@ -5,6 +5,15 @@ system/user data-contract layers live in [../ARCHITECTURE.md](../ARCHITECTURE.md
 
 ## System Overview
 
+The user-facing system has two modules:
+
+- **A — 机会搜寻与评估:** Discover/scan → Verify/Liveness → Pre-screen/Stage 0 → Evaluate/Stage 1 → Shortlist/Scored.
+- **B — 申请准备与投递:** Select → Prepare/Preparation Plan → Tailor/Reactive Resume → Review/Drafter-Reviewer → Verify/PDF-ATS → Submit (user only).
+
+`pipeline` is module A's internal orchestrator. `data/pipeline.md` is its
+opportunity inbox/database. Stage 1 publishes Scored roles and stops; only a
+later user selection starts Stage 2.
+
 ```
                     ┌─────────────────────────────────┐
                     │         AI Coding CLI Agent      │
@@ -24,10 +33,10 @@ system/user data-contract layers live in [../ARCHITECTURE.md](../ARCHITECTURE.md
             │           └─────────────┘          └────┬─────┘
             │                                          │
      ┌──────▼──────────────────────────────────────────▼──────┐
-     │             Stage 0 + Stage 1 Review                   │
+     │             Stage 0 + Stage 1 → Scored                 │
      │  ┌──────────────┐  ┌────────────┐  ┌───────────────┐  │
      │  │ Prescreen JSON│  │ Report.md  │  │ Confirmation  │  │
-     │  │ + hash/cache  │  │ (A-G eval)│  │ checklist     │  │
+     │  │ + hash/cache  │  │ (A-G eval)│  │ eval checklist│  │
      │  └──────────────┘  └────────────┘  └───────────────┘  │
      └────────────────────────────────────────────────────────┘
                                │
@@ -52,8 +61,8 @@ system/user data-contract layers live in [../ARCHITECTURE.md](../ARCHITECTURE.md
    - G: Posting legitimacy (scam / ghost-job signals)
 5. **Score**: Weighted average across 5 dimensions (1-5)
 6. **Report**: Save as `reports/{num}-{company}-{date}.md`
-7. **Confirm**: Stop for `Proceed`, `Reject`, or `Provide more evidence`
-8. **Stage 2**: only after `Proceed`, build the preparation plan and application bundle; Reactive Resume remains the CV backend
+7. **Shortlist**: Publish the role as Scored and stop
+8. **Stage 2**: After the user selects the role and invokes application preparation, build the plan and bundle; Reactive Resume remains the CV backend
 
 ## Batch Processing
 
@@ -67,7 +76,7 @@ batch-input.tsv    →  batch-runner.sh  →  N × headless CLI workers
                     (tracks progress)
 ```
 
-Each worker is a headless AI CLI instance — the bundled `batch-runner.sh` currently runs `claude -p` workers only. See the Headless / Batch Mode table in `AGENTS.md`. Workers produce a canonical Stage 0 result and, for `pass`/`uncertain`, a Stage 1 report. They never produce Stage 2 artifacts without `Proceed`.
+Each worker is a headless AI CLI instance — the bundled `batch-runner.sh` currently runs `claude -p` workers only. See the Headless / Batch Mode table in `AGENTS.md`. Workers produce a canonical Stage 0 result and, for `pass`/`uncertain`, a Stage 1 report. They never produce Stage 2 artifacts; the user starts that module later for one selected Scored role.
 
 The orchestrator manages parallelism, state, retries, and resume.
 
@@ -85,7 +94,7 @@ templates/cv-template.html → PDF generation template
 ## File Naming Conventions
 
 - Reports: `{###}-{company-slug}-{YYYY-MM-DD}.md` (3-digit zero-padded)
-- Application bundles after `Proceed`: `output/{report-company-role}/`
+- User-invoked application bundles: `output/{report-company-role}/`
 
 ## Pipeline Integrity
 

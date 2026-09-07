@@ -10,16 +10,27 @@ reads the mode plus the shared context and your user files, then executes it.
 Routing — which user request triggers which mode — lives in the Skill Modes
 table in `AGENTS.md` (mirrored in `CLAUDE.md`).
 
+User-facing work is grouped into two top-level modules:
+
+1. **A — 机会搜寻与评估 (Opportunity Discovery & Evaluation):** Discover/scan → Verify/Liveness → Pre-screen/Stage 0 → Evaluate/Stage 1 → Shortlist/Scored.
+2. **B — 申请准备与投递 (Application Preparation & Submission):** Select → Prepare/Preparation Plan → Tailor/Reactive Resume → Review/Drafter-Reviewer → Verify/PDF-ATS → Submit (user only).
+
+`scan`, `pipeline`, Stage 0, Stage 1, and Stage 2 remain internal compatibility
+terms. `pipeline` orchestrates module A; `data/pipeline.md` is its opportunity
+inbox/database. Stage 1 ends at Scored. Only the user's later selection of a
+specific role starts Stage 2, and career-ops never submits an application.
+
 ## Mode catalog
 
 | File | Mode | Purpose |
 |---|---|---|
 | `oferta.md` | `job` | Full A-G evaluation of a single offer |
 | `ofertas.md` | `jobs` | Multi-job comparison |
-| `auto-pipeline.md` | auto | Full automatic pipeline (evaluate + PDF + tracker) on a pasted JD/URL |
-| `pipeline.md` | `pipeline` | Process the URL inbox (`data/pipeline.md`) |
+| `auto-pipeline.md` | auto | Verify, pre-screen, evaluate, and publish a pasted JD/URL as Scored |
+| `pipeline.md` | `pipeline` | Internal module-A orchestrator over the opportunity inbox (`data/pipeline.md`) |
 | `scan.md` | `scan` | Portal scanner (job discovery) |
 | `batch.md` | `batch` | Mass processing with headless workers |
+| `shortlist.md` | `shortlist` | Read-only view of current valid Scored roles |
 | `apply.md` | `apply` | Live application assistant (form filling; never submits) |
 | `pdf.md` | `pdf` | ATS-optimized PDF generation |
 | `latex.md` | `latex` | LaTeX/Overleaf CV export |
@@ -42,6 +53,11 @@ table in `AGENTS.md` (mirrored in `CLAUDE.md`).
 | `add.md` | `add` | Add a project, paper, or role to the CV (confirm-before-write) |
 | `agent-inbox.md` | `agent-inbox` | Queue requests for the next session |
 | `update.md` | `update` | Interactive system update |
+
+Compatibility entrypoints: `discover` keeps its existing ATS-source discovery
+behavior; `evaluate` routes to `oferta`; `shortlist` routes to
+`shortlist.md`; `apply` keeps its existing mode and starts module B only for a
+user-selected Scored role.
 
 ## Shared context and user customization
 

@@ -2,6 +2,9 @@
 
 ## Purpose
 
+This supporting analysis reads scored evidence from **A — 机会搜寻与评估**. It
+does not select a role or start **B — 申请准备与投递**.
+
 After dozens of evaluations, the tracker holds dozens of verdicts — and no aggregate reading. Every low-scoring evaluation names the skills the candidate was missing. This mode turns that discard history into an answer to the question every job seeker asks: **what should I learn, in what order?**
 
 Phase 1 (this mode): aggregate gap map from tracked reports, with an optional LLM synthesis pass and a diff against the previous run. Phase 2b adds a **web-searched learning plan** — free-first resources per gap, grounded in live search results — layered on top of the same gap map (Step 3; trust model in Rules).

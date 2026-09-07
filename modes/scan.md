@@ -1,6 +1,10 @@
 # Mode: scan — Portal Scanner (Job Discovery)
 
-Scans configured job portals, filters by title relevance, and adds new offers to the pipeline for subsequent evaluation.
+`scan` is the Discover step of **A — 机会搜寻与评估**. It scans configured job
+portals, filters by title relevance, and adds new opportunities to
+`data/pipeline.md`, the opportunity inbox/database. The internal orchestrator
+continues with Verify/Liveness → Pre-screen/Stage 0 → Evaluate/Stage 1 →
+Shortlist/Scored. Scan never starts application preparation.
 
 ## Stage 0 handoff
 
@@ -429,7 +433,7 @@ New added to pipeline.md: N
   + {company} | {title} | {query_name}
   ...
 
-→ Run the `pipeline` mode to evaluate the new offers (`/career-ops pipeline` where available, or ask the agent to run `pipeline`).
+→ Run the internal `pipeline` orchestrator to verify, pre-screen, evaluate, and score the new opportunities (`/career-ops pipeline` where available, or ask the agent to run `pipeline`).
 ```
 
 ## Managing careers_url

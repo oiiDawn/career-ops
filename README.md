@@ -82,7 +82,17 @@
 
 ## What Is This
 
-career-ops ([career-ops.org](https://career-ops.org), also known as **careerops**) turns any AI coding CLI into a full job search command center. Instead of manually tracking applications in a spreadsheet, you get an AI-powered pipeline that:
+career-ops ([career-ops.org](https://career-ops.org), also known as **careerops**) turns any AI coding CLI into a job-search command center with two top-level modules:
+
+- **A — 机会搜寻与评估 (Opportunity Discovery & Evaluation):** Discover/scan → Verify/Liveness → Pre-screen/Stage 0 → Evaluate/Stage 1 → Shortlist/Scored.
+- **B — 申请准备与投递 (Application Preparation & Submission):** Select → Prepare/Preparation Plan → Tailor/Reactive Resume → Review/Drafter-Reviewer → Verify/PDF-ATS → Submit (user only).
+
+`scan`, `pipeline`, Stage 0, Stage 1, and Stage 2 remain internal compatibility
+terms. `pipeline` orchestrates module A; `data/pipeline.md` is the opportunity
+inbox/database. Stage 1 stops at Scored. The user selects a role and manually
+starts Stage 2; career-ops never submits an application.
+
+Instead of manually tracking applications in a spreadsheet, you get an AI-powered workflow that:
 
 - **Evaluates offers** into a structured report -- blocks A through H, with a global 1-5 score reached by holistic judgement across five dimensions rather than an arithmetic formula. Block G is a separate posting-legitimacy assessment that never affects the score; block H is drafted only at 4.5 and above
 - **Generates tailored PDFs** -- ATS-optimized CVs customized per job description
@@ -107,7 +117,7 @@ career-ops is the first reference implementation of [the CareerOps Manifesto](ht
 
 | Feature                  | Description                                                                                                                              |
 | ------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------- |
-| **Auto-Pipeline**        | Paste a URL, get a full evaluation + PDF + tracker entry                                                                                 |
+| **Auto-Pipeline**        | Paste a URL, verify and evaluate it through Stage 1, then add it to Scored                                                               |
 | **A-H Evaluation**       | Role summary, CV match, level strategy, comp research, personalization, interview prep (STAR+R) -- plus a Block G posting-legitimacy check that flags scams and ghost jobs, and a Work-Auth signal that flags an explicit no-sponsorship JD as a hard blocker |
 | **Interview Story Bank** | Accumulates STAR+Reflection stories across evaluations -- 5-10 master stories that answer any behavioral question                        |
 | **Negotiation Scripts**  | Salary negotiation frameworks, geographic discount pushback, competing offer leverage                                                    |
@@ -303,16 +313,19 @@ career-ops uses a shared command router. In CLIs that register slash commands, i
 
 ```
 /career-ops                → Show all available commands
-/career-ops {paste a JD}   → Evaluate + report; CV/PDF/application artifacts wait for explicit Proceed
+/career-ops {paste a JD}   → Verify + pre-screen + evaluate → Scored
+/career-ops discover       → Resolve companies to scannable ATS sources (existing compatibility behavior)
 /career-ops scan           → Scan portals for new offers
+/career-ops evaluate       → Evaluate one role (alias for oferta)
+/career-ops shortlist      → View current valid Scored roles (read-only)
 /career-ops pdf            → Generate ATS-optimized CV
 /career-ops cover          → Cover letter generator (paste JD or /career-ops cover {slug})
 /career-ops email          → Formal application email draft (draft-only; never sends, submits, or clicks)
 /career-ops batch          → Batch evaluate multiple offers
 /career-ops tracker        → View application status
-/career-ops apply          → Fill application forms with AI
+/career-ops apply          → Prepare a selected Scored role; you submit
 /career-ops outcome        → Record application outcome & archive artifacts
-/career-ops pipeline       → Process pending URLs
+/career-ops pipeline       → Run module A's internal orchestrator over the opportunity inbox
 /career-ops upskill        → Analyze aggregate gaps (`npm run prepare:role -- --jd ... --company ... --role ...` for one role)
 /career-ops contacto       → Find hiring manager / recruiter / peer + draft a ≤300-char LinkedIn message per contact type
 /career-ops deep           → Generate a structured 6-axis research prompt (AI strategy, recent moves, culture, challenges, competitors, candidate angle)

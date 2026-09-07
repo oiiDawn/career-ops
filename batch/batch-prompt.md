@@ -10,7 +10,7 @@ You receive a job URL plus a local JD text file and must produce:
 2. A complete A-G Stage 1 evaluation report (`reports/*.md`) for `pass`/`uncertain`
 3. A final JSON summary on stdout for the batch orchestrator
 
-Do not create a CV, PDF, application answer, or tracker line. Those are Stage 2 and require the user's explicit per-role `Proceed`.
+Do not create a CV, PDF, application answer, or tracker line. Those belong to a later user-invoked Stage 2 for one selected Scored role.
 
 **Important:** This prompt is self-contained. Do not depend on any slash command, skill, or external mode file at runtime.
 
@@ -363,7 +363,7 @@ Report header:
 **Legitimacy:** {High Confidence | Proceed with Caution | Suspicious}
 **Work Auth:** {✅ Sponsors | ➖ Not needed | ⚠️ Unstated | ⛔ No sponsorship}
 **URL:** {{URL}}
-**PDF:** not generated — awaiting explicit Proceed
+**PDF:** not generated — Stage 1 evaluation only
 **Batch ID:** {{ID}}
 
 
@@ -416,13 +416,13 @@ Then include:
 - `## G) Posting Legitimacy`
 - `## Risk Summary`
 - `## Extracted Keywords`
-- `## Confirmation Checklist` with company gates, capability mapping, CV change plan, and `Proceed | Reject | Provide more evidence`
+- `## Evaluation Checklist` with company gates, capability mapping, material gaps, and CV change plan
 
 Translate these human-facing headings according to `language.output` when it is not English. Keep `## Machine Summary` and YAML keys exact for downstream parsers.
 
 ### Steps 4–5 — Stop at Stage 1
 
-Do not generate a PDF or tracker TSV line. The coordinator publishes the report for human confirmation. Stage 2 begins only after the user explicitly chooses `Proceed` for this role and continues through the existing Reactive Resume application bundle.
+Do not generate a PDF or tracker TSV line. The coordinator publishes the report as Scored. Stage 2 begins only when the user later selects this role and invokes its application workflow; it continues through the existing Reactive Resume application bundle.
 
 ### Step 6 — Final JSON
 
@@ -476,7 +476,7 @@ Failure:
 2. Modify user source files such as `cv.md`, `article-digest.md`, `modes/_profile.md`, or `config/profile.yml`.
 3. Submit an application or imply the user has applied.
 4. Recommend compensation below the user's stated floor.
-5. Generate any CV, PDF, application answer, or tracker line before explicit `Proceed`.
+5. Generate any CV, PDF, application answer, or tracker line during Stage 1.
 6. Put user-private data into system-layer files.
 
 ### Always

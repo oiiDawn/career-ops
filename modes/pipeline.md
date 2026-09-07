@@ -1,6 +1,10 @@
-# Mode: pipeline — URL Inbox (Second Brain)
+# Mode: pipeline — Internal Opportunity Orchestrator
 
-Process job URLs stored in `data/pipeline.md`. The user adds URLs at any time and then executes `/career-ops pipeline` to process them all.
+Process opportunities stored in `data/pipeline.md`. `pipeline` is the internal
+orchestrator inside **A — 机会搜寻与评估**; `data/pipeline.md` is the opportunity
+inbox/database. The internal path is Discover/scan → Verify/Liveness →
+Pre-screen/Stage 0 → Evaluate/Stage 1 → Shortlist/Scored. It never starts
+application preparation or submission.
 
 ## Liveness sweep
 
@@ -35,8 +39,8 @@ After extracting the complete JD, build the evidence input documented by `lib/pr
    b. If the URL is not accessible → mark as `- [!]` with a note and continue
    c. **Stage 0**: run or reuse the canonical pre-screen above. On `fail`, log its auditable reasons and move it to Processed. On `incomplete`, leave it pending with `needs attention`. Claim no report number for either outcome.
    d. Claim the next sequential `REPORT_NUM` atomically by running `node reserve-report-num.mjs` (and release the sentinel using `node reserve-report-num.mjs --release <num>` after the report is written)
-   e. **Execute Stage 1 only**: Evaluation A-G → report with `## Confirmation Checklist` and CV change plan. Do not generate CV/PDF/application/tracker artifacts.
-   f. **Move from Pending to Awaiting Confirmation**: `- [~] #NNN | URL | Company | Role | Score/5 | Report: path` and stop for `Proceed`, `Reject`, or `Provide more evidence`.
+   e. **Execute Stage 1 only**: Evaluation A-G → report with `## Evaluation Checklist` and CV change plan. Do not generate CV/PDF/application/tracker artifacts.
+   f. **Move from Pending to Scored**: `- [~] #NNN | URL | Company | Role | Score/5 | Report: path`. This is a selectable pool, not a waiting gate.
 3. **Concurrency is conditional on the extraction tool.** If the surviving URLs will use browser-backed Playwright/MCP (`browser_navigate` + `browser_snapshot`), process them **one at a time**: multiple workers must never share one browser session, because navigation and snapshots can cross-contaminate and evaluate the wrong posting. If every worker uses the isolated CLI extractor or non-browser fallback, **and** the orchestrator can guarantee independent process/session state, 3+ URLs may use `run_in_background`, at most one URL per worker. Each worker is a **single-pass worker**: it evaluates its one URL and must **not** spawn further subagents or invoke other skills; its company/comp research stays inline and bounded (see `modes/_shared.md` → Subagent delegation). When in doubt, use the sequential path.
 4. **At the end**, show summary table:
 
@@ -60,11 +64,15 @@ After extracting the complete JD, build the evidence input documented by `lib/pr
 - [x] #143 | https://jobs.example.com/posting/789 | Acme Corp | AI PM | 4.2/5 | PDF ✅
 - [x] #144 | https://boards.greenhouse.io/xyz/jobs/012 | BigCo | SA | 2.1/5 | PDF ❌
 
-## Awaiting Confirmation
+## Scored（已评分 · 可手动启动申请）
 - [~] #145 | https://jobs.example.com/posting/999 | Acme Corp | AI Engineer | 4.4/5 | Report: reports/145-acme-2026-01-01.md
 ```
 
 > Note: the section headers may be in EN ("Pending"/"Processed"), ES ("Pendientes"/"Procesadas"), or any other language a market mode set writes them in. Be flexible when reading, faithful to the existing file's style when writing. `scan.mjs` (`PENDING_MARKERS`/`PROCESSED_MARKERS`) and `reconcile-pipeline.mjs` (`PENDING_RE`/`PROCESSED_RE`) already accept the EN and ES spellings.
+
+Existing `[~]` sections remain readable for backward compatibility; publish new
+Stage 1 results under `Scored`. A user starts **B — 申请准备与投递** by naming one
+scored role and invoking `apply` (or the relevant preparation command).
 
 Pending lines are variable-width. The rawest form is a bare pasted URL,
 `- [ ] {url}` (1 column) — what you drop into the inbox by hand. Scanner-written

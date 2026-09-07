@@ -86,6 +86,7 @@ const SYSTEM_PATHS = [
   'modes/deep.md',
   'modes/ofertas.md',
   'modes/pipeline.md',
+  'modes/shortlist.md',
   'modes/triage.md',
   'modes/project.md',
   'modes/tracker.md',

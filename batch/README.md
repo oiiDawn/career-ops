@@ -1,6 +1,6 @@
 # Batch Processing
 
-Process multiple job offers in parallel via headless workers. Each worker runs canonical Stage 0 and, for survivors, writes a Stage 1 A-G report. CV/PDF/application/tracker artifacts wait for explicit per-role `Proceed`. See the **Headless / Batch Mode** table in `AGENTS.md` for the correct command per CLI.
+Process multiple job offers in parallel via headless workers. Each worker runs canonical Stage 0 and, for survivors, writes a Stage 1 A-G report for the Scored pool. CV/PDF/application/tracker artifacts belong to a later user-invoked Stage 2 for one selected role. See the **Headless / Batch Mode** table in `AGENTS.md` for the correct command per CLI.
 
 ## Quick Start
 
