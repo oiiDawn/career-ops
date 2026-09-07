@@ -4,7 +4,7 @@ import { tmpdir } from 'os';
 import { spawnSync } from 'child_process';
 import { fileURLToPath } from 'url';
 import { rmSync } from './helpers.mjs';
-import { applicationArtifactPaths, ensureApplicationArtifactDirs, slugifySegment, writeReuseDecision } from '../application-artifacts.mjs';
+import { applicationArtifactPaths, ensureApplicationArtifactDirs, slugifySegment, validateApplicationReview, writeApplicationReview, writeReuseDecision } from '../application-artifacts.mjs';
 import { repoRelativeManifestPath, workspaceRelativeManifestPath } from '../generate-pdf.mjs';
 
 function expectError(label, action, pattern) {
@@ -27,7 +27,9 @@ try {
       && paths.cv.reactiveResume === join(paths.root, 'cv', 'reactive-resume.json')
       && paths.cv.source.html === join(paths.root, 'cv', 'source', 'original.html')
       && paths.cv.tailored.json === join(paths.root, 'cv', 'tailored', 'v002', 'cv.json')
-      && paths.cv.tailored.pdf === join(paths.root, 'cv', 'tailored', 'v002', 'cv.pdf')) {
+      && paths.cv.tailored.pdf === join(paths.root, 'cv', 'tailored', 'v002', 'cv.pdf')
+      && paths.preparation.plan === join(paths.root, 'preparation', 'plan.json')
+      && paths.review.changePlan === join(paths.root, 'review', 'change-plan.json')) {
     console.log('  ✅ application artifacts use a stable report/company/role bundle');
   } else {
     throw new Error(`unexpected artifact paths: ${JSON.stringify(paths)}`);
@@ -37,7 +39,9 @@ try {
   if (existsSync(join(paths.root, 'jd'))
       && existsSync(join(paths.root, 'cv', 'source'))
       && existsSync(join(paths.root, 'cv', 'tailored', 'v002'))
-      && existsSync(join(paths.root, 'decision'))) {
+      && existsSync(join(paths.root, 'decision'))
+      && existsSync(join(paths.root, 'preparation'))
+      && existsSync(join(paths.root, 'review'))) {
     console.log('  ✅ application artifact directories initialize together');
   } else {
     throw new Error('application artifact directories were not created');
@@ -62,6 +66,20 @@ try {
   expectError('versions must be positive integers', () => applicationArtifactPaths({ reportNum: 7, company: 'Acme', role: 'Engineer', version: 0, root }), /version must be a positive integer/);
   expectError('reuse decisions reject unknown values', () => writeReuseDecision(paths, { decision: 'maybe' }), /decision must be one of/);
   expectError('changed sections must be an array', () => writeReuseDecision(paths, { decision: 'reuse', changedSections: 'Summary' }), /changedSections must be an array/);
+  const review = {
+    schema: 'career-ops/application-review',
+    schema_version: 1,
+    verdict: 'approve',
+    checks: ['source-grounding', 'role-alignment', 'cv-materiality', 'answer-completeness', 'sensitive-fields', 'artifact-consistency']
+      .map((id) => ({ id, status: 'pass', finding: `${id} passed.` })),
+    unsupported_claims: [],
+    required_changes: [],
+  };
+  if (!validateApplicationReview(review).valid) throw new Error('valid application review was rejected');
+  writeApplicationReview(paths, review);
+  if (!existsSync(paths.review.result)) throw new Error('application review was not written');
+  expectError('approved review rejects unresolved changes', () => writeApplicationReview(paths, { ...review, required_changes: ['Fix claim'] }), /approve cannot carry/);
+  expectError('review requires all contract checks', () => writeApplicationReview(paths, { ...review, checks: review.checks.slice(1) }), /missing checks: source-grounding/);
   if (slugifySegment('!!!') === 'application') console.log('  ✅ punctuation-only slugs use the application fallback');
   else throw new Error('punctuation-only slug did not use the application fallback');
 

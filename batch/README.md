@@ -1,6 +1,6 @@
 # Batch Processing
 
-Process multiple job offers in parallel via headless workers. Each worker runs the full evaluation pipeline (A-F report + PDF + tracker line) autonomously. See the **Headless / Batch Mode** table in `AGENTS.md` for the correct command per CLI.
+Process multiple job offers in parallel via headless workers. Each worker runs canonical Stage 0 and, for survivors, writes a Stage 1 A-G report. CV/PDF/application/tracker artifacts wait for explicit per-role `Proceed`. See the **Headless / Batch Mode** table in `AGENTS.md` for the correct command per CLI.
 
 ## Quick Start
 
@@ -24,7 +24,7 @@ Process multiple job offers in parallel via headless workers. Each worker runs t
    ./batch/batch-runner.sh
    ```
 
-4. **Results** are automatically merged into `data/applications.md`, processed offers are reconciled out of the `data/pipeline.md` inbox, and integrity is verified with `verify-pipeline.mjs` at the end of the run.
+4. **Results** remain in `batch-state.tsv` and `reports/` for the confirmation review. The runner does not mutate `data/applications.md` or create Stage 2 artifacts.
 
 ## Options
 
@@ -48,33 +48,14 @@ batch/
   batch-input.tsv          # Input offers (you create this)
   batch-state.tsv          # Processing state (auto-managed, resumable)
   logs/                    # Per-offer worker logs ({report_num}-{id}.log)
-  tracker-additions/       # TSV lines produced by workers
-    merged/                # TSVs already merged into applications.md
 ```
 
 ## How It Works
 
 1. **batch-runner.sh** reads `batch-input.tsv` and `batch-state.tsv` to determine which offers need processing.
-2. For each pending offer, it assigns a report number and launches a headless worker with `batch-prompt.md` as the system prompt (placeholders like `{{URL}}`, `{{REPORT_NUM}}` are resolved).
-3. Each worker evaluates the offer, writes a report to `reports/`, generates a PDF to `output/`, and writes a tracker TSV to `tracker-additions/`.
-4. After all workers finish, batch-runner calls `merge-tracker.mjs` to merge TSVs into `data/applications.md`, `reconcile-pipeline.mjs` to move processed offers out of the `data/pipeline.md` inbox, and `verify-pipeline.mjs` to check integrity.
-
-## Tracker Merge
-
-Workers write one TSV per offer to `batch/tracker-additions/`. The merge script (`npm run merge`) handles:
-
-- Deduplication by company + role fuzzy match and report number
-- Column order conversion (TSV has status before score; applications.md has score before status)
-- In-place updates when a re-evaluation scores higher than the existing entry
-- Moving processed TSVs to `tracker-additions/merged/`
-
-Run `npm run merge` manually if you need to merge outside of a batch run.
-
-## Pipeline Reconcile
-
-Batch mode reads offers from `batch-input.tsv`, but the `data/pipeline.md` inbox is a separate list. Without reconciliation, an offer evaluated by a batch run stays in the pipeline "Pendientes" section and gets surfaced again on the next scan or `/career-ops pipeline` run -- producing duplicate reports.
-
-`reconcile-pipeline.mjs` (run as `npm run reconcile`) closes that gap: after the tracker merge, every `completed` or `skipped` offer in `batch-state.tsv` whose URL is still in pipeline "Pendientes" is moved to "Procesadas" with its report link and score (entries without a report file on disk are left in place). It is idempotent -- safe to run after every batch, or manually.
+2. For each pending offer, it launches a headless worker with `batch-prompt.md`; a temporary report-number reservation is released for Stage 0 failures.
+3. Each worker runs/reuses `prescreen.mjs`. `fail` records an auditable skip; `incomplete` is retried; `pass`/`uncertain` produce a Stage 1 report with a confirmation checklist.
+4. After all workers finish, review the reports and choose `Proceed`, `Reject`, or `Provide more evidence` per role. Only `Proceed` enables the existing Reactive Resume Stage 2 flow.
 
 ## Resumability
 

@@ -24,11 +24,11 @@ system/user data-contract layers live in [../ARCHITECTURE.md](../ARCHITECTURE.md
             │           └─────────────┘          └────┬─────┘
             │                                          │
      ┌──────▼──────────────────────────────────────────▼──────┐
-     │                    Output Pipeline                      │
-     │  ┌──────────┐  ┌────────────┐  ┌───────────────────┐  │
-     │  │ Report.md│  │  PDF (HTML  │  │ Tracker TSV       │  │
-     │  │ (A-G eval)│  │  → Playwright)│ │ (merge-tracker)  │  │
-     │  └──────────┘  └────────────┘  └───────────────────┘  │
+     │             Stage 0 + Stage 1 Review                   │
+     │  ┌──────────────┐  ┌────────────┐  ┌───────────────┐  │
+     │  │ Prescreen JSON│  │ Report.md  │  │ Confirmation  │  │
+     │  │ + hash/cache  │  │ (A-G eval)│  │ checklist     │  │
+     │  └──────────────┘  └────────────┘  └───────────────┘  │
      └────────────────────────────────────────────────────────┘
                                │
                     ┌──────────▼──────────┐
@@ -52,9 +52,8 @@ system/user data-contract layers live in [../ARCHITECTURE.md](../ARCHITECTURE.md
    - G: Posting legitimacy (scam / ghost-job signals)
 5. **Score**: Weighted average across 5 dimensions (1-5)
 6. **Report**: Save as `reports/{num}-{company}-{date}.md`
-7. **PDF**: Generate ATS-optimized CV (`generate-pdf.mjs`)
-8. **Track**: New entries via TSV in `batch/tracker-additions/` merged by
-   `merge-tracker.mjs`; status updates to existing rows via `set-status.mjs`
+7. **Confirm**: Stop for `Proceed`, `Reject`, or `Provide more evidence`
+8. **Stage 2**: only after `Proceed`, build the preparation plan and application bundle; Reactive Resume remains the CV backend
 
 ## Batch Processing
 
@@ -68,10 +67,7 @@ batch-input.tsv    →  batch-runner.sh  →  N × headless CLI workers
                     (tracks progress)
 ```
 
-Each worker is a headless AI CLI instance — the bundled `batch-runner.sh` currently runs `claude -p` workers only. See the Headless / Batch Mode table in `AGENTS.md`. Workers produce:
-- Report .md
-- PDF
-- Tracker TSV line
+Each worker is a headless AI CLI instance — the bundled `batch-runner.sh` currently runs `claude -p` workers only. See the Headless / Batch Mode table in `AGENTS.md`. Workers produce a canonical Stage 0 result and, for `pass`/`uncertain`, a Stage 1 report. They never produce Stage 2 artifacts without `Proceed`.
 
 The orchestrator manages parallelism, state, retries, and resume.
 
@@ -89,8 +85,7 @@ templates/cv-template.html → PDF generation template
 ## File Naming Conventions
 
 - Reports: `{###}-{company-slug}-{YYYY-MM-DD}.md` (3-digit zero-padded)
-- PDFs: `cv-candidate-{company-slug}-{YYYY-MM-DD}.pdf`
-- Tracker TSVs: `batch/tracker-additions/{id}.tsv`
+- Application bundles after `Proceed`: `output/{report-company-role}/`
 
 ## Pipeline Integrity
 

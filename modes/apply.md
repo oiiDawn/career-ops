@@ -4,6 +4,18 @@
 
 Interactive mode for when the candidate is filling out an application form in Chrome. It reads what is on the screen, loads the previous context of the job, and generates personalized responses for each form question.
 
+## Stage 2 drafter-reviewer gate
+
+For a pipeline role, do not draft until that exact role has an explicit `Proceed`. Initialize its application bundle and read `preparation/plan.json`. The drafter writes answers and role-specific CV artifacts without changing `cv.md` or the configured Reactive Resume mother resume. A separate reviewer must produce `review/application-review.json` with:
+
+```json
+{"schema":"career-ops/application-review","schema_version":1,"verdict":"approve|revise|blocked","checks":[{"id":"source-grounding","status":"pass|fail|uncertain","finding":"...","evidence":"..."}],"unsupported_claims":[],"required_changes":[]}
+```
+
+Validate it with `validateApplicationReview()` / `writeApplicationReview()` from `application-artifacts.mjs`. A `revise` or `blocked` verdict is not application-ready; persist concrete edits in `review/change-plan.json`, apply them, and review again. Even `approve` only means ready for the candidate's review—never submit or send.
+
+The six required check IDs are `source-grounding`, `role-alignment`, `cv-materiality`, `answer-completeness`, `sensitive-fields`, and `artifact-consistency`. `approve` requires all six to pass and no unsupported claims or required changes.
+
 ## Requirements
 
 - **Best with Playwright in visible mode**: In visible mode, the candidate sees the browser and the agent can interact with the page.

@@ -15,6 +15,10 @@ import { fileURLToPath } from 'url';
 
 const DEFAULT_OUTPUT_ROOT = resolve('output');
 const DECISIONS = new Set(['reuse', 'reuse-with-edits', 'regenerate']);
+const REVIEW_VERDICTS = new Set(['approve', 'revise', 'blocked']);
+const REVIEW_STATES = new Set(['pass', 'fail', 'uncertain']);
+const REQUIRED_REVIEW_CHECKS = new Set(['source-grounding', 'role-alignment', 'cv-materiality', 'answer-completeness', 'sensitive-fields', 'artifact-consistency']);
+export const APPLICATION_REVIEW_SCHEMA = 'career-ops/application-review';
 
 /** Convert a user-facing label into a safe, readable path segment. */
 export function slugifySegment(value, fallback = 'application') {
@@ -61,6 +65,13 @@ export function applicationArtifactPaths({ reportNum, company, role, version = 1
     decision: {
       reuse: join(applicationRoot, 'decision', 'reuse.json'),
     },
+    preparation: {
+      plan: join(applicationRoot, 'preparation', 'plan.json'),
+    },
+    review: {
+      result: join(applicationRoot, 'review', 'application-review.json'),
+      changePlan: join(applicationRoot, 'review', 'change-plan.json'),
+    },
   };
 }
 
@@ -71,8 +82,37 @@ export function ensureApplicationArtifactDirs(paths) {
     join(paths.root, 'cv', 'source'),
     paths.cv.tailored.root,
     join(paths.root, 'decision'),
+    join(paths.root, 'preparation'),
+    join(paths.root, 'review'),
   ]) mkdirSync(directory, { recursive: true });
   return paths;
+}
+
+/** Validate the independent reviewer handoff before an application is shown as ready. */
+export function validateApplicationReview(review) {
+  const errors = [];
+  if (review?.schema !== APPLICATION_REVIEW_SCHEMA) errors.push(`schema must be ${APPLICATION_REVIEW_SCHEMA}`);
+  if (review?.schema_version !== 1) errors.push('schema_version must be 1');
+  if (!REVIEW_VERDICTS.has(review?.verdict)) errors.push(`verdict must be one of: ${[...REVIEW_VERDICTS].join(', ')}`);
+  if (!Array.isArray(review?.checks) || review.checks.some((check) => !check?.id || !REVIEW_STATES.has(check?.status) || !check?.finding)) errors.push('checks must contain id, status, and finding');
+  const checkIds = new Set(Array.isArray(review?.checks) ? review.checks.map((check) => check.id) : []);
+  const missingChecks = [...REQUIRED_REVIEW_CHECKS].filter((id) => !checkIds.has(id));
+  if (missingChecks.length) errors.push(`missing checks: ${missingChecks.join(', ')}`);
+  if (!Array.isArray(review?.unsupported_claims)) errors.push('unsupported_claims must be an array');
+  if (!Array.isArray(review?.required_changes)) errors.push('required_changes must be an array');
+  if (review?.verdict === 'approve' && (review?.unsupported_claims?.length || review?.required_changes?.length)) errors.push('approve cannot carry unsupported claims or required changes');
+  if (review?.verdict === 'approve' && review?.checks?.some((check) => check.status !== 'pass')) errors.push('approve requires every check to pass');
+  return { valid: errors.length === 0, errors };
+}
+
+/** Write a validated, structured reviewer result beside the draft artifacts. */
+export function writeApplicationReview(paths, review) {
+  const validation = validateApplicationReview(review);
+  if (!validation.valid) throw new Error(`invalid application review: ${validation.errors.join(', ')}`);
+  ensureApplicationArtifactDirs(paths);
+  const record = { ...review, reviewed_at: review.reviewed_at || new Date().toISOString() };
+  writeFileSync(paths.review.result, `${JSON.stringify(record, null, 2)}\n`);
+  return record;
 }
 
 /** Write an auditable CV reuse decision beside the application artifacts. */

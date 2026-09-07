@@ -19,7 +19,6 @@ PROMPT_FILE="$BATCH_DIR/batch-prompt.md"
 PROFILE_FILE="$PROJECT_DIR/config/profile.yml"
 LOGS_DIR="$BATCH_DIR/logs"
 DISCARD_LOG="$LOGS_DIR/discard.log"
-TRACKER_DIR="$BATCH_DIR/tracker-additions"
 REPORTS_DIR="$PROJECT_DIR/reports"
 APPLICATIONS_FILE="$PROJECT_DIR/data/applications.md"
 LOCK_FILE="$BATCH_DIR/batch-runner.pid"
@@ -67,8 +66,8 @@ Options:
   --start-from N       Start from offer ID N (skip earlier IDs)
   --limit N            Max number of offers to process in this run
   --max-retries N      Max retry attempts per offer (default: 2)
-  --min-score N        Skip PDF/tracker for offers scoring below N (default: 0 = off)
-  --skip-pdf           Skip PDF generation entirely (write ❌ in tracker PDF column)
+  --min-score N        Mark completed Stage 1 reports below N as skipped (default: 0 = off)
+  --skip-pdf           Compatibility no-op; Stage 1 never generates PDFs
   --rate-limit-sleep N Seconds to wait before retrying a rate-limited worker
                        (default: 300)
   --model NAME         Override the tier-resolved Claude model passed to
@@ -83,7 +82,6 @@ Files:
   batch-state.tsv      Processing state (auto-managed)
   batch-prompt.md      Prompt template for workers
   logs/                Per-offer logs
-  tracker-additions/   Tracker lines for post-batch merge
 
 Examples:
   # Dry run to see pending offers
@@ -183,7 +181,7 @@ check_prerequisites() {
     exit 1
   fi
 
-  mkdir -p "$LOGS_DIR" "$TRACKER_DIR" "$REPORTS_DIR"
+  mkdir -p "$LOGS_DIR" "$REPORTS_DIR"
 }
 
 # Status/watch mode only needs prior batch state, not worker prerequisites.
@@ -862,10 +860,10 @@ process_offer() {
   # Build the prompt with placeholders replaced
   local prompt
   if [[ "$SKIP_PDF" == "true" ]]; then
-    prompt="Process this job offer. Run the pipeline: A-G evaluation + report .md + tracker line. Do not generate PDF; write ❌ in the tracker PDF column and set \"pdf\": null in the final JSON."
-    echo "    ⏭️  --skip-pdf set — skipping PDF generation for #$id ($url)"
+    prompt="Process this job offer through canonical Stage 0 and Stage 1 only. Write the evaluation report for pass/uncertain; create no CV, PDF, application answers, or tracker line."
+    echo "    ℹ️  --skip-pdf is already implied by the Stage 1-only workflow for #$id ($url)"
   else
-    prompt="Process this job offer. Run the full pipeline: A-G evaluation + report .md + optional PDF + tracker line."
+    prompt="Process this job offer through canonical Stage 0 and Stage 1 only. Write the evaluation report for pass/uncertain; create no CV, PDF, application answers, or tracker line."
   fi
   prompt="$prompt URL: $url"
   prompt="$prompt JD file: $jd_file"
@@ -1005,6 +1003,7 @@ process_offer() {
     # as status/error fixes both by construction -- there's only one place
     # left to look.
     local worker_failed_match="" worker_error_match="" score="-"
+    local parsed_status="" parsed_error="" parsed_score=""
     if [[ -n "$worker_result_json" ]]; then
       local parsed
       parsed=$(printf '%s' "$worker_result_json" | node -e '
@@ -1051,6 +1050,16 @@ process_offer() {
       return 0
     fi
 
+    # Canonical Stage 0 terminal result: no report/tracker artifact is expected.
+    if [[ "$parsed_status" == "skipped" ]]; then
+      local discard_reason="${parsed_error:-pre-screen mismatch}"
+      update_state_retrying "$id" "$url" "skipped" "$started_at" "$completed_at" "-" "-" "$discard_reason" "$retries" || true
+      printf '%s\t%s\t%s\t%s\n' "$completed_at" "$id" "$url" "$discard_reason" >> "$LOGS_DIR/discard.log"
+      release_report_num "$report_num"
+      echo "    ⏭️  Skipped by Stage 0: $discard_reason"
+      return 0
+    fi
+
     # A worker can exit 0, self-report a non-"failed" status (or no parseable
     # JSON at all), and STILL never actually write the report file it claims
     # -- exit code and JSON status alone are not proof a report exists. Found
@@ -1091,19 +1100,6 @@ process_offer() {
     release_report_num "$report_num"
     echo "    ❌ Failed (attempt $retries, exit code $exit_code)"
   fi
-}
-
-# Merge tracker additions into applications.md
-merge_tracker() {
-  echo ""
-  echo "=== Merging tracker additions ==="
-  node "$PROJECT_DIR/merge-tracker.mjs"
-  echo ""
-  echo "=== Reconciling pipeline.md ==="
-  node "$PROJECT_DIR/reconcile-pipeline.mjs" || echo "⚠️  Pipeline reconcile had issues (see above)"
-  echo ""
-  echo "=== Verifying pipeline integrity ==="
-  node "$PROJECT_DIR/verify-pipeline.mjs" || echo "⚠️  Verification found issues (see above)"
 }
 
 # Print summary
@@ -1460,9 +1456,6 @@ main() {
       wait "$pid" 2>/dev/null || true
     done
   fi
-
-  # Merge tracker additions
-  merge_tracker
 
   # Print summary
   print_summary

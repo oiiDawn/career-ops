@@ -1,4 +1,4 @@
-# Mode: auto-pipeline — Full Automatic Pipeline
+# Mode: auto-pipeline — Evaluate, Review, Then Prepare
 
 When the user pastes a JD (text or URL) without an explicit sub-command, execute the ENTIRE pipeline in sequence:
 
@@ -50,7 +50,11 @@ The evaluation inherits `oferta`'s bounded research budget. Company, compensatio
 Save the full evaluation in `reports/{###}-{company-slug}-{YYYY-MM-DD}.md` (see format in `modes/oferta.md`).
 Include Block G in the saved report. Add **URL:** {url} and **Legitimacy:** {tier} to the report header.
 
+End the report with `## Confirmation Checklist`: company gates, capability mapping, material gaps, CV change plan, and the choices `Proceed`, `Reject`, or `Provide more evidence`. Stop here and wait. Steps 3–5 are Stage 2 and run only after the user explicitly says `Proceed` for this role.
+
 ## Step 3 — Generate PDF
+
+Precondition: explicit per-role `Proceed`. Initialize the application bundle and generate its preparation plan before tailoring.
 
 Read `config/profile.yml`. Check `cv.output_format`:
 

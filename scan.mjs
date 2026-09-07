@@ -56,6 +56,8 @@ import { compileKeyword, compilePositiveKeyword, buildTitleFilter } from './titl
 import { flagValue, hasFlag, validateFlags } from './lib/cli-flags.mjs';
 import { withPortalHealthLock } from './portal-health-lock.mjs';
 import { localToday } from './lib/local-today.mjs';
+import { evaluatePrescreen, hashValue } from './lib/prescreen-core.mjs';
+import { writePrescreenCache } from './lib/prescreen-cache.mjs';
 
 try {
   const { config } = await import('dotenv');
@@ -81,6 +83,7 @@ const PROFILE_PATH = process.env.CAREER_OPS_PROFILE || 'config/profile.yml';
 const SCAN_HISTORY_PATH = process.env.CAREER_OPS_SCAN_HISTORY || 'data/scan-history.tsv';
 const PIPELINE_PATH = process.env.CAREER_OPS_PIPELINE || 'data/pipeline.md';
 const APPLICATIONS_PATH = 'data/applications.md';
+const PRESCREEN_CACHE_PATH = process.env.CAREER_OPS_PRESCREEN_CACHE || 'data/prescreen-cache';
 const PROVIDERS_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), 'providers');
 
 // Ensure required directories exist (fresh setup). Stays literal: the paths that
@@ -1785,6 +1788,32 @@ export function formatScanHistoryRow(offer, date, status = 'added') {
   ].map(sanitizeTsvField).join('\t');
 }
 
+/** Persist an honest Stage 0 placeholder; listing metadata is not a complete JD assessment. */
+export function persistScanPrescreens(offers, {
+  cacheRoot = PRESCREEN_CACHE_PATH,
+  candidateSourceHash = hashValue({
+    cv: readIfExists('cv.md'),
+    profile: readIfExists(PROFILE_PATH),
+    profileRules: readIfExists('modes/_profile.md'),
+  }),
+} = {}) {
+  return offers.map((offer) => {
+    const input = {
+      job: {
+        url: normalizeScanUrl(offer.url),
+        title: offer.title || null,
+        company: offer.company || null,
+        listing_hash: hashValue({ location: offer.location || null, salary: offer.salary || null, description: offer.description || null }),
+      },
+      candidate_source_hash: candidateSourceHash,
+      complete_jd: false,
+      assessment_complete: false,
+    };
+    const result = evaluatePrescreen(input);
+    return writePrescreenCache(input.job.url, input, result, cacheRoot);
+  });
+}
+
 /**
  * Parse scan-history.tsv rows that carry a fingerprint, for the cross-listing
  * check. Older rows without the 8th column simply never match. Takes the file
@@ -2716,6 +2745,7 @@ async function main() {
 
   // 6. Write results
   if (!dryRun && verifiedOffers.length > 0) {
+    persistScanPrescreens(verifiedOffers);
     await appendToPipeline(verifiedOffers);
     await appendToScanHistory(verifiedOffers, date);
   }

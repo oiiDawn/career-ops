@@ -39,6 +39,9 @@ These files contain your personal data, customizations, and work product. Update
 | `data/agent-inbox.md` | Your append-only request queue drained at session start (written by `agent-inbox.mjs`) |
 | `data/reply-candidates.json` | Your normalized employer-reply candidates (subject, body, sender, signal — read by `reply-watch.mjs`) |
 | `data/pdf-index.tsv` | PDF↔report linkage manifest (written by `generate-pdf.mjs` or `reactive-resume.mjs`, read by `find.mjs`, the dashboard, and the `email` mode) |
+| `data/prescreen-cache/*.json` | Canonical Stage 0 inputs/results keyed by URL hash. Scanner writes `incomplete`; pipeline/batch replace it after full-JD evidence extraction. Liveness is evaluated separately. |
+| `output/{report-company-role}/preparation/plan.json` | Single-role preparation plan with evidence-gap, adjacent, actual-gap, and unverified classifications plus pre-application/interview actions. |
+| `output/{report-company-role}/review/*.json` | Stage 2 reviewer result and required change plan. Draft-only, created only after explicit `Proceed`; never submission authority. |
 | `data/offers/*` | Your received offers/contracts, promise notes, prep reports, and reply drafts (PII — gitignored, written by the `offer-prep` mode) |
 | `data/outcomes/*` | Your application outcome logs and archived application artifacts (written by the `outcome` mode) |
 | `data/salary-observations.tsv` | Your append-only compensation observation log: `{tracker#}\t{date}\t{desired\|advertised\|actual}\t{amount}\t{currency}\t{source}\t{note}`. Written by interactive modes when a figure is stated/confirmed; never edited in place. Advertised figures come from reports' `advertised_comp` instead — reports are themselves observation sources. Read by `salary-gap.mjs` |

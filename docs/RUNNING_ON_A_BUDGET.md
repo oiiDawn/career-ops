@@ -24,7 +24,7 @@ Before diving into CLI configuration, know that career-ops has a built-in knob f
 | **standard** | Balanced model, no extended thinking. Default if the key is absent. |
 | **premium** | Most capable model, adaptive extended thinking. Best for high-stakes offers. |
 
-The **economy** tier is the high-volume scanning choice — it processes the most offers per dollar. On **standard** and **premium**, a pre-screen gate automatically trims batch spend by skipping obvious mismatches before the full evaluation runs.
+The **economy** tier is the high-volume scanning choice — it processes the most offers per dollar. Every tier uses the same deterministic Stage 0 contract; the tier only selects the evidence-extraction model.
 
 Set it once in your profile:
 

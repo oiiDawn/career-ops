@@ -46,6 +46,8 @@
     "find": "node find.mjs",
     "patterns": "node analyze-patterns.mjs",
     "upskill": "node upskill.mjs",
+    "prepare:role": "node preparation-plan.mjs",
+    "prescreen": "node prescreen.mjs",
     "add": "node add-entry.mjs",
     "reposts": "node detect-reposts.mjs",
     "digest": "node weekly-digest.mjs",

@@ -303,7 +303,7 @@ career-ops uses a shared command router. In CLIs that register slash commands, i
 
 ```
 /career-ops                → Show all available commands
-/career-ops {paste a JD}   → Full auto-pipeline (evaluate + PDF + tracker)
+/career-ops {paste a JD}   → Evaluate + report; CV/PDF/application artifacts wait for explicit Proceed
 /career-ops scan           → Scan portals for new offers
 /career-ops pdf            → Generate ATS-optimized CV
 /career-ops cover          → Cover letter generator (paste JD or /career-ops cover {slug})
@@ -313,6 +313,7 @@ career-ops uses a shared command router. In CLIs that register slash commands, i
 /career-ops apply          → Fill application forms with AI
 /career-ops outcome        → Record application outcome & archive artifacts
 /career-ops pipeline       → Process pending URLs
+/career-ops upskill        → Analyze aggregate gaps (`npm run prepare:role -- --jd ... --company ... --role ...` for one role)
 /career-ops contacto       → Find hiring manager / recruiter / peer + draft a ≤300-char LinkedIn message per contact type
 /career-ops deep           → Generate a structured 6-axis research prompt (AI strategy, recent moves, culture, challenges, competitors, candidate angle)
 /career-ops training       → Evaluate a course/cert
