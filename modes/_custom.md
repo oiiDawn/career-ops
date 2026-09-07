@@ -90,7 +90,7 @@ does not offset an explicit hard failure. A discarded role gets no report,
 score, report number, application artifact, or human-confirmation slot unless
 the user explicitly asks to override that specific discard.
 
-### Stage 1 — Evaluate and wait for confirmation
+### Stage 1 — Evaluate and produce a scored list
 
 1. Generate an evaluation report only for roles that survive Stage 0. Confirmed
    duplicates, expired postings, and terminal pre-screen mismatches skip the
@@ -108,27 +108,16 @@ the user explicitly asks to override that specific discard.
    - CV change plan: proposed headline/summary emphasis, bullets to select or
      move earlier, evidence-backed rewrites, bullets to omit, and gaps that must
      not be claimed.
-   - Decision choices: `Proceed`, `Reject`, or `Provide more evidence`.
-3. Move evaluated roles out of Pending into an `## Awaiting Confirmation`
+3. Move evaluated roles out of Pending into the `## Scored（已评分 · 可手动启动申请）`
    section using `- [~] #NNN | URL | Company | Role | Score/5 | Report: path`.
-   Do not mark them Processed yet.
+   This is the automated scored-list state; it is NOT a per-role wait gate.
 4. Maintain one consolidated `reports/pipeline-review-{YYYY-MM-DD}.md` table
    listing report number, company, role, score, company-gate result, material
    gaps, recommendation, and report link.
-5. Before asking for a per-role decision, perform a fresh targeted investigation
-   of every material `Unknown` or caution that could change the decision. Check
-   current posting status, first-party requisition, legal employer and employment
-   type, work location, five-day workweek/WLB, compensation, work authorization,
-   team/role scope, and the candidate's material capability gaps. Use public
-   evidence where available; do not merely repeat the Stage 1 summary. Present a
-   decision brief with verified facts, unresolved recruiter questions, downside,
-   upside, and a reasoned recommendation before offering `Proceed`, `Reject`, or
-   `Provide more evidence`. Human confirmation is for preferences, non-hard
-   capability gaps, and recruiter-only unknowns—not for roles that already fail
-   Stage 0. An unresolved item may remain `Unknown` only after bounded targeted
-   research and must name the exact question to ask.
-6. After all Stage 1 evaluations, show that table and stop. Wait for the user's
-   explicit per-role decisions before any Stage 2 work.
+5. After all Stage 1 evaluations, output the scored list and STOP. Do NOT
+   advance to Stage 2 automatically. The user reviews the scored list and
+   manually triggers an application for the roles they choose.
+
 
 Existing reports or PDFs created before this workflow are not implicitly
 approved. If they lack a completed Confirmation Checklist and an explicit user
@@ -170,7 +159,7 @@ Stage 1 in waves of up to three jobs, matching the available worker-agent slots.
 5. After the wave finishes, sort valid packets by original pipeline order. Reuse
    an existing report number for an exact URL; otherwise reserve all required
    report numbers in one coordinator call. The coordinator alone writes reports,
-   moves rows to Awaiting Confirmation, and deterministically rebuilds the daily
+   moves rows to Scored, and deterministically rebuilds the daily
    consolidated review.
 6. One worker failure never blocks successful siblings. Retry it once on another
    worker; after that keep it Pending with `needs attention` and continue.
@@ -179,22 +168,25 @@ Stage 1 in waves of up to three jobs, matching the available worker-agent slots.
    worker completion order, so interruption cannot duplicate reports.
 
 The expensive evaluation work is parallel; shared-state publication remains
-single-writer and serial. Stage 1 still stops after the consolidated review and
-never starts Stage 2 without explicit per-role decisions.
+single-writer and serial. Stage 1 ends with the consolidated scored list and
+never starts Stage 2 automatically. The user manually triggers Stage 2 for a
+chosen role.
 
 When an unverified quantified or scope claim appears, offer four outcomes:
 confirm it, correct it, mark it narrative-only, or `I don't know`. Never turn a
-guess into a verified fact.
+ guess into a verified fact.
 
-### Stage 2 — Only after explicit confirmation
+### Stage 2 — User-triggered application only
 
-- `Reject`: move the role to Processed with `rejected after review`; generate
-  no application artifacts.
-- `Provide more evidence`: leave it Awaiting Confirmation and update approved
-  source files only after the user explicitly confirms the new facts.
-- `Proceed`: use the confirmed checklist and CV change plan to generate the
-  role-specific CV/PDF, then create tracker/application artifacts and move the
-  role to Processed.
+Stage 2 is invoked manually for a specific scored role. There is no per-role
+confirmation queue. The user chooses a role from the scored list and triggers
+its application workflow explicitly.
+
+- `Proceed`: generate the selected role's preparation plan and application
+  artifacts using the confirmed report/checklist, then run the drafter-reviewer
+  gate below.
+- A scored role is never discarded merely because the user has not chosen it.
+- No Stage 2 work is run by the daily scan/evaluation cron.
 
 For `Proceed`, write the single-role `preparation/plan.json`, then use a drafter-reviewer handoff. The drafter may create the role-specific Reactive Resume payload, PDF, and application answers; it must not mutate `cv.md` or the configured Reactive Resume mother resume. A separate reviewer writes `review/application-review.json` using the validated `approve|revise|blocked` contract in `application-artifacts.mjs`. Required fixes go to `review/change-plan.json`; apply them and rerun validation before presenting an application as ready. Never submit.
 
