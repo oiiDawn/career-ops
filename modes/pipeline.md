@@ -8,17 +8,21 @@ application preparation or submission.
 
 ## Liveness sweep
 
-**Run this before processing any URLs.** Entries added by the scanner in headless/batch mode carry `**Verification:** unconfirmed (batch mode)` because Playwright was unavailable at scan time — they were never checked for liveness. Without a sweep, dead postings reach evaluation one tab at a time, burning time and tokens on phantom roles (a single inbox of 8 stale URLs produces 8 wasted evaluations).
+处理机会前，运行现有只读检查器：
 
-Sweep all pending URLs in one batch with the zero-token liveness checker before the per-URL loop:
+```bash
+node check-liveness.mjs
+```
 
-1. Collect every `- [ ]` URL from the "Pending" section into a temp file (one URL per line).
-2. Run `node check-liveness.mjs --file <tmpfile>` (add `--throttle` for large batches to stay under WAF rate limits; it's pure Playwright, zero Claude tokens). The checker prints a per-URL verdict and exits non-zero if any are expired/uncertain.
-3. For every URL the checker reports as **expired/closed**, resolve the pipeline entry instead of processing it: move it to "Processed" as `- [x] ~~URL | Company | Role~~ — posting expired (liveness sweep)` and, if it already has a tracker row, mark it `Discarded`. **Do not** extract the JD, evaluate, or generate a report/PDF for it.
-4. Leave `uncertain` results in place to be confirmed during normal per-URL extraction (a transient timeout shouldn't drop a possibly-live posting).
-5. Only the surviving live URLs continue to the per-URL processing loop below.
+默认读取 `data/pipeline.md`（或 `CAREER_OPS_PIPELINE`），覆盖所有 Pending/Pendientes、Scored（包括中文说明后缀）和旧 Awaiting Confirmation 区段的 `[ ]`、`[!]`、`[~]` 岗位 URL，去重后串行检查；Processed 与 `local:` 快照不参与网络检查。`local:` 的历史内容不能证明岗位仍开放，应单独找到原始链接核验。显式 URL 或 `--file <tmpfile>` 可限定范围，大批量可加 `--throttle`。
 
-This complements — does not replace — the per-URL liveness gate in `auto-pipeline` (Step 0.5) and the `apply` preflight: the sweep drops the dead postings up front, in bulk, so the user never opens a tab or spends a token on them.
+检查器先复用公共 ATS API，结果不明确时用 Playwright；退出码非零表示存在过期、待确认结果或执行失败，不能整批判为过期。批处理留下的 `unconfirmed` 记录也必须核验。
+
+- **expired/closed**：将对应 Pending 或 Scored 条目移到 Processed，保留报告号、报告链接和其他已有注释，注明 `posting expired (liveness sweep)`。已有 tracker 行按现有状态更新工具处理为 Discarded。不再提取 JD、评估或生成申请材料。
+- **uncertain / 执行失败**：保留原区段和状态，记录原因；通过原 URL 的 Playwright MCP fallback 或后续提取补核验。超时、403、限流和浏览器启动失败不是关闭证据。
+- **active**：Pending 继续预筛选/评估；Scored 保留在可选池，不重复评估，也不自动启动申请。
+
+该清扫补充 `auto-pipeline` 和 `apply` 的逐岗位核验；检查脚本本身不修改机会库或 tracker。
 
 ## Canonical Stage 0 pre-screen
 
@@ -68,7 +72,7 @@ After extracting the complete JD, build the evidence input documented by `lib/pr
 - [~] #145 | https://jobs.example.com/posting/999 | Acme Corp | AI Engineer | 4.4/5 | Report: reports/145-acme-2026-01-01.md
 ```
 
-> Note: the section headers may be in EN ("Pending"/"Processed"), ES ("Pendientes"/"Procesadas"), or any other language a market mode set writes them in. Be flexible when reading, faithful to the existing file's style when writing. `scan.mjs` (`PENDING_MARKERS`/`PROCESSED_MARKERS`) and `reconcile-pipeline.mjs` (`PENDING_RE`/`PROCESSED_RE`) already accept the EN and ES spellings.
+> Note: the section headers may be in EN ("Pending"/"Processed"), ES ("Pendientes"/"Procesadas"), or any other language a market mode set writes them in. Be flexible when reading, faithful to the existing file's style when writing. `scan.mjs` (`PENDING_MARKERS`/`PROCESSED_MARKERS`) already accepts the EN and ES spellings.
 
 Existing `[~]` sections remain readable for backward compatibility; publish new
 Stage 1 results under `Scored`. A user starts **B — 申请准备与投递** by naming one
@@ -109,16 +113,7 @@ are defined:
   (`- [ ] {url} | {company} | {title} | note: curated shortlist` is valid). The
   deterministic scanner never sets it.
 
-- `| rank: {score}/5 — {reason}` — an **opt-in** LLM relevance annotation written
-  only by `node rank-pipeline.mjs`, never by a scan. The score is 0–5 to one
-  decimal and always carries a one-line reason, so you can disagree with it. It
-  is advisory only: the ranker never removes, reorders, or hides a row, and an
-  unranked row simply has no usable annotation — not that it scored badly. (A
-  row can go unranked because the CLI call failed, returned malformed JSON, or
-  gave no usable reason — all of which still spent tokens.)
-
-When more than one is present the order is `posted:` → `trust:` → `note:` →
-`rank:`. Treat them as hints when triaging; none changes how you process the URL.
+多个标签按 `posted:` → `trust:` → `note:` 排列；标签仅供参考，不改变岗位处理流程。
 
 ## Intelligent JD detection from URL
 

@@ -348,6 +348,25 @@ for (const e of entries) {
     if (m) referencedNums.add(parseInt(m[1], 10));
   }
 }
+// A report is also legitimately referenced when its pipeline row cites it —
+// primarily Scored (evaluated, awaiting manual Stage 2), but also Pending /
+// Processed rows that carry a Report: link. Scored rows are exactly the
+// reports behind the current shortlist; flagging them as orphans because the
+// user hasn't applied yet is a false positive. Do NOT fabricate a tracker row
+// for a Scored-only report — that pollutes the application log.
+const PIPELINE_FILE = process.env.CAREER_OPS_PIPELINE
+  ? process.env.CAREER_OPS_PIPELINE
+  : join(CAREER_OPS, 'data/pipeline.md');
+if (existsSync(PIPELINE_FILE)) {
+  const pipelineText = readFileSync(PIPELINE_FILE, 'utf-8');
+  // `Report: reports/NNN-…` and markdown `[NNN](…/NNN-…)` references.
+  for (const m of pipelineText.matchAll(/[Rr]eport:\s*reports\/(\d+)-/g)) {
+    referencedNums.add(parseInt(m[1], 10));
+  }
+  for (const m of pipelineText.matchAll(/\]\([^)]*?(\d+)-/g)) {
+    referencedNums.add(parseInt(m[1], 10));
+  }
+}
 
 let orphanReports = 0;
 for (const name of reportFiles) {

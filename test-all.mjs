@@ -294,12 +294,10 @@ const scripts = [
   { name: 'normalize-statuses.mjs --dry-run', expectExit: 0 },
   { name: 'dedup-tracker.mjs --dry-run', expectExit: 0 },
   { name: 'merge-tracker.mjs --dry-run', expectExit: 0 },
-  { name: 'reconcile-pipeline.mjs --dry-run', expectExit: 0 },
   { name: 'analyze-patterns.mjs --self-test', expectExit: 0 },
   { name: 'check-table-freshness.mjs --self-test', expectExit: 0 },
   { name: 'upskill.mjs --self-test', expectExit: 0 },
   { name: 'detect-reposts.mjs --self-test', expectExit: 0 },
-  { name: 'rank-pipeline.mjs --self-test', expectExit: 0 },
   { name: 'discover-ats.mjs --self-test', expectExit: 0 },
   { name: 'process-quality.mjs --self-test', expectExit: 0 },
   { name: 'company-history.mjs --self-test', expectExit: 0 },
@@ -3792,7 +3790,7 @@ if (
   pipelineMode.includes('## Liveness sweep') &&
   pipelineMode.includes('check-liveness.mjs') &&
   pipelineMode.includes('unconfirmed') &&
-  pipelineMode.includes('Do not') &&
+  pipelineMode.includes('Scored') &&
   pipelineMode.includes('liveness sweep')
 ) {
   pass('pipeline mode sweeps unconfirmed entries for liveness before processing');
@@ -4469,24 +4467,16 @@ if (fileExists('templates/blacklist.example.md') && readFile('templates/blacklis
 
 const scanMode = fileExists('modes/scan.md') ? readFile('modes/scan.md') : '';
 if (
+  scanMode.includes('node scan.mjs') &&
+  scanMode.includes('唯一默认入口') &&
   scanMode.includes('local_parser_ok') &&
-  (scanMode.includes('No Expensive Scraping Repetition') || scanMode.includes('no repetir scraping caro')) &&
-  (scanMode.includes('name not listed in `local_parser_ok`') || scanMode.includes('nombre no listado en `local_parser_ok`'))
+  scanMode.includes('已成功覆盖的公司不重复抓取') &&
+  scanMode.includes('Playwright/WebSearch 只作 fallback') &&
+  scanMode.includes('providers/*.mjs')
 ) {
-  pass('scan.md skips expensive levels after successful local parser');
+  pass('scan.md uses the scanner by default and bounds fallback to uncovered sources');
 } else {
-  fail('scan.md missing local_parser_ok skip rules for agent scan');
-}
-
-// Guard against scan.md's manual-parse conventions drifting from what providers/*.mjs
-// emit and scan.mjs's filters consume (location/salary/description). We assert the two
-// most specific, consumed-field tokens: Ashby `secondaryLocations` (location_filter) and
-// Lever `descriptionPlain` (content_filter + #1597 cross-listing dedup). Raw API
-// identifiers → language-neutral, low-brittleness.
-if (scanMode.includes('secondaryLocations') && scanMode.includes('descriptionPlain')) {
-  pass('scan.md parse conventions document consumed provider fields (ashby secondaryLocations, lever descriptionPlain)');
-} else {
-  fail('scan.md parse conventions drifted from providers/*.mjs — missing secondaryLocations (ashby) or descriptionPlain (lever) that scan.mjs filters consume');
+  fail('scan.md missing default scanner entrypoint or bounded fallback contract');
 }
 
 if (!fileExists('scripts/parsers/cohere_jobs.py')) {

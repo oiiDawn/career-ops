@@ -1151,7 +1151,7 @@ function pipelineEntry(line, checkboxRe) {
  * Six line shapes are documented across the modes, and only the one
  * `appendToPipeline` writes leads with the URL. The others lead with a report
  * number (`#NNN`, `modes/pipeline.md`), a report link
- * (`[NNN](reports/…)`, `reconcile-pipeline.mjs`), a pre-screen marker (`#--`,
+ * (`[NNN](reports/…)`), a pre-screen marker (`#--`,
  * `modes/pipeline.md`), or a strikethrough (`~~…~~`, `modes/pipeline.md` and
  * `modes/oferta.md`). Anchoring the URL to the checkbox missed all five.
  *

@@ -4,11 +4,12 @@
  * check-liveness.mjs — Playwright job link liveness checker
  *
  * Tests whether job posting URLs are still active or have expired.
- * Uses the same detection logic as scan.md step 7.5.
+ * 只读检查；默认覆盖机会库中的 Pending 和 Scored。
  * Zero Claude API tokens. Two rungs: a free public-API check first
  * (liveness-api.mjs, no browser), then Playwright for everything else.
  *
  * Usage:
+ *   node check-liveness.mjs                    # Pending + Scored
  *   node check-liveness.mjs <url1> [url2] ...
  *   node check-liveness.mjs --file urls.txt
  *
@@ -17,6 +18,7 @@
 
 import { chromium } from 'playwright';
 import { readFile } from 'fs/promises';
+import { pathToFileURL } from 'url';
 import {
   checkUrlLivenessWithFallback,
   createHeadedPageProvider,
@@ -25,6 +27,39 @@ import {
   sleep,
 } from './liveness-browser.mjs';
 import { checkLivenessViaApi } from './liveness-api.mjs';
+
+/** 从机会库提取待处理和已评分条目的岗位 URL；保留顺序并去重。 */
+export function collectPipelineUrls(text) {
+  const urls = new Set();
+  let eligible = false;
+  for (const line of text.split(/\r?\n/)) {
+    if (/^##\s+/.test(line)) {
+      eligible = /^##\s+(?:Pending\b|Pendientes\b|Scored\b|Awaiting Confirmation\b|待处理|已评分)/i.test(line);
+      continue;
+    }
+    if (!eligible || !/^\s*- \[[ !~]\]\s+/.test(line)) continue;
+    const cells = line.replace(/^\s*- \[[ !~]\]\s+/, '').split('|').map(cell => cell.trim());
+    const posting = cells[0].startsWith('#') ? cells[1] : cells[0];
+    const url = posting?.match(/^https?:\/\/[^\s]+/)?.[0];
+    if (url) urls.add(url);
+  }
+  return [...urls];
+}
+
+/** 显式 URL/文件优先；无参数时读取 canonical 机会库，不写入状态。 */
+export async function loadLivenessUrls(positional) {
+  if (positional.length === 0) {
+    const file = process.env.CAREER_OPS_PIPELINE || new URL('./data/pipeline.md', import.meta.url);
+    return collectPipelineUrls(await readFile(file, 'utf-8'));
+  }
+  if (positional[0] === '--file') {
+    if (positional.length !== 2) throw new Error('--file 需要一个 URL 列表文件');
+    const text = await readFile(positional[1], 'utf-8');
+    return text.split('\n').map(l => l.trim()).filter(l => l && !l.startsWith('#'));
+  }
+  if (positional.some(arg => arg.startsWith('-'))) throw new Error('未知参数：请使用 URL 或 --file <文件>');
+  return positional;
+}
 
 async function main() {
   const args = process.argv.slice(2);
@@ -40,19 +75,7 @@ async function main() {
   const throttleBaseMs = throttleArg ? (Number(throttleArg.split('=')[1]) || 5000) : 0;
   const positional = args.filter((a) => a !== '--no-fallback' && a !== throttleArg);
 
-  if (positional.length === 0) {
-    console.error('Usage: node check-liveness.mjs [--no-fallback] [--throttle[=ms]] <url1> [url2] ...');
-    console.error('       node check-liveness.mjs [--no-fallback] [--throttle[=ms]] --file urls.txt');
-    process.exit(1);
-  }
-
-  let urls;
-  if (positional[0] === '--file') {
-    const text = await readFile(positional[1], 'utf-8');
-    urls = text.split('\n').map(l => l.trim()).filter(l => l && !l.startsWith('#'));
-  } else {
-    urls = positional;
-  }
+  const urls = await loadLivenessUrls(positional);
 
   const notes = [
     noFallback ? null : 'headed fallback on challenge',
@@ -109,7 +132,9 @@ async function main() {
   if (expired > 0 || uncertain > 0) process.exit(1);
 }
 
-main().catch(err => {
-  console.error('Fatal:', err.message);
-  process.exit(1);
-});
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  main().catch(err => {
+    console.error('Fatal:', err.message);
+    process.exit(1);
+  });
+}

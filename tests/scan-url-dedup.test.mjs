@@ -100,7 +100,6 @@ try {
     // modes/pipeline.md → workflow step 2f and the "Processed" example.
     ['- [x] #143 | https://jobs.example.com/posting/2 | Acme Corp | AI PM | 4.2/5 | PDF ✅',
       'https://jobs.example.com/posting/2', 'processed entry led by a report number'],
-    // reconcile-pipeline.mjs → the line it writes when moving an entry to Processed.
     // The report link is not a URL, so the gate must not stop at the first `(`…`)`.
     ['- [x] [144](reports/144-acme-2026-01-01.md) | https://jobs.example.com/posting/3 | Acme Corp | Solutions Architect | 3.1/5 | PDF ❌',
       'https://jobs.example.com/posting/3', 'processed entry led by a report link'],

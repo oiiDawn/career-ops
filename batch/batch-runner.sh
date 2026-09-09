@@ -975,11 +975,6 @@ process_offer() {
     # A worker can exit 0 (no crash) but still self-report failure inside its
     # own JSON summary — e.g. it correctly declines to fabricate an evaluation
     # when the JD couldn't be extracted (Data Contract: never fabricate).
-    # Without this check such offers were silently marked "completed" with no
-    # report file on disk and score "-" (found 2026-07-29, offer id 6 / report
-    # 019 — Deepgram JD unextractable in headless mode). Only the downstream
-    # reconcile-pipeline.mjs safety net (which leaves an entry in Pending when
-    # its report file is missing) prevented the offer from being lost.
     # Extract only the LAST ```json fenced block in the log -- that's the
     # worker's one authoritative final result (batch-prompt.md Step 6), not
     # arbitrary text anywhere else in stdout/stderr -- and parse it as real

@@ -24,7 +24,7 @@ All scripts live in the project root as `.mjs` modules. Most are exposed via
 | `npm run update:check` | `update-system.mjs check` | Check for upstream updates |
 | `npm run update` | `update-system.mjs apply` | Apply upstream update |
 | `npm run rollback` | `update-system.mjs rollback` | Rollback last update |
-| `npm run liveness` | `check-liveness.mjs` | Test if job URLs are still active |
+| `npm run liveness` | `check-liveness.mjs` | 只读核验岗位存活；默认覆盖 Pending 与 Scored |
 | `npm run extract` | `browser-extract.mjs` | Headless read-only page extractor (opt-in `scan.extractor: cli`) — compact JSON for scan/JD |
 | `npm run scan` | `scan.mjs` | Zero-token portal scanner |
 | `npm run scan:full` | `scan-ats-full.mjs` | Reverse ATS discovery scanner |
@@ -38,12 +38,10 @@ All scripts live in the project root as `.mjs` modules. Most are exposed via
 | `npm run freshness` | `check-table-freshness.mjs` | Staleness validator for jurisdiction data tables (`as_of` / `next_effective` watchdog) |
 | `npm run openai:tailor` | `openai-tailor.mjs` | Tailor a CV via any OpenAI-compatible endpoint (headless companion to `openai-eval.mjs`) |
 | `npm run or` | `openrouter-runner.mjs` | Run scan/evaluate/pipeline/apply on OpenRouter free models — no Claude CLI required |
-| `npm run reconcile` | `reconcile-pipeline.mjs` | Remove batch-evaluated offers from pipeline.md "Pendientes" |
 | `npm run cover-letter` | `generate-cover-letter.mjs` | Render a cover-letter JSON payload to PDF |
 | `npm run verify:portals` | `verify-portals.mjs` | Probe ATS endpoints to confirm portals.yml slugs resolve (network) |
 | `node fix-slugs.mjs` | `fix-slugs.mjs` | Write `verify-portals.mjs`'s suggested ATS slug fixes back to portals.yml (dry run by default, `--fix` to write) |
 | `npm run reposts` | `detect-reposts.mjs` | Flag re-listed (ghost) postings from scan history |
-| `node rank-pipeline.mjs` | `rank-pipeline.mjs` | Opt-in LLM relevance re-ranker — annotates pending pipeline rows with a score + reason (off by default) |
 | `npm run gemini:eval` | `gemini-eval.mjs` | Evaluate a JD with Google Gemini (free-tier alternative) |
 | `npm run ollama:eval` | `ollama-eval.mjs` | Evaluate a JD with a local Ollama model |
 | `npm run openai:eval` | `openai-eval.mjs` | Evaluate a JD via any OpenAI-compatible endpoint |
@@ -526,6 +524,8 @@ npm run rollback
 
 ## liveness
 
+无参数运行时只读检查 `data/pipeline.md` 中的 Pending 和 Scored；显式 URL 或文件可限定范围。
+
 Tests whether job posting URLs are still live. Two rungs: a zero-token API check first (`liveness-api.mjs` — Greenhouse, Lever, Ashby, Workday, LinkedIn), falling back to headless Chromium (`liveness-browser.mjs`) for everything else or when the API is inconclusive. The browser rung detects expired patterns (e.g. "job no longer available"), HTTP 404/410, ATS redirect patterns, and apply-button presence, and supports multi-language expired patterns (English, German, French).
 
 The LinkedIn rung reads the guest posting endpoint, which returns the rendered posting as HTML and answers HTTP 200 for closed postings as well as live ones. Liveness therefore comes from two independent signals in the body — the "No longer accepting applications" banner and the apply control — and the rung only concludes when they agree: banner without apply control is expired, apply control without banner is live, a body carrying both or neither is `uncertain`. That `uncertain` is final rather than a fall-through, because a headless fetch of `linkedin.com/jobs/view/{id}` lands on a generic search page rather than the posting, so the browser rung has nothing better to offer. The endpoint is unauthenticated and rate-limited, so the rung spaces its own requests.
@@ -533,6 +533,7 @@ The LinkedIn rung reads the guest posting endpoint, which returns the rendered p
 Per-job ATS endpoints (Greenhouse, Lever, Workday) treat a 200 as proof the posting is live; Ashby's public API is org-level (the whole job board), so that rung parses the board and confirms the specific job id is still listed. A definitive 404/410 from any ATS API is authoritative and short-circuits the browser check entirely — zero tokens, no browser launch.
 
 ```bash
+npm run liveness                              # 默认 Pending + Scored
 npm run liveness -- https://example.com/job/123
 npm run liveness -- https://a.com/job/1 https://b.com/job/2
 npm run liveness -- --file urls.txt
@@ -769,19 +770,6 @@ npm run or:apply                # application assistance
 
 ---
 
-## reconcile
-
-Syncs the `data/pipeline.md` "Pendientes" section with `batch/batch-state.tsv`.
-`batch-runner.sh` records evaluated offers in the state file but never writes
-back to `pipeline.md`, so batch-processed offers would otherwise be
-re-surfaced by every later scan or pipeline run.
-
-```bash
-npm run reconcile
-```
-
----
-
 ## cover-letter
 
 Renders a cover-letter JSON payload to PDF: fills
@@ -818,47 +806,6 @@ within a 90-day window — a strong ghost-job / re-listing signal.
 npm run reposts                 # JSON
 node detect-reposts.mjs --summary
 ```
-
----
-
-## rank-pipeline
-
-Opt-in LLM relevance re-ranker for `data/pipeline.md`. **Off by default and not
-part of any scan** — `scan.mjs` stays 100% zero-token, and this costs nothing
-unless you run it yourself.
-
-It **annotates, it does not filter**: eligible pending rows can gain a labeled
-`rank: {score}/5 — {reason}` segment, riding after `posted:`/`trust:`/`note:`
-like any other labeled segment. No row is removed, reordered, or hidden — the
-reason is there so you can disagree with the score. An entry the model scores
-but cannot explain is left un-annotated rather than reduced to a bare number,
-and a whole batch is left un-annotated if the CLI call fails or returns
-unusable JSON.
-
-Cost is bounded and reported. Only pending (`- [ ]`) rows that are not already
-annotated are eligible, `--limit` caps each run (default 20, hard ceiling 200
-that the flag cannot raise), and a summary prints the entries ranked, the number
-of CLI calls, and elapsed time. Re-runs are idempotent — an already-annotated
-row is skipped, so you can work through a large pipeline in bounded passes.
-
-The ranking is done by whichever agent CLI you already have installed (the
-Headless / Batch Mode table in `AGENTS.md`): `claude`, `opencode`, `codex`,
-`copilot`, `qwen`, `agy`, `grok` — first one found wins. No API key, no new
-dependency, no new network endpoint. Each call sends a `cv.md` excerpt (the
-first ~2000 chars) and the selected postings through that CLI's own auth and
-provider handling — review your chosen CLI's data-retention/provider settings
-before running this on sensitive CV content.
-
-```bash
-node rank-pipeline.mjs                  # rank up to 20 pending entries
-node rank-pipeline.mjs --limit 10
-node rank-pipeline.mjs --cli codex      # override auto-detection
-node rank-pipeline.mjs --dry-run        # print annotations, write nothing
-```
-
-Writes go through `pipeline-lock.mjs`, the same lock `scan.mjs` and
-`scan-ats-full.mjs` use, and the file is re-read inside the lock — so a
-concurrent scan cannot lose rows to this script.
 
 ---
 

@@ -56,47 +56,16 @@ opportunity inbox/database. Stage 1 never generates a CV, PDF, cover letter,
 application answer, or tracker addition. It ends at Scored. The user selects a
 specific scored role and manually starts Stage 2. Nothing submits automatically.
 
-### Stage 0 — Canonical terminal pre-screen
+### Stage 0 — 统一预筛选
 
-Stage 0 is implemented once in `lib/prescreen-core.mjs` and is shared by scan, pipeline, and batch. Each caller must build the documented evidence input and run or reuse a schema-valid cache result via `prescreen.mjs`; it must not maintain a separate business-rule gate.
+执行前阅读 [预筛选契约](../docs/PRESCREEN.md) 和 [pipeline 流程](pipeline.md#canonical-stage-0-pre-screen)。规则只由 `lib/prescreen-core.mjs` 实现，证据输入与缓存通过 `prescreen.mjs` 处理；liveness 单独检查。
 
-- `fail`: explicit hard failure only—location, company size, employment, compensation, terminal experience gap, two or more core mandatory capability gaps, or an absent mandatory credential. Write `Processed` plus `data/discard.log`; do not reserve a report number.
-- `pass`: no hard failure and all required evidence is complete; proceed to Stage 1.
-- `uncertain`: unknown gate, adjacent/unverified capability, or borderline experience; proceed to Stage 1 with exact questions carried into the checklist. Unknown is not fail.
-- `incomplete`: missing full JD or required assessment fields; keep Pending and complete the evidence before Stage 1.
+- `fail`：移至 Processed，向 `data/discard.log` 追加原因，不分配报告号、不生成评分或申请材料；只有用户明确覆盖该岗位的淘汰决定才重新处理。
+- `pass`：进入 Stage 1。
+- `uncertain`：进入 Stage 1，并将确切问题带入 Evaluation Checklist；未知不等于失败。
+- `incomplete`：保留 Pending，补齐完整 JD 与所需证据后再评估。
 
-Scan normally writes an `incomplete` cache placeholder because listing metadata is not a candidate-evidence-backed assessment. Pipeline and batch reuse valid hash-matching results and rerun only stale, missing, invalid, or incomplete results. Liveness remains a separate check.
-
-### Stage 0 — Terminal pre-screen
-
-Use `lib/prescreen-core.mjs` as the sole rule engine and `node prescreen.mjs --input {evidence.json} --cache-dir data/prescreen-cache` as the persistence boundary. Scan records `incomplete`; pipeline and batch reuse hash-valid results and rerun only stale, missing, invalid, or incomplete records. Keep liveness separate.
-
-Extract the complete JD before scoring or reserving a report number. Apply the
-pre-screen after liveness verification and before the full evaluation. A role
-reaches Stage 1 only when it has no explicit hard failure.
-
-Mark the role `skipped (pre-screen mismatch: {reason})` in Processed and append
-the same reason to `data/discard.log` when any of these is true:
-
-- An explicit company gate fails: location, minimum company size, accepted
-  employee/contract classification, applicable work authorization, or disclosed
-  compensation after the WLB adjustment.
-- The JD states a minimum number of years and the candidate's verified relevant
-  experience is at least three years below that minimum. Smaller gaps are
-  borderline rather than terminal; for example, `4 years required` versus
-  `3+ years verified` survives, while `10 years required` versus `3+ years
-  verified` does not.
-- Two or more capabilities that the JD presents as core mandatory work are
-  `Gap`, or one indispensable licence, credential, or domain requirement is
-  explicitly mandatory and absent. Preferred, bonus, or nice-to-have items do
-  not count.
-
-An `Unknown` is not a failure. Resolve it with bounded research when possible;
-if only the recruiter can answer it and the candidate otherwise passes, carry
-the exact question into Stage 1. Topic similarity or a strong adjacent skill
-does not offset an explicit hard failure. A discarded role gets no report,
-score, report number, application artifact, or human-confirmation slot unless
-the user explicitly asks to override that specific discard.
+扫描仅写 `incomplete` 占位；pipeline/batch 复用合法且哈希匹配的完整缓存，仅重跑缺失、过期、无效或 `incomplete` 记录。
 
 ### Stage 1 — Evaluate and produce a scored list
 

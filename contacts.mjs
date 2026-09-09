@@ -443,8 +443,7 @@ function writeVcf(contacts, quality) {
   // before the write so it also guards a TOCTOU swap. The lexical gate above only
   // inspects the string: a symlinked child directory (or a symlinked target file)
   // can resolve OUTSIDE the repo while passing it. Create the parent first, then
-  // re-verify the CANONICAL destination is inside the repo. Mirrors the
-  // reconcile-pipeline.mjs / followup-seed.mjs realpath-containment pattern.
+  // re-verify the CANONICAL destination is inside the repo.
   mkdirSync(dirname(outPath), { recursive: true });
   // A symlink at the target path (even a dangling one) would let writeFileSync
   // follow it and escape — refuse before resolving anything else.

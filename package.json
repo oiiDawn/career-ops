@@ -18,7 +18,6 @@
     "normalize": "node normalize-statuses.mjs",
     "dedup": "node dedup-tracker.mjs",
     "merge": "node merge-tracker.mjs",
-    "reconcile": "node reconcile-pipeline.mjs",
     "pdf": "node generate-pdf.mjs",
     "jd:similarity": "node jd-similarity.mjs",
     "img-to-pdf": "node img-to-pdf.mjs",
