@@ -49,6 +49,18 @@ export function inProviderFetch() {
  * metadata endpoint on AWS/GCP/Azure, so it is the address an SSRF is usually
  * aimed at. The rest are the ordinary private/loopback/reserved space.
  *
+ * EXCEPTION — Clash/Surge-style transparent proxies (fake-IP mode) resolve
+ * every proxied hostname to a virtual address in 198.18.0.0/15 and route the
+ * connection through the local proxy. On a user's own machine this range is the
+ * proxy's virtual NIC, not a private/SSRF target, yet it is benchmark-reserved
+ * so this guard refuses it — which silently breaks EVERY provider fetch made
+ * through such a proxy (JobsDB, Workday, SuccessFactors, CN job APIs, …) with
+ * "resolves to non-public address". Setting CAREER_OPS_ALLOW_FAKE_IP_RANGE=1
+ * (in .env or the environment) drops ONLY the 198.18.0.0/15 entry; loopback,
+ * cloud-metadata, RFC1918 and every other range stay blocked. The env is read
+ * lazily (first fetch) because ESM imports evaluate before scan.mjs's dotenv
+ * load, so a .env-supplied value is visible by the time any connection dials.
+ *
  * @type {[number, number][]} [network, prefixLength]
  */
 const V4_BLOCKED = [
@@ -60,10 +72,21 @@ const V4_BLOCKED = [
   [0xAC100000, 12],  // 172.16.0.0/12  RFC1918
   [0xC0000000, 24],  // 192.0.0.0/24   IETF protocol assignments
   [0xC0A80000, 16],  // 192.168.0.0/16 RFC1918
-  [0xC6120000, 15],  // 198.18.0.0/15  benchmarking
+  [0xC6120000, 15],  // 198.18.0.0/15  benchmarking (see exception above)
   [0xE0000000, 4],   // 224.0.0.0/4    multicast
   [0xF0000000, 4],   // 240.0.0.0/4    reserved (includes 255.255.255.255)
 ];
+
+/** Lazily-resolved blocked list honoring the fake-IP proxy opt-out. */
+let _v4Blocked = null;
+function v4BlockedList() {
+  if (_v4Blocked === null) {
+    _v4Blocked = process.env.CAREER_OPS_ALLOW_FAKE_IP_RANGE === '1'
+      ? V4_BLOCKED.filter(([net]) => net !== 0xC6120000)
+      : V4_BLOCKED;
+  }
+  return _v4Blocked;
+}
 
 /** Dotted-quad -> uint32, or null when it is not a well-formed IPv4 literal. */
 function v4ToInt(address) {
@@ -104,7 +127,7 @@ export function isBlockedAddress(address) {
 
   const asV4 = v4ToInt(addr);
   if (asV4 !== null) {
-    return V4_BLOCKED.some(([net, bits]) => {
+    return v4BlockedList().some(([net, bits]) => {
       const mask = bits === 0 ? 0 : (0xFFFFFFFF << (32 - bits)) >>> 0;
       return (asV4 & mask) >>> 0 === net;
     });
