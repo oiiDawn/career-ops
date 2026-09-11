@@ -1,11 +1,13 @@
-/** Exercise scoring arithmetic and reject malformed, unsupported or inconsistent pilot reports. */
+/** Exercise scoring arithmetic and reject malformed, unsupported or inconsistent reports. */
 import assert from 'node:assert/strict';
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createHash } from 'node:crypto';
 import { dump } from 'js-yaml';
-import { calculateAttractiveness, HEADINGS, scoreLabel, validateReport } from '../scoring-report.mjs';
+import { calculateAttractiveness, HEADINGS, scoreLabel, validateReport, validateReviewedReport, validateResearch } from '../scoring-report.mjs';
+import { readShortlist } from '../scoring-decisions.mjs';
+import { looksLikeScoreCell, parseScalarScore } from '../tracker-parse.mjs';
 
 const weights = { direction: 0.35, compensation: 0.3, team: 0.25, company: 0.1 };
 const dimensions = Object.fromEntries(Object.keys(weights).map(key => [key, {
@@ -23,9 +25,32 @@ for (const score of [undefined, '4', 0, 5.5, NaN, Infinity]) {
 assert.throws(() => calculateAttractiveness(dimensions, { ...weights, team: 0.5 }));
 assert.throws(() => calculateAttractiveness({ ...dimensions, legitimacy: { score: 5 } }, weights));
 
+const research = {
+  searched_at: '2026-09-11', queries: ['company salary hours financial results'],
+  dimensions: Object.fromEntries(['compensation', 'team', 'company'].map(key => [key, {
+    queries: [0], conclusion: 'Insufficient applicable evidence.', next_step: 'Confirm employer and role terms.',
+  }])),
+  findings: [{ id: 'market', url: 'https://example.com/salary', entity: 'Market benchmark', scope: 'market',
+    status: 'retrieved', published_at: null, limitation: 'Not an employer offer.', source: 'market', quote: 'Market range' }],
+};
+const researchSources = new Map([['market', 'Market range']]);
+validateResearch(research, researchSources);
+for (const mutate of [
+  r => { delete r.dimensions.team; },
+  r => { r.dimensions.company.queries = [4]; },
+  r => { r.findings[0].status = 'failed'; },
+  r => { r.findings[0].quote = 'Invented amount'; },
+  r => { r.findings[0].scope = 'guaranteed'; },
+]) {
+  const value = structuredClone(research); mutate(value);
+  assert.throws(() => validateResearch(value, researchSources));
+}
+
 const root = mkdtempSync(join(tmpdir(), 'scoring-report-'));
 try {
   const files = {
+    'research.json': JSON.stringify(research),
+    'market.md': 'Market range',
     'profile.yml': dump({ attractiveness: { model: 'attractiveness-v1', weights } }),
     'jd.md': 'Concrete job evidence. Full responsibilities and qualifications are manually verified.',
     'cv.md': 'Approved candidate evidence for independent semantic review.',
@@ -33,7 +58,7 @@ try {
   };
   for (const [path, text] of Object.entries(files)) writeFileSync(join(root, path), text);
   const summary = {
-    company: 'Sample', role: 'Engineer', scoring_model: 'attractiveness-v1', scope: 'pilot', score: null,
+    company: 'Sample', role: 'Engineer', scoring_model: 'attractiveness-v1', score: null,
     complete_jd: true, jd_source: 'jd', dimensions,
     sources: Object.entries(files).map(([path, text]) => ({
       id: path.split('.')[0], path, sha256: createHash('sha256').update(text).digest('hex'),
@@ -43,10 +68,45 @@ try {
   const render = value => HEADINGS.map(heading => `## ${heading}\n\n${heading === 'Machine Summary'
     ? `\`\`\`yaml\n${dump(value)}\`\`\``
     : heading === 'C. 入职吸引力'
-      ? `${scoreLabel(value.attractiveness)}\n\n${Object.entries(value.dimensions).map(([key, d]) => `| ${key} | ${d.score ?? 'Unknown'} | evidence |`).join('\n')}`
+      ? `${scoreLabel(value.attractiveness)}\n\n${Object.entries(value.dimensions).map(([key, d]) => `| ${key} | ${d.score ?? 'Unknown'} | ${weights[key] * 100}% | evidence |`).join('\n')}`
       : 'Manually reviewed content, evidence, limitations and next action.'}`).join('\n\n');
   const text = render(summary);
   assert.equal(validateReport(text, { root }).coverage, 0.7);
+  const currentRules = structuredClone(summary);
+  writeFileSync(join(root, 'rules.md'), 'research-required-v1');
+  currentRules.sources = currentRules.sources.filter(s => s.id !== 'research');
+  currentRules.sources.find(s => s.id === 'rules').sha256 = createHash('sha256').update('research-required-v1').digest('hex');
+  assert.throws(() => validateReport(render(currentRules), { root }), /web research required/);
+  writeFileSync(join(root, 'rules.md'), files['rules.md']);
+  const review = {
+    reviewer: 'independent-reviewer', verdict: 'approve',
+    gates: Object.fromEntries(['location', 'employment', 'size', 'compensation', 'eligibility', 'liveness'].map(k => [k, 'Pass'])), ready: true,
+    report_sha256: createHash('sha256').update(text).digest('hex'),
+    checks: Object.fromEntries(['jd_complete', 'source_grounding', 'dimension_support', 'capability_coverage', 'no_double_count', 'gate_evidence'].map(key => [key, { status: 'pass', finding: 'Reviewed the evidence and its scope.' }])),
+  };
+  assert.equal(validateReviewedReport(text, review, { root }).coverage, 0.7);
+  assert.throws(() => validateReviewedReport(text, { ...review, gates: undefined }, { root }), /review gates/);
+  assert.throws(() => validateReviewedReport(text, { ...review, ready: undefined }, { root }), /readiness/);
+  mkdirSync(join(root, 'reports'));
+  writeFileSync(join(root, 'reports/new.md'), text);
+  const gates = Object.fromEntries(['location', 'employment', 'size', 'compensation', 'eligibility', 'liveness'].map(k => [k, 'Pass']));
+  writeFileSync(join(root, 'reports/new.md.review.json'), JSON.stringify({ ...review, gates, ready: true }));
+  writeFileSync(join(root, 'reports/old.md'), '**Score:** 5.0/5');
+  const pipeline = '## Scored\n- [~] #1 | Report: reports/new.md\n- [~] #2 | Report: reports/old.md\n- [~] #3 | Report: reports/missing.md\n## Processed\n- [~] #4 | Report: reports/new.md';
+  const shortlist = readShortlist(pipeline, { root, profile: { attractiveness: { model: 'attractiveness-v1', weights, acceptable_line: 3 } } });
+  assert.equal(shortlist.decisions[0].action, 'apply');
+  assert.deepEqual(shortlist.needs_review.map(x => x.id), ['2']);
+  assert.deepEqual(shortlist.invalid.map(x => x.id), ['3']);
+  assert.equal(shortlist.decisions.length, 1);
+  const cell = '吸引力 3.10–4.30/5（覆盖率70%）';
+  assert(looksLikeScoreCell(cell));
+  assert(Number.isNaN(parseScalarScore(cell)));
+  assert.equal(parseScalarScore('**4.0/5**'), 4);
+  assert.throws(() => validateReviewedReport(text, null, { root }), /semantic review/);
+  const unsupported = structuredClone(summary);
+  unsupported.dimensions.direction.evidence = [{ source: 'cv', quote: 'Approved candidate evidence' }];
+  assert.throws(() => validateReviewedReport(render(unsupported), review, { root }), /stale semantic review/);
+  assert.throws(() => validateReviewedReport(text, { ...review, verdict: 'revise' }, { root }), /not approved/);
   for (const mutate of [
     s => { s.attractiveness.lower = 3.2; },
     s => { s.score = 4; },
@@ -65,6 +125,9 @@ try {
   assert.throws(() => validateReport(text.replace('## Risk Summary', '## Other'), { root }));
   assert.throws(() => validateReport(text.replace('3.10–4.30/5', '4.00–4.30/5'), { root }));
   assert.throws(() => validateReport(text.replace('| team | 4 |', '| team | 5 |'), { root }));
+  assert.throws(() => validateReport(text.replace('## D. 薪酬与需求', '| team | 1 | conflict |\n\n## D. 薪酬与需求'), { root }));
+  assert.throws(() => validateReport(text + '\n' + scoreLabel(summary.attractiveness), { root }));
+  assert.throws(() => validateReport(text.replace('| team | 4 | 25%', '| team | 4 | 50%'), { root }));
   writeFileSync(join(root, 'jd.md'), readFileSync(join(root, 'jd.md'), 'utf8') + ' changed');
   assert.throws(() => validateReport(text, { root }), /hash mismatch/);
 } finally {

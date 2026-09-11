@@ -35,7 +35,6 @@ RETRY_FAILED=false
 RESUME_PAUSED=false
 START_FROM=0
 MAX_RETRIES=2
-MIN_SCORE=0
 SKIP_PDF=false
 MODEL=""  # explicit override; otherwise resolved from config/profile.yml spend_tier
 RESOLVED_MODEL=""
@@ -66,7 +65,6 @@ Options:
   --start-from N       Start from offer ID N (skip earlier IDs)
   --limit N            Max number of offers to process in this run
   --max-retries N      Max retry attempts per offer (default: 2)
-  --min-score N        Mark completed Stage 1 reports below N as skipped (default: 0 = off)
   --skip-pdf           Compatibility no-op; Stage 1 never generates PDFs
   --rate-limit-sleep N Seconds to wait before retrying a rate-limited worker
                        (default: 300)
@@ -108,7 +106,6 @@ while [[ $# -gt 0 ]]; do
     --start-from) START_FROM="$2"; shift 2 ;;
     --limit) LIMIT="$2"; shift 2 ;;
     --max-retries) MAX_RETRIES="$2"; shift 2 ;;
-    --min-score) MIN_SCORE="$2"; shift 2 ;;
     --skip-pdf) SKIP_PDF=true; shift ;;
     --rate-limit-sleep)
       [[ $# -ge 2 ]] || { echo "ERROR: --rate-limit-sleep requires an argument"; exit 1; }
@@ -128,10 +125,7 @@ if ! [[ "$RATE_LIMIT_SLEEP" =~ ^[0-9]+$ ]]; then
   exit 1
 fi
 
-if ! is_decimal_number "$MIN_SCORE"; then
-  echo "ERROR: --min-score must be a non-negative number."
-  exit 1
-fi
+
 
 if ! [[ "$LIMIT" =~ ^[0-9]+$ ]]; then
   echo "ERROR: --limit must be a non-negative integer."
@@ -1072,15 +1066,14 @@ process_offer() {
       return 0
     fi
 
-    # Check min-score gate
-    if is_decimal_number "$score" && awk -v min="$MIN_SCORE" 'BEGIN{exit !(min > 0)}'; then
-      if awk -v score="$score" -v min="$MIN_SCORE" 'BEGIN{exit !(score < min)}'; then
-        update_state_retrying "$id" "$url" "skipped" "$started_at" "$completed_at" "$report_num" "$score" "below-min-score" "$retries" || true
-        release_report_num "$report_num"
-        echo "    ⏭️  Skipped (score: $score < min-score: $MIN_SCORE)"
-        return 0
-      fi
+    local checked_report validation
+    checked_report=$(compgen -G "$REPORTS_DIR/${report_num}-*.md" | head -1)
+    if ! validation=$(node "$SCRIPT_DIR/../scoring-report.mjs" "$checked_report"); then
+      update_state_retrying "$id" "$url" "failed" "$started_at" "$completed_at" "$report_num" "-" "report or semantic review validation failed" "$retries" || true
+      release_report_num "$report_num"
+      return 0
     fi
+    score=$(printf '%s' "$validation" | node -e 'let s="";process.stdin.on("data",x=>s+=x);process.stdin.on("end",()=>{const r=JSON.parse(s);process.stdout.write(`吸引力 ${r.lower.toFixed(2)}–${r.upper.toFixed(2)}/5（覆盖率${r.coverage*100}%）`)});')
 
     update_state_retrying "$id" "$url" "completed" "$started_at" "$completed_at" "$report_num" "$score" "-" "$retries" || true
     release_report_num "$report_num"

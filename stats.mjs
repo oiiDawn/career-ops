@@ -23,7 +23,7 @@ import { readFileSync, existsSync } from 'fs';
 import { join, dirname } from 'path';
 import { fileURLToPath, pathToFileURL } from 'url';
 import * as yaml from 'js-yaml';
-import { resolveColumns, parseTrackerRow } from './tracker-parse.mjs';
+import { parseScalarScore, resolveColumns, parseTrackerRow } from './tracker-parse.mjs';
 import { normalizeStatus, analyzeFromContent } from './followup-cadence.mjs';
 
 const ROOT = dirname(fileURLToPath(import.meta.url));
@@ -77,7 +77,7 @@ export function computeTrackerStats(content) {
     const status = canonicalStatus(row.status);
     byStatus[status] = (byStatus[status] || 0) + 1;
     if (ACTIVE_STATUSES.has(status)) activeApps++;
-    const score = parseFloat(String(row.score || '').replace(/\*/g, ''));
+    const score = parseScalarScore(row.score);
     if (!Number.isNaN(score) && score > 0) {
       scoreSum += score;
       scoreCount++;

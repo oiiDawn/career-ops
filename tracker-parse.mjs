@@ -53,10 +53,17 @@ export const HEADER_ALIASES = (() => {
  */
 export const SCORE_CELL_RE = /^\d+(?:\.\d+)?\/5$/;
 
+/** Historical scalar analytics must never parse an attractiveness bound as a point score. */
+export function parseScalarScore(value) {
+  const text = String(value ?? '').replace(/\*\*/g, '').trim();
+  return /^\d+(?:\.\d+)?(?:\/5)?$/.test(text) ? Number(text.replace(/\/5$/, '')) : NaN;
+}
+
 /** @param {string} v @returns {boolean} whether the cell reads as a score. */
 export function looksLikeScoreCell(v) {
   const t = String(v ?? '').replace(/\*\*/g, '').trim();
-  return SCORE_CELL_RE.test(t) || t === 'N/A' || t === 'DUP' || t === '—' || t === '-';
+  return SCORE_CELL_RE.test(t) || /^吸引力 [1-5](?:\.\d+)?–[1-5](?:\.\d+)?\/5（覆盖率\d+(?:\.\d+)?%）$/.test(t)
+    || t === 'N/A' || t === 'DUP' || t === '—' || t === '-';
 }
 
 /**

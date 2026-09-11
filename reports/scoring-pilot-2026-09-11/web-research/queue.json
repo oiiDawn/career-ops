@@ -1,0 +1,35 @@
+{
+  "profile": "../revision/profile.yml",
+  "opportunities": [
+    {
+      "id": "a2b2",
+      "report": "a2b2.md",
+      "gates": {
+        "location": "Unknown",
+        "employment": "Unknown",
+        "size": "Unknown",
+        "compensation": "Unknown",
+        "eligibility": "Unknown",
+        "liveness": "Unknown"
+      },
+      "ready": false,
+      "deadline": null,
+      "effort_days": null
+    },
+    {
+      "id": "nls",
+      "report": "nls.md",
+      "gates": {
+        "location": "Pass",
+        "employment": "Unknown",
+        "size": "Unknown",
+        "compensation": "Unknown",
+        "eligibility": "Unknown",
+        "liveness": "Unknown"
+      },
+      "ready": false,
+      "deadline": null,
+      "effort_days": null
+    }
+  ]
+}

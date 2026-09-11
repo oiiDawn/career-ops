@@ -1,0 +1,40 @@
+{
+  "reviewer": "blind-b 独立外部证据语义复核",
+  "report_sha256": "080ae3fcc555cca7a8540b224d3b82625b08dd2443284b9b38a733c0dd5cada0",
+  "verdict": "approve",
+  "checks": {
+    "jd_complete": {
+      "status": "pass",
+      "finding": "冻结JD包含职责、Must Have、Strong Plus、Mindset及申请说明，核心内容未出现省略截断；完整性可支持历史试评，不能据此证明当前仍招聘。"
+    },
+    "source_grounding": {
+      "status": "pass",
+      "finding": "已核对冻结候选/JD、外部短摘录与研究日志，并验证源哈希和机器摘要引文。市场数据仅供定位；中位102万也由冻结targeting来源明确支持，不能从60万–144万区间本身推出中位。Equora仅为官网平台运营实体，不是劳动合同主体承诺；2–10为品牌公司页自填规模，不被扩大为所有潜在签约实体事实。候选能力陈述保持原型/生产/进行中边界。"
+    },
+    "dimension_support": {
+      "status": "pass",
+      "finding": "Agent产品主业和端到端设计交付/运营明确支持direction=5。外部市场工资不能证明岗位底薪；另一全栈职位的远程仅作线索；品牌人数与运营主体不证明资金、技术投入或实际雇主规模，故其他三维仍null公允，范围2.40–5.00。"
+    },
+    "capability_coverage": {
+      "status": "pass",
+      "finding": "实质必备及加分要求均有映射，包含年限、Python、async、PostgreSQL/schema/查询、每日工具频率、CS基础、Git/review/测试、学历及全部加分技术。之前混写的缓存/限流/降级已拆分；金融兴趣已正确标为加分而非必需。技能深度和不确定年限未被抬升为满足要求。"
+    },
+    "no_double_count": {
+      "status": "pass",
+      "finding": "产品职责仅在direction定档；市场工资、相邻职位远程和公司资料均保留适用范围，未作为额外分或风险重复扣分。能力竞争力仍独立，不因公司或待遇Unknown受损。"
+    },
+    "gate_evidence": {
+      "status": "pass",
+      "finding": "Checklist已将新2–10人数作为明确冲突信号，并要求确认签约实体及人数后决定Fail，未错误自动通过或借未知抹掉风险。法律运营主体已披露，但实际劳动雇主仍未确定，雇佣Unknown不与条款发现矛盾。其余地点、待遇、资格支持及当前有效性未知；历史JD没有被公司检索替代实时核验。"
+    }
+  },
+  "gates": {
+    "location": "Unknown",
+    "employment": "Unknown",
+    "size": "Unknown",
+    "compensation": "Unknown",
+    "eligibility": "Unknown",
+    "liveness": "Unknown"
+  },
+  "ready": false
+}

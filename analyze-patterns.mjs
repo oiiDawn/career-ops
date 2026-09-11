@@ -17,7 +17,7 @@ import { readFileSync, existsSync, realpathSync, writeFileSync, symlinkSync, rmS
 import { join, dirname, relative, sep } from 'path';
 import { fileURLToPath } from 'url';
 import { load as yamlLoad } from 'js-yaml';
-import { resolveColumns, parseTrackerRow, normalizeVia } from './tracker-parse.mjs';
+import { parseScalarScore, resolveColumns, parseTrackerRow, normalizeVia } from './tracker-parse.mjs';
 
 const CAREER_OPS = dirname(fileURLToPath(import.meta.url));
 const APPS_FILE = existsSync(join(CAREER_OPS, 'data/applications.md'))
@@ -955,7 +955,7 @@ function analyze() {
       }
     }
     const outcome = classifyOutcome(e.status);
-    const trackerScore = parseFloat(e.score);
+    const trackerScore = parseScalarScore(e.score);
     const score = Number.isFinite(trackerScore)
       ? trackerScore
       : (Number.isFinite(reportData?.scores?.global) ? reportData.scores.global : 0);

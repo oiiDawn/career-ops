@@ -48,7 +48,9 @@ Execute the same as the `oferta` mode (read `modes/oferta.md` for all A-F blocks
 
 The evaluation inherits `oferta`'s bounded research budget. Company, compensation, and hiring-signal lookup must not invoke `deep-research`, must not spawn subagents, and must stop at the shared query cap instead of escalating into open-ended research.
 
-## Step 2 — Save Report .md
+## Step 2 — Validate and Save Report .md
+
+Apply `modes/_custom.md` → Scoring Rules for the report contract. Run `node scoring-report.mjs <report>` with its independent review before moving the role to Scored; failure leaves it pending. Use the calculated attractiveness range and coverage in the Score cell.
 
 Save the full evaluation in `reports/{###}-{company-slug}-{YYYY-MM-DD}.md` (see format in `modes/oferta.md`).
 Include Block G in the saved report. Add **URL:** {url} and **Legitimacy:** {tier} to the report header.

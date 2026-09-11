@@ -245,7 +245,7 @@ function roleMatch(a, b) {
  * @returns {number} Parsed score, or 0 when no number is present.
  */
 function parseScore(s) {
-  const m = s.replace(/\*\*/g, '').match(/([\d.]+)/);
+  const m = s.replace(/\*\*/g, '').trim().match(/^(\d+(?:\.\d+)?)(?:\/5)?$/);
   return m ? parseFloat(m[1]) : 0;
 }
 
@@ -373,7 +373,8 @@ for (const [company, companyEntries] of groups) {
     if (cluster.length < 2) continue;
 
     // Keep the one with highest score
-    cluster.sort((a, b) => parseScore(b.score) - parseScore(a.score));
+    cluster.sort((a, b) => a.score.includes('吸引力') || b.score.includes('吸引力')
+      ? b.date.localeCompare(a.date) : parseScore(b.score) - parseScore(a.score));
     const keeper = cluster[0];
 
     // Check if any removed entry has more advanced status

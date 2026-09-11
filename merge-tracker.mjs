@@ -382,7 +382,7 @@ function mergeNotes(existingNotes, addition, oldScore, newScore, extraMarker = '
  * @returns {number} Parsed score, or 0 when no numeric value is present.
  */
 function parseScore(s) {
-  const m = s.replace(/\*\*/g, '').match(/([\d.]+)/);
+  const m = s.replace(/\*\*/g, '').trim().match(/^(\d+(?:\.\d+)?)(?:\/5)?$/);
   return m ? parseFloat(m[1]) : 0;
 }
 
@@ -1178,7 +1178,7 @@ for (const file of tsvFiles) {
     // recoverable from the tracker alone. mergeNotes() keeps the existing cell
     // verbatim and first, so a second downgrade preserves the earlier marker
     // rather than overwriting it.
-    const downgrade = newScore < oldScore;
+    const downgrade = !addition.score.includes('吸引力') && !duplicate.score.includes('吸引力') && newScore < oldScore;
     const oldReportNum = extractReportNum(duplicate.report, duplicate.notes);
     const supersededNote = downgrade && oldReportNum && oldReportNum !== reportNum
       ? `Superseded report [${oldReportNum}] (was ${oldScore}/5)`

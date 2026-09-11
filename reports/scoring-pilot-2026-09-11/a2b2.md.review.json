@@ -1,0 +1,40 @@
+{
+  "reviewer": "blind-b 独立语义复核",
+  "report_sha256": "435ead418cad49cf7de730dce207014d6d5512390d745f6334ecdb3b3d469840",
+  "verdict": "approve",
+  "checks": {
+    "jd_complete": {
+      "status": "pass",
+      "finding": "冻结JD包含职责、Must Have、Strong Plus、Mindset及申请说明，核心内容未出现省略截断；完整性可支持历史试评，不能据此证明当前仍招聘。"
+    },
+    "source_grounding": {
+      "status": "pass",
+      "finding": "逐项核对冻结CV和JD，并验证所有声明源哈希及机器摘要引文。生产MCP、DingTalk Agent、回归评估与全栈交付有CV依据；学历已更正。RAG/LangGraph仅原型、CI仍进行中，未被提升为生产成果；Python/PostgreSQL的技能列名与实际深度已区分。"
+    },
+    "dimension_support": {
+      "status": "pass",
+      "finding": "direction=5由主要Agent/检索产品工作及从prompt/tool设计到服务/API交付和运营的明确职责共同支持。待遇未披露；导师承诺不足以判断团队；服务费与早期定位不足以判断经营稳定性，后三维null合理。按冻结权重复算为2.40–5.00、coverage 0.35。"
+    },
+    "capability_coverage": {
+      "status": "pass",
+      "finding": "实质必备及加分要求均有映射，包含年限、Python、async、PostgreSQL/schema/查询、每日工具频率、CS基础、Git/review/测试、学历及全部加分技术。之前混写的缓存/限流/降级已拆分；金融兴趣已正确标为加分而非必需。技能深度和不确定年限未被抬升为满足要求。"
+    },
+    "no_double_count": {
+      "status": "pass",
+      "finding": "能力与年限问题单列，无吸引力扣分；产品职责只用于direction，导师叙述未重复加团队分；未知经营、待遇与工时均未暗扣。"
+    },
+    "gate_evidence": {
+      "status": "pass",
+      "finding": "香港域名不能确定工作地点，Full-time不能证明实际雇主直签，early stage不能证明员工规模。薪资、受雇支持及实时有效性均缺证，因此六门槛Unknown；历史快照ready=false，不把未知视为失败。"
+    }
+  },
+  "gates": {
+    "location": "Unknown",
+    "employment": "Unknown",
+    "size": "Unknown",
+    "compensation": "Unknown",
+    "eligibility": "Unknown",
+    "liveness": "Unknown"
+  },
+  "ready": false
+}

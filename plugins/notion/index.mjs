@@ -49,7 +49,7 @@ async function applicationsDb(client) {
  * @returns {number} Parsed score, or NaN if no valid number is present.
  */
 export function parseScore(s) {
-  const m = String(s ?? '').replace(/\*\*/g, '').match(/([\d.]+)/);
+  const m = String(s ?? '').replace(/\*\*/g, '').trim().match(/^(\d+(?:\.\d+)?)(?:\/5)?$/);
   return m ? parseFloat(m[1]) : NaN;
 }
 

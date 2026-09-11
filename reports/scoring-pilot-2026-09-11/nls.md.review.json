@@ -1,0 +1,40 @@
+{
+  "reviewer": "blind-b 独立语义复核",
+  "report_sha256": "58f3d59efd37e6c17468f50956f2562358e4530a5f7d2f494d887a065e962b21",
+  "verdict": "approve",
+  "checks": {
+    "jd_complete": {
+      "status": "pass",
+      "finding": "冻结JD含完整The role、What you offer与The sell，职责与资格信息可用于历史试评；页面附带的登录错误未吞掉岗位正文。"
+    },
+    "source_grounding": {
+      "status": "pass",
+      "finding": "源哈希及机器摘要引文逐一验证。TypeScript/Python、产品UX、三人团队经历及个人Agent规则配置均有CV来源；未声称Rust、四年单语言经历、企业代码Agent平台或生产RAG。当前已撤销组织级平台作为规则配置必需条件的旧表述。"
+    },
+    "dimension_support": {
+      "status": "pass",
+      "finding": "JD明确应用开发、代码Agent规则/审查及产品UX贡献，支持direction=4；未明确面向用户的Agent产品是主要交付物，不能由AI fintech标签得5。100万是上限且未确认为底薪；hybrid不足以确定整个团队维度；匿名客户无经营证据，后三维null合理。加权复算2.05–4.65、coverage 0.35。"
+    },
+    "capability_coverage": {
+      "status": "pass",
+      "finding": "三项资格及八项职责均有对应映射。四年经验是指定语言任选其一，Rust缺证未误作硬门槛；最好一年生产AI正确作为偏好且需核上线日期。规则配置、skills/审查迭代与业务Agent评估分开，避免以工具使用证明全套代码审查能力。"
+    },
+    "no_double_count": {
+      "status": "pass",
+      "finding": "产品贡献用于direction；混合办公作为team线索但未定档，未重复产品职责得分。年限不足证据、代理身份和薪酬上限均未变成重复风险扣分。"
+    },
+    "gate_evidence": {
+      "status": "pass",
+      "finding": "JD明确Hong Kong，历史地点Pass合理；Permanent未证明实际雇主直签，NLS12人不代表客户规模，up to 1M不能证明底薪合格。雇佣、规模、待遇、受雇支持和当前有效性Unknown，ready=false。"
+    }
+  },
+  "gates": {
+    "location": "Pass",
+    "employment": "Unknown",
+    "size": "Unknown",
+    "compensation": "Unknown",
+    "eligibility": "Unknown",
+    "liveness": "Unknown"
+  },
+  "ready": false
+}

@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-/** Recompute and validate evidence-backed attractiveness pilot reports without publishing them. */
+/** Recompute and validate evidence-backed attractiveness reports before publication. */
 import { readFileSync, realpathSync } from 'node:fs';
 import { dirname, isAbsolute, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -8,6 +8,7 @@ import { load } from 'js-yaml';
 
 const ROOT = dirname(fileURLToPath(import.meta.url));
 const DIMENSIONS = ['direction', 'compensation', 'team', 'company'];
+export const GATES = ['location', 'employment', 'size', 'compensation', 'eligibility', 'liveness'];
 export const HEADINGS = [
   'Machine Summary', 'A. 岗位概览', 'B. 能力竞争力', 'C. 入职吸引力',
   'D. 薪酬与需求', 'E. CV 变更计划', 'F. 面试与补证', 'G. 岗位真实性',
@@ -44,10 +45,40 @@ export function scoreLabel({ lower, upper, coverage }) {
   return `**入职吸引力：** ${lower.toFixed(2)}–${upper.toFixed(2)}/5；证据覆盖率：${Number((coverage * 100).toFixed(4))}%`;
 }
 
+/** Validate the research audit trail; scope and sufficiency still require semantic review. */
+export function validateResearch(research, sources) {
+  requireValue(research && /^\d{4}-\d{2}-\d{2}$/.test(research.searched_at), 'research date required');
+  requireValue(Array.isArray(research.queries) && research.queries.length > 0 && research.queries.length <= 5
+    && research.queries.every(q => typeof q === 'string' && q.trim()), 'research requires 1–5 executed queries');
+  exactKeys(research.dimensions, DIMENSIONS.slice(1), 'research dimensions');
+  for (const [key, dimension] of Object.entries(research.dimensions)) {
+    requireValue(Array.isArray(dimension.queries) && dimension.queries.length > 0
+      && dimension.queries.every(i => Number.isInteger(i) && i >= 0 && i < research.queries.length), `${key}: executed query reference required`);
+    requireValue(typeof dimension.conclusion === 'string' && dimension.conclusion.trim()
+      && typeof dimension.next_step === 'string' && dimension.next_step.trim(), `${key}: research conclusion and next step required`);
+  }
+  requireValue(Array.isArray(research.findings), 'research findings required');
+  const ids = new Set();
+  for (const finding of research.findings) {
+    requireValue(typeof finding.id === 'string' && finding.id.trim() && !ids.has(finding.id), 'research finding IDs must be unique');
+    ids.add(finding.id);
+    requireValue(['retrieved', 'search_only', 'failed', 'excluded'].includes(finding.status), 'research access status required');
+    requireValue(['role', 'team', 'company', 'adjacent_role', 'market', 'unresolved'].includes(finding.scope), 'research scope required');
+    requireValue(typeof finding.url === 'string' && /^https?:\/\//.test(finding.url)
+      && typeof finding.entity === 'string' && finding.entity.trim()
+      && typeof finding.limitation === 'string' && finding.limitation.trim(), 'research URL, entity and limitations required');
+    requireValue(finding.published_at === null || (typeof finding.published_at === 'string' && finding.published_at.trim()), 'research publication date or null required');
+    if (finding.status === 'retrieved') {
+      requireValue(typeof finding.quote === 'string' && finding.quote.trim()
+        && sources.get(finding.source)?.includes(finding.quote), 'research quote missing from frozen source');
+    } else requireValue(finding.source === null && finding.quote === null, 'unretrieved research cannot provide scored evidence');
+  }
+}
+
 /** Validate structure, frozen sources, literal citations and arithmetic; semantic review remains required. */
 export function validateReport(text, { root = ROOT } = {}) {
   const headings = [...text.matchAll(/^## (.+)$/gm)];
-  requireValue(headings.map(m => m[1]).join('|') === HEADINGS.join('|'), 'report headings must match the pilot contract in order');
+  requireValue(headings.map(m => m[1]).join('|') === HEADINGS.join('|'), 'report headings must match the scoring contract in order');
   for (let i = 0; i < headings.length; i++) {
     const body = text.slice(headings[i].index + headings[i][0].length, headings[i + 1]?.index ?? text.length).trim();
     requireValue(body.length >= 20, `empty section: ${headings[i][1]}`);
@@ -55,8 +86,8 @@ export function validateReport(text, { root = ROOT } = {}) {
   const fence = text.match(/## Machine Summary\s*\n+```(?:yaml|yml)\s*\n([\s\S]*?)\n```/);
   requireValue(fence, 'missing Machine Summary YAML');
   const summary = load(fence[1]);
-  requireValue(summary?.scoring_model === 'attractiveness-v1' && summary.scope === 'pilot', 'not an attractiveness-v1 pilot');
-  requireValue(summary.score === null, 'pilot must not publish a legacy scalar score');
+  requireValue(summary?.scoring_model === 'attractiveness-v1', 'not an attractiveness-v1 report');
+  requireValue(summary.score === null, 'attractiveness must not publish a scalar score');
   requireValue(summary.complete_jd === true, 'complete JD required; record incomplete without a scored report');
   requireValue(typeof summary.company === 'string' && summary.company.trim()
     && typeof summary.role === 'string' && summary.role.trim(), 'company and role required');
@@ -76,6 +107,8 @@ export function validateReport(text, { root = ROOT } = {}) {
   requireValue(typeof summary.jd_source === 'string' && sources.has(summary.jd_source), 'jd_source must reference frozen JD');
   requireValue(sources.has('profile'), 'frozen profile required');
   requireValue(sources.has('cv') && sources.has('rules'), 'frozen candidate CV and scoring rules required');
+  requireValue(sources.has('research'), 'frozen web research required by scoring rules');
+  validateResearch(JSON.parse(sources.get('research')), sources);
   const profile = load(sources.get('profile'));
   requireValue(profile?.attractiveness?.model === summary.scoring_model, 'profile model mismatch');
   const result = calculateAttractiveness(summary.dimensions, profile.attractiveness.weights);
@@ -95,23 +128,52 @@ export function validateReport(text, { root = ROOT } = {}) {
     requireValue(summary.attractiveness[key] === result[key], `${key}: expected ${result[key]}`);
   }
   const body = text.slice(headings[1].index);
-  requireValue(body.includes(scoreLabel(result)), 'body score/range does not match Machine Summary');
+  const labels = body.split('\n').filter(line => line.includes('入职吸引力：'));
+  requireValue(labels.length === 1 && labels[0] === scoreLabel(result), 'body must contain exactly one matching score/range');
   const scoreSection = text.slice(headings[3].index, headings[4].index);
+  const rows = scoreSection.split('\n').filter(line => /^\s*\|/.test(line))
+    .map(line => line.split('|').slice(1, -1).map(cell => cell.trim()));
+  requireValue(rows.every(cells => DIMENSIONS.includes(cells[0]) || cells[0] === '维度' || /^[-: ]+$/.test(cells[0])), 'unexpected score table row');
   for (const key of DIMENSIONS) {
-    requireValue(scoreSection.includes(`| ${key} | ${summary.dimensions[key].score ?? 'Unknown'} |`), `${key}: missing or inconsistent body score row`);
+    const matching = rows.filter(cells => cells[0] === key);
+    const weight = `${Number((profile.attractiveness.weights[key] * 100).toFixed(6))}%`;
+    requireValue(matching.length === 1 && matching[0][1] === String(summary.dimensions[key].score ?? 'Unknown')
+      && matching[0][2] === weight, `${key}: missing, duplicate or inconsistent score/weight row`);
   }
-  return { company: summary.company, role: summary.role, ...result };
+  return { company: summary.company, role: summary.role, scoring_model: summary.scoring_model,
+    weights: profile.attractiveness.weights, ...result };
+}
+
+/** Bind a separate semantic review to the exact report; a literal quote alone is not approval. */
+export function validateReviewedReport(text, review, options) {
+  const result = validateReport(text, options);
+  requireValue(review?.report_sha256 === createHash('sha256').update(text).digest('hex'), 'missing or stale semantic review');
+  requireValue(typeof review.reviewer === 'string' && review.reviewer.trim(), 'reviewer required');
+  requireValue(review.verdict === 'approve', 'semantic review has not approved this report');
+  exactKeys(review.gates, GATES, 'review gates');
+  requireValue(Object.values(review.gates).every(value => ['Pass', 'Fail', 'Unknown'].includes(value))
+    && typeof review.ready === 'boolean', 'review gate states and readiness required');
+  const checks = ['jd_complete', 'source_grounding', 'dimension_support', 'capability_coverage', 'no_double_count', 'gate_evidence'];
+  exactKeys(review.checks, checks, 'semantic checks');
+  for (const key of checks) {
+    requireValue(review.checks[key]?.status === 'pass' && typeof review.checks[key].finding === 'string'
+      && review.checks[key].finding.trim(), `${key}: semantic review must pass with a finding`);
+  }
+  return result;
 }
 
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   const paths = process.argv.slice(2);
   if (!paths.length) {
-    console.error('Usage: node scoring-report.mjs <pilot-report.md>...');
+    console.error('Usage: node scoring-report.mjs <report.md>... (loads <report>.review.json)');
     process.exitCode = 1;
   }
   for (const path of paths) {
     try {
-      console.log(JSON.stringify({ path, valid: true, ...validateReport(readFileSync(path, 'utf8')) }));
+      const text = readFileSync(path, 'utf8');
+      validateReport(text);
+      const review = JSON.parse(readFileSync(`${path}.review.json`, 'utf8'));
+      console.log(JSON.stringify({ path, valid: true, ...validateReviewedReport(text, review) }));
     } catch (error) {
       console.log(JSON.stringify({ path, valid: false, error: error.message }));
       process.exitCode = 1;

@@ -26,7 +26,7 @@ import { readFileSync, existsSync, statSync, realpathSync, writeFileSync, symlin
 import { join, dirname, relative, sep } from 'path';
 import { fileURLToPath, pathToFileURL } from 'url';
 import { load as yamlLoad } from 'js-yaml';
-import { resolveColumns, parseTrackerRow } from './tracker-parse.mjs';
+import { parseScalarScore, resolveColumns, parseTrackerRow } from './tracker-parse.mjs';
 import { validateFlags } from './lib/cli-flags.mjs';
 
 const CAREER_OPS = dirname(fileURLToPath(import.meta.url));
@@ -419,7 +419,7 @@ function analyze(minReports) {
     reportsRead += 1;
     const { score, gapText, hasMachineSummary } = parseReportGaps(content);
     if (hasMachineSummary) reportsWithMachineSummary += 1;
-    const trackerScore = parseFloat(row.score);
+    const trackerScore = parseScalarScore(row.score);
     parsedReports.push({
       num: row.num,
       score: Number.isFinite(trackerScore) ? trackerScore : score,

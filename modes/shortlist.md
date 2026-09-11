@@ -23,16 +23,10 @@ shortlist.
 
 ## Behavior
 
-1. Read `data/pipeline.md` and locate the `## Scored（已评分 · 可手动启动申请）`
-   section (accept the localized/legacy header as needed).
-2. For each `- [~] #NNN | URL | Company | Role | Score/5 | Report: path` row,
-   render a compact table sorted by score descending.
-3. Highlight the **推荐申请 (≥4.0)** tier; group the rest by band
-   (3.5–3.9 可考虑, <3.5 不建议).
-4. Do not liveness-check or re-evaluate roles here — that is module A's job on
-   the next run. If a report link is missing, list the row with `报告: —` rather
-   than inventing a path.
-5. Optionally show counts: total scored, count ≥4.0, count by band.
+1. Run `node scoring-decisions.mjs`. It reads Scored, validates reports and semantic reviews, and applies the current profile's decision policy.
+2. Display `decisions` in returned order, grouped as apply (推荐申请), verify (优先补证), deprioritize (暂缓), discard (硬门槛不符). Show attractiveness range, coverage, company/role, and report link.
+3. Display `needs_review` separately as 历史评分待重评, and `invalid` as 报告校验失败. Neither belongs to the recommendation pool.
+4. Report counts by action. Reading this view does not verify current posting liveness or start reassessment.
 
 ## Explicitly not done
 
