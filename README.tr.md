@@ -73,9 +73,7 @@
   <img src="https://img.shields.io/badge/Grok_Build_CLI-000?style=flat&logo=x&logoColor=white" alt="Grok Build CLI">
   <br>
   <img src="https://img.shields.io/badge/Node.js-339933?style=flat&logo=node.js&logoColor=white" alt="Node.js">
-  <img src="https://img.shields.io/badge/Go-00ADD8?style=flat&logo=go&logoColor=white" alt="Go">
   <img src="https://img.shields.io/badge/Playwright-2EAD33?style=flat&logo=playwright&logoColor=white" alt="Playwright">
-  <img src="https://img.shields.io/badge/Bubble_Tea-FF75B5?style=flat&logo=go&logoColor=white" alt="Bubble Tea">
   <img src="https://img.shields.io/badge/License-MIT-blue.svg" alt="MIT">
   <a href="TRADEMARK.md"><img src="https://img.shields.io/badge/Trademark-Policy-blue.svg" alt="Trademark Policy"></a>
 </p>
@@ -116,7 +114,6 @@ career-ops, [CareerOps Manifestosu](https://career-ops.org/manifesto?utm_source=
 | **Başvuru E-postası Taslakları** | Bir rapordan veya yapıştırılan iş ilanından resmi işe alım uzmanı/referans/soğuk başvuru e-postaları -- konu satırı, ek kontrol listesi, kaynağa dayalı uyum noktaları ve profil odaklı iletişim bloğu ile. Yalnızca taslak -- career-ops hiçbir şeyi göndermez, iletmez veya tıklamaz. |
 | **Portal Tarayıcı**       | 45+ önceden yapılandırılmış şirket (Anthropic, OpenAI, ElevenLabs, Retool, n8n...) + Ashby, Greenhouse, Lever, Wellfound genelinde özel sorgular |
 | **Toplu İşleme**          | Headless CLI çalışanlarıyla paralel değerlendirme (`claude -p` / `opencode run`)                                                        |
-| **Dashboard TUI**         | Hattınızı gezmek, filtrelemek ve sıralamak için terminal arayüzü                                                                          |
 | **İnsan Onaylı Döngü**    | Yapay zekâ değerlendirir ve önerir, siz karar verir ve harekete geçersiniz. Sistem asla bir başvuru göndermez -- son söz her zaman sizindir <!-- hitl: absolute guarantee. Do not add "automatically", "by itself", "without your permission" or any other hedge when translating this row. --> |
 | **Hat Bütünlüğü**         | Otomatik birleştirme, tekrar tespiti, durum normalizasyonu, sağlık kontrolleri                                                            |
 | **CV'nin Ötesinde**       | Şirket araştırması ([`deep`](modes/deep.md)) yapay zekâ stratejisini, son hamleleri, mühendislik kültürünü ve profilinizin alması gereken açıyı ortaya çıkarır. Kişi bulma ([`contacto`](modes/contacto.md)) ulaşılmaya değer işe alım uzmanını, recruiter'ı veya ekip üyesini belirler ve her kişi türüne uyarlanmış ≤300 karakterlik bir LinkedIn mesajı taslağı hazırlar. Resmi başvuru e-postası taslakları ([`email`](modes/email.md)) değerlendirilmiş bir raporu veya yapıştırılan iş ilanını -- hiçbir şey göndermeden, iletmeden veya tıklamadan -- bir konu satırına, gövdeye ve ek kontrol listesine dönüştürür. Başvurular sizi kuyruğa sokar; araştırma size bir sohbet kazandırır. |
@@ -350,19 +347,6 @@ node scan.mjs --verify          # sıfır token'lı keşif + Playwright canlıl�
 
 Doğrulama sıralıdır ve yalnızca (tekrar tespitinden sonra) yeni ilanlara karşı çalışır, bu yüzden maliyet sınırlı kalır.
 
-## Dashboard TUI
-
-Yerleşik terminal panosu, hattınızı görsel olarak gezmenizi sağlar:
-
-```bash
-npm run serve:dashboard   # TUI'yi başlat
-npm run build:dashboard   # opsiyonel: bağımsız ikili dosyayı derle
-```
-
-Özellikler: 6 filtre sekmesi, 4 sıralama modu, gruplanmış/düz görünüm, geç yüklenen önizlemeler, satır içi durum değişiklikleri.
-
-Ayrıca **deneysel bir web arayüzü** de var (alfa, opt-in — siz başlatmadıkça hiçbir şey çalışmaz): bkz. [`web/README.md`](web/README.md).
-
 ## Proje Yapısı
 
 ```
@@ -392,7 +376,6 @@ career-ops/
 ├── batch/
 │   ├── batch-prompt.md          # Kendi kendine yeten çalışan istemi
 │   └── batch-runner.sh          # Orkestratör betiği
-├── dashboard/                   # Go TUI hat görüntüleyici
 ├── data/                        # Takip verileriniz (gitignore'lu)
 ├── reports/                     # Değerlendirme raporları (gitignore'lu)
 ├── output/                      # Üretilen PDF'ler (gitignore'lu)
@@ -406,14 +389,11 @@ career-ops/
 ![Claude Code](https://img.shields.io/badge/Claude_Code-000?style=flat&logo=anthropic&logoColor=white)
 ![Node.js](https://img.shields.io/badge/Node.js-339933?style=flat&logo=node.js&logoColor=white)
 ![Playwright](https://img.shields.io/badge/Playwright-2EAD33?style=flat&logo=playwright&logoColor=white)
-![Go](https://img.shields.io/badge/Go-00ADD8?style=flat&logo=go&logoColor=white)
-![Bubble Tea](https://img.shields.io/badge/Bubble_Tea-FF75B5?style=flat&logo=go&logoColor=white)
 
 - **Ajan**: Paylaşılan skill'ler ve modlarla yapay zekâ kodlama CLI'si (`AGENTS.md` + CLI sarmalayıcısı)
 - **PDF**: Playwright/Puppeteer + HTML şablonu
 - **Ön yazılar**: HTML şablonu + Playwright (A4 PDF, CV'lerle aynı hat)
 - **Tarayıcı**: Playwright + Greenhouse API + WebSearch
-- **Dashboard**: Go + Bubble Tea + Lipgloss (Catppuccin Mocha teması)
 - **Veri**: Markdown tabloları + YAML yapılandırma + TSV toplu iş dosyaları
 
 ## Ayrıca Açık Kaynak

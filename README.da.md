@@ -52,9 +52,7 @@
   <img src="https://img.shields.io/badge/GitHub_Copilot-000?style=flat&logo=githubcopilot&logoColor=white" alt="GitHub Copilot">
   <br>
   <img src="https://img.shields.io/badge/Node.js-339933?style=flat&logo=node.js&logoColor=white" alt="Node.js">
-  <img src="https://img.shields.io/badge/Go-00ADD8?style=flat&logo=go&logoColor=white" alt="Go">
   <img src="https://img.shields.io/badge/Playwright-2EAD33?style=flat&logo=playwright&logoColor=white" alt="Playwright">
-  <img src="https://img.shields.io/badge/Bubble_Tea-FF75B5?style=flat&logo=go&logoColor=white" alt="Bubble Tea">
   <img src="https://img.shields.io/badge/License-MIT-blue.svg" alt="MIT">
   <a href="TRADEMARK.md"><img src="https://img.shields.io/badge/Trademark-Policy-blue.svg" alt="Trademark Policy"></a>
 </p>
@@ -88,7 +86,6 @@ Bygget af en, der brugte det til at vurdere 740+ stillinger, generere 100+ skræ
 | **ATS-optimeret PDF**          | CV med søgeordsindsprøjtning, Space Grotesk + DM Sans-design                                                                                    |
 | **Portalskanner**              | 45+ virksomheder konfigureret (Anthropic, OpenAI, ElevenLabs, Retool, n8n…) + forespørgsler via Ashby, Greenhouse, Lever, Wellfound            |
 | **Batch-behandling**           | Parallel vurdering via `claude -p`-workers                                                                                                      |
-| **TUI-dashboard**              | Terminal-UI til at gennemse, filtrere og sortere pipelinen                                                                                       |
 | **Human-in-the-Loop**          | AI vurderer og anbefaler, du beslutter og handler. Systemet sender aldrig ansøgninger — det sidste ord er altid dit <!-- hitl: absolute guarantee. Do not add "automatically", "by itself", "without your permission" or any other hedge when translating this row. -->                            |
 | **Pipeline-integritet**        | Automatisk merge, deduplikering, statusnormalisering, datakvalitetstjek                                                                          |
 
@@ -194,18 +191,6 @@ node scan.mjs --verify          # token-fri søgning + liveness-verifikation via
 
 Verifikationen er sekventiel og gælder kun nye stillinger (efter deduplikering), så omkostningen er begrænset.
 
-## Dashboard TUI
-
-Indbygget terminal-dashboard til visuel gennemgang af pipelinen:
-
-```bash
-cd dashboard
-go build -o career-dashboard .
-./career-dashboard --path ..
-```
-
-Funktioner: 6 filterfaner, 4 sorteringstilstande, grupperet/flad visning, doven indlæsning af forhåndsvisninger, statusændring inline.
-
 ## Projektstruktur
 
 ```text
@@ -230,7 +215,6 @@ career-ops/
 ├── batch/
 │   ├── batch-prompt.md          # Selvstændig worker-prompt
 │   └── batch-runner.sh          # Orkestratorscript
-├── dashboard/                   # Go TUI-viewer til pipelinen
 ├── data/                        # Dine sporingsdata (gitignored)
 ├── reports/                     # Vurderingsrapporter (gitignored)
 ├── output/                      # Genererede PDF'er (gitignored)
@@ -244,13 +228,10 @@ career-ops/
 ![Claude Code](https://img.shields.io/badge/Claude_Code-000?style=flat&logo=anthropic&logoColor=white)
 ![Node.js](https://img.shields.io/badge/Node.js-339933?style=flat&logo=node.js&logoColor=white)
 ![Playwright](https://img.shields.io/badge/Playwright-2EAD33?style=flat&logo=playwright&logoColor=white)
-![Go](https://img.shields.io/badge/Go-00ADD8?style=flat&logo=go&logoColor=white)
-![Bubble Tea](https://img.shields.io/badge/Bubble_Tea-FF75B5?style=flat&logo=go&logoColor=white)
 
 - **Agent**: Claude Code med brugerdefinerede skills og tilstande
 - **PDF**: Playwright/Puppeteer + HTML-skabelon
 - **Skanner**: Playwright + Greenhouse API + WebSearch
-- **Dashboard**: Go + Bubble Tea + Lipgloss (Catppuccin Mocha-tema)
 - **Data**: Markdown-tabeller + YAML-konfiguration + TSV-filer til batches
 
 ## Også open source

@@ -62,9 +62,7 @@
   <img src="https://img.shields.io/badge/GitHub_Copilot-000?style=flat&logo=githubcopilot&logoColor=white" alt="GitHub Copilot">
   <br>
   <img src="https://img.shields.io/badge/Node.js-339933?style=flat&logo=node.js&logoColor=white" alt="Node.js">
-  <img src="https://img.shields.io/badge/Go-00ADD8?style=flat&logo=go&logoColor=white" alt="Go">
   <img src="https://img.shields.io/badge/Playwright-2EAD33?style=flat&logo=playwright&logoColor=white" alt="Playwright">
-  <img src="https://img.shields.io/badge/Bubble_Tea-FF75B5?style=flat&logo=go&logoColor=white" alt="Bubble Tea">
   <img src="https://img.shields.io/badge/License-MIT-blue.svg" alt="MIT">
   <a href="TRADEMARK.md"><img src="https://img.shields.io/badge/Trademark-Policy-blue.svg" alt="Trademark Policy"></a>
 </p>
@@ -98,7 +96,6 @@ Conçu par quelqu'un qui l'a utilisé pour évaluer plus de 740 offres d'emploi,
 | **Génération de CV ATS** | CV optimisés avec injection de mots-clés, utilisant le design Space Grotesk + DM Sans |
 | **Scanner de Portails** | Plus de 45 entreprises préconfigurées (Anthropic, OpenAI, ElevenLabs, Retool, n8n...) + requêtes personnalisées sur Ashby, Greenhouse, Lever, Wellfound |
 | **Traitement en Lot** | Évaluation parallèle avec des processus de travail `claude -p` |
-| **TUI de Tableau de Bord** | Interface terminal pour explorer, filtrer et trier votre pipeline |
 | **Humain dans la Boucle** | L'IA évalue et recommande, vous décidez et agissez. Le système ne soumet jamais de candidature — vous avez toujours le dernier mot <!-- hitl: absolute guarantee. Do not add "automatically", "by itself", "without your permission" or any other hedge when translating this row. --> |
 | **Intégrité du Pipeline** | Fusion automatisée, déduplication, normalisation des statuts et vérifications de santé |
 
@@ -248,18 +245,6 @@ node scan.mjs --verify          # découverte sans jeton + vérification de l'é
 
 La vérification est séquentielle et ne s'exécute que sur les nouvelles offres (après déduplication), afin de limiter l'utilisation des ressources.
 
-## TUI de Tableau de Bord
-
-Le tableau de bord terminal intégré vous permet d'explorer visuellement votre pipeline :
-
-```bash
-cd dashboard
-go build -o career-dashboard .
-./career-dashboard --path ..
-```
-
-Fonctionnalités : 6 onglets de filtrage, 4 modes de tri, vue groupée ou plate, chargement différé des aperçus, modification du statut en ligne.
-
 ## Structure du projet
 
 ```
@@ -284,7 +269,6 @@ career-ops/
 ├── batch/
 │   ├── batch-prompt.md          # Consigne pour le traitement par lot
 │   └── batch-runner.sh          # Script d'orchestration
-├── dashboard/                   # Visualiseur de pipeline TUI en Go
 ├── data/                        # Vos données de suivi (gitignoré)
 ├── reports/                     # Rapports d'évaluation (gitignoré)
 ├── output/                      # CV PDF générés (gitignoré)
@@ -298,7 +282,6 @@ career-ops/
 - **Agent** : Claude Code avec compétences et modes personnalisés
 - **PDF** : Playwright/Puppeteer + modèle HTML
 - **Scanner** : Playwright + API Greenhouse + Recherche Web
-- **Tableau de bord** : Go + Bubble Tea + Lipgloss (thème Catppuccin Mocha)
 - **Données** : Tableaux Markdown + configuration YAML + fichiers TSV pour les lots
 
 ## Également en Open Source

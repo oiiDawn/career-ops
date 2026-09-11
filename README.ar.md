@@ -32,9 +32,7 @@
   <img src="https://img.shields.io/badge/GitHub_Copilot-000?style=flat&logo=githubcopilot&logoColor=white" alt="GitHub Copilot">
   <br>
   <img src="https://img.shields.io/badge/Node.js-339933?style=flat&logo=node.js&logoColor=white" alt="Node.js">
-  <img src="https://img.shields.io/badge/Go-00ADD8?style=flat&logo=go&logoColor=white" alt="Go">
   <img src="https://img.shields.io/badge/Playwright-2EAD33?style=flat&logo=playwright&logoColor=white" alt="Playwright">
-  <img src="https://img.shields.io/badge/Bubble_Tea-FF75B5?style=flat&logo=go&logoColor=white" alt="Bubble Tea">
   <img src="https://img.shields.io/badge/License-MIT-blue.svg" alt="MIT">
   <a href="TRADEMARK.md"><img src="https://img.shields.io/badge/Trademark-Policy-blue.svg" alt="Trademark Policy"></a>
 </p>
@@ -80,7 +78,6 @@
 | **توليد ملفات PDF متوافقة مع ATS** | سير ذاتية مخصصة وموجهة مكتوبة بخطوط احترافية وتصميم جذاب خاضعة لتحسين الكلمات المفتاحية |
 | **ماسح بوابات التوظيف** | معد مسبقًا لأكثر من 45 شركة رائدة (Anthropic, OpenAI, ElevenLabs, Retool, n8n...) مع استعلامات مخصصة |
 | **المعالجة بالدفعات (Batch Processing)** | تقييم متوازي لعدة وظائف دفعة واحدة باستخدام وكلاء فرعيين يعملون بالتوازي |
-| **لوحة تحكم سطر الأوامر (TUI)** | واجهة طرفية تفاعلية لتصفح وفلترة وترتيب مسار وظائفك بمرونة فائقة |
 | **المرشح في قلب القرار (Human-in-the-Loop)** | يقوم الذكاء الاصطناعي بالتقييم والتوصية، بينما تتخذ أنت القرار النهائي وتنفذه. النظام لا يقوم أبدًا بإرسال أي طلب — القرار النهائي لك دائمًا <!-- hitl: absolute guarantee. Do not add "automatically", "by itself", "without your permission" or any other hedge when translating this row. --> |
 | **سلامة وموثوقية البيانات** | دمج تلقائي، إزالة التكرار، توحيد الحالات المهنية، وفحوصات سلامة المسار البرمجي |
 
@@ -218,20 +215,6 @@ node scan.mjs --verify          # كشف سريع بدون استهلاك للر
 
 ---
 
-## لوحة تحكم سطر الأوامر (Dashboard TUI)
-
-تتيح لك لوحة التحكم المصممة بلغة Go تصفح مسارات البحث وفلترة العروض بصريًا وتفاعليًا داخل الطرفية:
-
-```bash
-cd dashboard
-go build -o career-dashboard .
-./career-dashboard --path ..
-```
-
-تتميز اللوحة بدعم التصفح السريع والكسول (lazy-loaded previews)، والتبديل المباشر لحالات الطلب، وواجهات ملونة وجذابة مبنية باستخدام Bubble Tea و Lipgloss.
-
----
-
 ## هيكلية المشروع (Project Structure)
 
 ```text
@@ -252,7 +235,6 @@ career-ops/
 │   ├── cv-template.html         # قالب السيرة الذاتية المهيأ للـ ATS
 │   ├── portals.example.yml      # نموذج إعدادات بوابات فحص الوظائف
 │   └── states.yml               # تعريف الحالات القانونية للطلبات
-├── dashboard/                   # لوحة تحكم TUI مبنية بلغة Go
 ├── data/                        # بيانات التتبع والمتابعة الخاصة بك
 ├── reports/                     # تقارير التقييم المفصلة للوظائف
 ├── output/                      # ملفات الـ PDF المولدة النهائية

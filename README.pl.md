@@ -52,9 +52,7 @@
   <img src="https://img.shields.io/badge/GitHub_Copilot-000?style=flat&logo=githubcopilot&logoColor=white" alt="GitHub Copilot">
   <br>
   <img src="https://img.shields.io/badge/Node.js-339933?style=flat&logo=node.js&logoColor=white" alt="Node.js">
-  <img src="https://img.shields.io/badge/Go-00ADD8?style=flat&logo=go&logoColor=white" alt="Go">
   <img src="https://img.shields.io/badge/Playwright-2EAD33?style=flat&logo=playwright&logoColor=white" alt="Playwright">
-  <img src="https://img.shields.io/badge/Bubble_Tea-FF75B5?style=flat&logo=go&logoColor=white" alt="Bubble Tea">
   <img src="https://img.shields.io/badge/License-MIT-blue.svg" alt="MIT">
   <a href="TRADEMARK.md"><img src="https://img.shields.io/badge/Trademark-Policy-blue.svg" alt="Trademark Policy"></a>
 </p>
@@ -88,7 +86,6 @@ Zbudowany przez kogoś, kto użył go do oceny 740+ ofert pracy, wygenerowania 1
 | **Generowanie PDF pod ATS**    | CV z wstrzyknięciem słów kluczowych, design Space Grotesk + DM Sans                                                                            |
 | **Skaner portali**             | 45+ firm skonfigurowanych (Anthropic, OpenAI, ElevenLabs, Retool, n8n…) + zapytania przez Ashby, Greenhouse, Lever, Wellfound                  |
 | **Przetwarzanie wsadowe**      | Równoległa ocena przez workery `claude -p`                                                                                                      |
-| **Dashboard TUI**              | Terminalowy UI do przeglądania, filtrowania i sortowania pipeline'u                                                                             |
 | **Human-in-the-Loop**          | AI ocenia i rekomenduje, ty decydujesz i działasz. System nigdy nie wysyła aplikacji — ostatnie słowo zawsze należy do ciebie <!-- hitl: absolute guarantee. Do not add "automatically", "by itself", "without your permission" or any other hedge when translating this row. -->                  |
 | **Integralność pipeline'u**    | Automatyczny merge, deduplikacja, normalizacja statusów, sprawdzenia zdrowia danych                                                             |
 
@@ -219,18 +216,6 @@ node scan.mjs --verify          # zero-tokenowe wyszukiwanie + weryfikacja liven
 
 Weryfikacja jest sekwencyjna i dotyczy tylko nowych ofert (po deduplikacji), więc koszt jest ograniczony.
 
-## Dashboard TUI
-
-Wbudowany terminal dashboard do wizualnego przeglądania pipeline'u:
-
-```bash
-cd dashboard
-go build -o career-dashboard .
-./career-dashboard --path ..
-```
-
-Funkcje: 6 zakładek filtrowania, 4 tryby sortowania, widok grupowany/płaski, leniwe ładowanie podglądów, zmiana statusów inline.
-
 ## Struktura projektu
 
 ```text
@@ -255,7 +240,6 @@ career-ops/
 ├── batch/
 │   ├── batch-prompt.md          # Samodzielny prompt workera
 │   └── batch-runner.sh          # Skrypt orkiestratora
-├── dashboard/                   # Go TUI viewer pipeline'u
 ├── data/                        # Twoje dane śledzenia (gitignored)
 ├── reports/                     # Raporty ocen (gitignored)
 ├── output/                      # Wygenerowane PDF (gitignored)
@@ -269,13 +253,10 @@ career-ops/
 ![Claude Code](https://img.shields.io/badge/Claude_Code-000?style=flat&logo=anthropic&logoColor=white)
 ![Node.js](https://img.shields.io/badge/Node.js-339933?style=flat&logo=node.js&logoColor=white)
 ![Playwright](https://img.shields.io/badge/Playwright-2EAD33?style=flat&logo=playwright&logoColor=white)
-![Go](https://img.shields.io/badge/Go-00ADD8?style=flat&logo=go&logoColor=white)
-![Bubble Tea](https://img.shields.io/badge/Bubble_Tea-FF75B5?style=flat&logo=go&logoColor=white)
 
 - **Agent**: Claude Code z niestandardowymi skillami i trybami
 - **PDF**: Playwright/Puppeteer + szablon HTML
 - **Skaner**: Playwright + Greenhouse API + WebSearch
-- **Dashboard**: Go + Bubble Tea + Lipgloss (motyw Catppuccin Mocha)
 - **Dane**: tabele Markdown + konfiguracja YAML + pliki TSV dla wsadów
 
 ## Również open source

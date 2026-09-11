@@ -3,7 +3,7 @@
 /**
  * update-system.mjs — Safe auto-updater for career-ops
  *
- * Updates ONLY system layer files (modes, scripts, dashboard, templates).
+ * Updates ONLY system layer files (modes, scripts, templates).
  * NEVER touches user data (cv.md, profile.yml, _profile.md, data/, reports/).
  *
  * Usage:
@@ -56,7 +56,6 @@ export const DEFAULT_GIT_FETCH_TIMEOUT_MS = parsePositiveInt(
 );
 export const NPM_INSTALL_TIMEOUT_MS = parsePositiveInt(process.env.CAREER_OPS_NPM_INSTALL_TIMEOUT_MS, 60000);
 export const PLAYWRIGHT_INSTALL_TIMEOUT_MS = parsePositiveInt(process.env.CAREER_OPS_PLAYWRIGHT_INSTALL_TIMEOUT_MS, 120000);
-export const DASHBOARD_REBUILD_TIMEOUT_MS = parsePositiveInt(process.env.CAREER_OPS_DASHBOARD_REBUILD_TIMEOUT_MS, 60000);
 export const UPDATE_PATH_CHECKOUT_BUDGET_MS = parsePositiveInt(process.env.CAREER_OPS_UPDATE_PATH_CHECKOUT_BUDGET_MS, 5000);
 export const REEXEC_BUFFER_TIMEOUT_MS = parsePositiveInt(process.env.CAREER_OPS_REEXEC_BUFFER_TIMEOUT_MS, 60000);
 
@@ -145,13 +144,16 @@ const SYSTEM_PATHS = [
   'AGENTS.md',
   'GEMINI.md',
   'KIMI.md',
-  'build-dashboard.mjs',
   'generate-pdf.mjs',
   'reactive-resume.mjs',
   'theme-style.mjs',
   'generate-latex.mjs',
   'extract-latex-content.mjs',
   'patch-latex-content.mjs',
+  'prescreen.mjs',
+  'preparation-plan.mjs',
+  'lib/prescreen-core.mjs',
+  'lib/prescreen-cache.mjs',
   'lib/ascii-fold.mjs',
   'lib/cli-flags.mjs',
   'lib/gemini-node-floor.mjs',
@@ -280,7 +282,6 @@ const SYSTEM_PATHS = [
   'batch/README.md',
   'utils/token-tracker.mjs',
   'batch-tailor.mjs',
-  'dashboard/',
   'templates/',
   'config/cv-facts.example.json',
   'fonts/',
@@ -640,7 +641,6 @@ export function reexecTimeoutMs(updatePathCount = SYSTEM_PATHS.length + BOOTSTRA
       UPDATE_PATH_CHECKOUT_BUDGET_MS * Math.max(0, updatePathCount) +
       NPM_INSTALL_TIMEOUT_MS +
       PLAYWRIGHT_INSTALL_TIMEOUT_MS +
-      DASHBOARD_REBUILD_TIMEOUT_MS +
       REEXEC_BUFFER_TIMEOUT_MS,
   );
 }
@@ -1237,32 +1237,6 @@ export function stagedPathsOutside(owned, preserved = [], run = (...args) => git
     .filter(path => path !== '')
     .filter(path => preservedFiles.has(path)
       || (!files.has(path) && !dirs.some(dir => path.startsWith(dir))));
-}
-
-function dashboardGoSourcesChanged() {
-  try {
-    const changed = git('diff', '--name-only', 'HEAD', '--', 'dashboard');
-    return changed
-      .split('\n')
-      .some(path => path.startsWith('dashboard/') && path.endsWith('.go'));
-  } catch {
-    return false;
-  }
-}
-
-function rebuildDashboardBinaryIfNeeded() {
-  if (!dashboardGoSourcesChanged()) return;
-
-  try {
-    execFileSync('go', ['build', '-o', 'career-dashboard', '.'], {
-      cwd: join(ROOT, 'dashboard'),
-      timeout: DASHBOARD_REBUILD_TIMEOUT_MS,
-      stdio: 'pipe',
-    });
-    console.log('dashboard binary rebuilt');
-  } catch {
-    console.log('dashboard binary rebuild skipped -- run: cd dashboard && go build -o career-dashboard . manually');
-  }
 }
 
 // ── CHECK ───────────────────────────────────────────────────────
@@ -1974,9 +1948,6 @@ async function apply() {
     } catch {
       console.log('playwright install skipped (run manually: npx playwright install chromium)');
     }
-
-    // 6. Rebuild compiled dashboard if Go sources changed
-    rebuildDashboardBinaryIfNeeded();
 
     // 7. Commit the update
     const remote = localVersion(); // Re-read after checkout updated VERSION

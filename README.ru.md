@@ -58,9 +58,7 @@
   <img src="https://img.shields.io/badge/GitHub_Copilot-000?style=flat&logo=githubcopilot&logoColor=white" alt="GitHub Copilot">
   <br>
   <img src="https://img.shields.io/badge/Node.js-339933?style=flat&logo=node.js&logoColor=white" alt="Node.js">
-  <img src="https://img.shields.io/badge/Go-00ADD8?style=flat&logo=go&logoColor=white" alt="Go">
   <img src="https://img.shields.io/badge/Playwright-2EAD33?style=flat&logo=playwright&logoColor=white" alt="Playwright">
-  <img src="https://img.shields.io/badge/Bubble_Tea-FF75B5?style=flat&logo=go&logoColor=white" alt="Bubble Tea">
   <img src="https://img.shields.io/badge/License-MIT-blue.svg" alt="MIT">
   <a href="TRADEMARK.md"><img src="https://img.shields.io/badge/Trademark-Policy-blue.svg" alt="Trademark Policy"></a>
 </p>
@@ -88,7 +86,6 @@ career-ops превращает любой AI-CLI в полноценный ко
 | **ATS PDF-генерация**         | Резюме с инъекцией ключевых слов, дизайн Space Grotesk + DM Sans                                                                                          |
 | **Сканер порталов**           | 45+ предустановленных компаний (международный рынок) + российские площадки (hh.ru, Хабр Карьера, trudvsem.ru и др.) — добавляются вручную в `portals.yml` |
 | **Пакетная обработка**        | Параллельная оценка через `claude -p` воркеры                                                                                                             |
-| **Dashboard TUI**             | Терминальный UI для просмотра, фильтрации и сортировки пайплайна                                                                                          |
 | **Human-in-the-Loop**         | ИИ оценивает и рекомендует, вы решаете и действуете. Система никогда не отправляет отклик — окончательный выбор всегда за вами <!-- hitl: absolute guarantee. Do not add "automatically", "by itself", "without your permission" or any other hedge when translating this row. -->                                                            |
 | **Целостность пайплайна**     | Автоматический merge, дедупликация, нормализация статусов, проверки здоровья                                                                              |
 
@@ -205,17 +202,6 @@ career-ops поддерживает ключевые российские джо
 
 **Джоб-борды:** Ashby, Greenhouse, Lever, Wellfound, Workable (поддерживаются через WebSearch/WebFetch)
 
-## Dashboard TUI
-
-Встроенный терминальный дашборд для визуального просмотра пайплайна:
-
-```bash
-npm run serve:dashboard   # launch the TUI
-npm run build:dashboard   # optional: build the standalone binary
-```
-
-Возможности: 6 табов фильтрации, 4 режима сортировки, группированный/плоский вид, ленивая подгрузка превью, смена статусов inline.
-
 ## Структура проекта
 
 ```
@@ -237,7 +223,6 @@ career-ops/
 │   ├── portals.example.yml      # Конфигурация сканера
 │   └── states.yml               # Канонические статусы
 ├── batch/                       # Пакетная обработка
-├── dashboard/                   # Go TUI
 ├── data/                        # Данные трекинга (gitignored)
 ├── reports/                     # Отчёты оценки (gitignored)
 ├── output/                      # Сгенерированные PDF (gitignored)
@@ -251,7 +236,6 @@ career-ops/
 - **Агент**: Claude Code с кастомными навыками и режимами
 - **PDF**: Playwright + HTML-шаблон
 - **Сканер**: Playwright + Greenhouse API + WebSearch
-- **Dashboard**: Go + Bubble Tea + Lipgloss (тема Catppuccin Mocha)
 - **Данные**: Markdown-таблицы + YAML-конфиг + TSV-файлы батчей
 
 ## FAQ

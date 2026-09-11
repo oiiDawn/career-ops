@@ -1,7 +1,7 @@
 // tests/tracker-busy-timeout.test.mjs — regression coverage for #1957.
 //
 // openDb() must set a non-zero SQLite busy_timeout. Without it the default is
-// 0, so a CLI query, a `set-status` write and the Go TUI dashboard touching
+// 0, so a CLI query, a `set-status` write and another process touching
 // the derived index at the same time throw SQLITE_BUSY on the first contention
 // instead of waiting for the lock to clear.
 //

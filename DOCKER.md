@@ -5,7 +5,7 @@ Use this when the host can't install Playwright/Chromium directly (e.g. Ubuntu
 laptops). The image is based on Microsoft's official Playwright image, which
 ships Chromium preinstalled and works on any Linux kernel Docker supports.
 
-No feature is dropped: PDF generation, scanner, liveness checker, dashboard
+No feature is dropped: PDF generation, scanner, liveness checker,
 (Go), batch workers, update system — everything runs inside the container.
 Your project directory is bind-mounted, so reports, CVs, profile, tracker, and
 all generated artifacts live on the host as before.
@@ -44,7 +44,6 @@ The `./cops` wrapper forwards any command into the container.
 | Rollback | `./cops rollback` |
 | Interactive shell | `./cops shell` |
 | Raw node script | `./cops node check-liveness.mjs <url>` |
-| Build dashboard | `./cops bash -c 'cd dashboard && go build -buildvcs=false -o career-dashboard . && ./career-dashboard --path ..'` |
 
 Unknown subcommands fall through to `docker compose exec` so anything works:
 
@@ -65,7 +64,7 @@ Unknown subcommands fall through to `docker compose exec` so anything works:
 ## How it works
 
 - `Dockerfile` — installs Node, Playwright/Chromium (preinstalled in base image),
-  Go (for the dashboard), LaTeX (for `generate-latex.mjs`), and project deps.
+  LaTeX (for `generate-latex.mjs`), and project deps.
 - `docker-compose.yml` — bind-mounts the project at `/app` so host edits appear
   inside the container immediately. `node_modules` lives in a named volume to
   avoid host/container ABI mismatches.

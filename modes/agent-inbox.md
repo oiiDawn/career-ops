@@ -3,7 +3,7 @@
 A durable bridge between *looking at* the pipeline and *acting on* it. career-ops
 runs from an AI session, but there's no place to drop a request when you're not
 in one. The agent inbox is that place: an append-only checklist
-(`data/agent-inbox.md`) that any tool — this CLI, a dashboard button, a cron job,
+(`data/agent-inbox.md`) that any tool — this CLI, an agent, a cron job,
 or you by hand — can append to, and that the agent drains at the start of a
 session.
 
@@ -44,7 +44,3 @@ node agent-inbox.mjs resolve 1 --result "scored 4.3 — report 012"
 4. Items that need **live user input** (a mock interview, a pasted transcript, a
    decision, anything that would submit an application) → do **not** run them;
    ask the user to start them instead. The inbox never bypasses human review.
-
-This mode pairs naturally with a dashboard: a "queue this" button writes to the
-same file, so a click while browsing the tracker becomes work the next session
-picks up.

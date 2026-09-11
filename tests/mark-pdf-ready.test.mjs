@@ -1,7 +1,7 @@
 // tests/mark-pdf-ready.test.mjs — regression coverage for mark-pdf-ready.mjs (#2172).
 //
 // mark-pdf-ready.mjs is the canonical write path for the tracker's PDF column
-// (❌→✅), used by the web dashboard's "pdf" mode after the backend confirms a
+// (❌→✅), used after the PDF workflow confirms a
 // successful render. Same sandboxing pattern as set-status-tests.mjs /
 // tracker-columns-tests.mjs: a throwaway tracker via the CAREER_OPS_TRACKER /
 // CAREER_OPS_TRACKER_LOCK env overrides tracker-utils.mjs already respects.

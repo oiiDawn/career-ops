@@ -100,18 +100,7 @@ const CADENCE = resolveCadenceConfig();
 
 // --- Status normalization ---
 //
-// DERIVED from templates/states.yml, not a hand-copy of it. The map that used
-// to live here was already missing every Turkish spelling the Go dashboard
-// recognises, so the same tracker row normalized three different ways: the TUI
-// read `Mülakat` as `interview`, this file left it as `mülakat` (matching no
-// ACTIONABLE/ADVANCED set, so the row silently vanished from the funnel), and
-// the web rejected it outright on writeback. tracker-utils already exposes the
-// loader for exactly this — its docstring says "a new state or alias lands in
-// one file and every consumer follows" — it just had no consumer here (#2704).
-//
-// Cached per process: these are short-lived CLI runs, so a single read is
-// correct. A long-running consumer must NOT copy this pattern — see #2590,
-// where caching states.yml for a server's lifetime pinned a stale roster.
+// Resolve status aliases from the shared state definitions.
 let aliasMapCache = null;
 
 /** alias/id/label (lowercased) → canonical lowercase id, from states.yml. */
@@ -777,8 +766,7 @@ export function analyzeFromContent(trackerContent, followupsContent = '') {
     const appFollowups = followupsByApp.get(app.num) || [];
     const followupCount = appFollowups.length;
 
-    // Find most recent follow-up (sorted date-desc; also exposed per entry so
-    // the web dashboard can render history without a second parser).
+    // Expose the most recent follow-up and its history in date-descending order.
     let lastFollowupDate = null;
     let daysSinceLastFollowup = null;
     const sortedFollowups = [...appFollowups].sort((a, b) => (a.date > b.date ? -1 : 1));

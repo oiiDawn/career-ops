@@ -1,7 +1,7 @@
 {
-  "_why": "Shared corpus for the company/role matching key (#2666). The core's normalizeTextKey (tracker-parse.mjs) is the source of truth; web/src/lib/core/normalize-text-key.mjs is a declared copy that exists because the browser cannot reach the user's checkout. This file is the single list both sides are checked against — two lists would drift, which is the whole failure this corpus guards.",
+  "_why": "Unicode company-name inputs for the core identity contract.",
   "_separator": " ",
-  "_note": "Expected values are NOT hand-written: the assertion derives them from the core and compares the mirror against that. The strings below are the cases; the core decides the answers.",
+  "_note": "Unicode company-name inputs for the core identity contract.",
   "cases": [
     { "input": "Nestlé", "why": "accented Latin — the plain case the ASCII-only key destroyed (nestl)" },
     { "input": "Nestlé", "why": "same name in NFD (macOS stores filenames decomposed) — must key identically to the NFC form" },
@@ -18,7 +18,7 @@
     { "input": "Generali", "why": "the counterpart: must stay DISTINCT from Ġenerali" },
     { "input": "ＡＣＭＥ", "why": "fullwidth Latin, routine in Japanese-sourced data — NFKC folds it to acme" },
     { "input": "ﬁnance", "why": "fi ligature — NFKC decomposes it" },
-    { "input": "İstanbul Tekstil", "why": "Turkish dotted capital I. toLowerCase yields i + U+0307, and that combining mark used to survive into the key, so this did NOT match 'Istanbul Tekstil' even though the two read identically on screen. Decision reversed 12-ago-2026 after the same artifact turned up in a third surface and, worse, inside verify-pipeline's duplicate check, where it produced a false green. The targeted fix now strips U+0307 after lowercasing, so İstanbul/Istanbul match. It is scoped to the artifact CASING CREATES: Škoda != Skoda, Nestlé != Nestle, Zürich != Zurich and İŞ BANKASI != Is Bankasi all still hold, because those marks are letters the user typed. This key is a frozen contract surface the web derives from, so the mirror in web/src/lib/core/normalize-text-key.mjs changed in the same commit and test-all §55.7 compares them." },
+    { "input": "İstanbul Tekstil", "why": "Turkish dotted capital I. toLowerCase yields i + U+0307, and that combining mark used to survive into the key, so this did NOT match 'Istanbul Tekstil' even though the two read identically on screen. Decision reversed 12-ago-2026 after the same artifact turned up in a third surface and, worse, inside verify-pipeline's duplicate check, where it produced a false green. The targeted fix now strips U+0307 after lowercasing, so İstanbul/Istanbul match. It is scoped to the artifact CASING CREATES: Škoda != Skoda, Nestlé != Nestle, Zürich != Zurich and İŞ BANKASI != Is Bankasi all still hold, because those marks are letters the user typed." },
     { "input": "Acme Corp", "why": "plain ASCII control — must be unaffected by any of the above" },
     { "input": null, "why": "nullish must key to empty string, not the literal 'null' (which made null and undefined match each other)" },
     { "input": "", "why": "empty stays empty" },

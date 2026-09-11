@@ -6,7 +6,7 @@
  *
  * career-ops is driven from an AI session, but there's no durable place to drop
  * a request when you're not in one — e.g. while glancing at the tracker (or a
- * dashboard) you think "evaluate this URL" or "draft a follow-up for #7". This
+ * tracker) you think "evaluate this URL" or "draft a follow-up for #7". This
  * is that place: an append-only queue the agent drains at the start of a
  * session.
  *
@@ -17,7 +17,7 @@
  * Fully local-first and human-in-the-loop: nothing here auto-submits. Queued
  * items are *intents* for the agent to action and the user to review. Markdown
  * checklist, no database, no server, no dependencies — edit it by hand or via
- * this CLI, and any tool (a dashboard, a script, cron) can append to it. The
+ * this CLI, and any tool (an agent, a script, cron) can append to it. The
  * protocol an agent follows is documented in modes/agent-inbox.md.
  *
  * Usage:
@@ -44,7 +44,7 @@ const HEADER = [
   '> decision) → ask the user to start them instead of running them.',
   '>',
   '> Nothing here auto-submits — queued items are *intents* for you to action and',
-  '> the user to review. Appended by hand, by a dashboard, or by agent-inbox.mjs.',
+  '> the user to review. Appended by hand, by an agent, or by agent-inbox.mjs.',
   '',
 ].join('\n');
 
@@ -163,7 +163,7 @@ async function add() {
   // another writer's append between the check and the write.
   //
   // timeoutMs is raised from the shared 8s default because this queue's whole
-  // point is bursty concurrent writers (a dashboard, a script, cron all drop
+  // point is bursty concurrent writers (an agent, a script, cron all drop
   // items at once), and lock acquisition is a retry lottery, not a fair queue.
   // Serving N herded waiters is the coupon-collector problem: ~N·H(N) rounds,
   // so 30 concurrent adds need ~120 rounds while 8000/80 = 100 only affords

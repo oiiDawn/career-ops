@@ -58,7 +58,7 @@ See the Company blacklist section in `docs/SCRIPTS.md` for the full behavior and
 
 ## What's the difference between `Discarded` and `SKIP`?
 
-From `templates/states.yml`: `Discarded` is "discarded by candidate or offer closed" (you considered it and stopped), `SKIP` is "doesn't fit, don't apply" (never a candidate). They land in different dashboard groups, so they count differently in your funnel: SKIP is filtering, Discarded is dropping out.
+From `templates/states.yml`: `Discarded` is "discarded by candidate or offer closed" (you considered it and stopped), `SKIP` is "doesn't fit, don't apply" (never a candidate). They represent different funnel outcomes: SKIP is filtering, Discarded is dropping out.
 
 ## Is there only one CV template?
 

@@ -95,16 +95,6 @@ function pickOracle(mirror, oldTag, targetSha, systemPaths) {
     if (!managed(f)) return false;
     try { git(mirror, 'cat-file', '-e', `${targetSha}:${f}`); return true; } catch { return false; }
   });
-  // No managed file changed. That is NOT a failure by itself: a web-only PR
-  // (web/ is deliberately outside SYSTEM_PATHS) legitimately changes nothing
-  // `apply` manages, so there is nothing to qualify. Returning null lets the
-  // caller SKIP. Throwing here made the gate red for every web-only PR, which
-  // on 11-ago blocked three at once — including the fix for a HIGH severity
-  // advisory. "I cannot test this" and "this is broken" must not share an exit.
-  //
-  // The caller still fails loudly when ROOT files changed and none is managed:
-  // that shape means the SYSTEM_PATHS read is probably wrong, which is exactly
-  // what this oracle exists to catch.
   if (!candidate) return { oracle: null, changed };
   return { oracle: candidate, changed };
 }

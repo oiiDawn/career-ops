@@ -36,10 +36,7 @@ const PORTAL_HEALTH_FILE = join(ROOT, 'data', 'portal-health.tsv');
 
 const CANONICAL_STATUSES = ['Evaluated', 'Applied', 'Responded', 'Interview', 'Offer', 'Hired', 'Rejected', 'Discarded', 'SKIP'];
 
-// In-flight applications. Deliberately NARROWER than the dashboard's
-// ActiveApps (which also counts Evaluated): an evaluated-but-never-sent row is
-// a candidate, not an application in flight. Hired is a terminal success, not
-// in flight, so it is intentionally excluded here (but see PURSUED/funnel).
+// In-flight applications still awaiting an outcome.
 const ACTIVE_STATUSES = new Set(['Applied', 'Responded', 'Interview', 'Offer']);
 
 // Rows that count toward avgScoreApplied — jobs the user actually pursued.
@@ -141,7 +138,7 @@ export function computeColdAppNums(trackerContent, followupsContent) {
 
 /**
  * Cumulative funnel: everX = "reached stage X or beyond, ever". The math
- * mirrors the dashboard's ComputeProgressMetrics (career.go): Rejected counts
+ * counts Rejected
  * into everApplied (a rejection proves a submission), Hired counts into every
  * stage through everOffer (a landed job proves the offer and everything before
  * it), and each later stage sums itself plus everything beyond it. Rates are
@@ -155,9 +152,6 @@ export function computeColdAppNums(trackerContent, followupsContent) {
  * response is indistinguishable from one rejected after interviews — middle
  * stages are lower bounds until status-transition logging exists (#1428).
  *
- * This is the canonical funnel definition for career-ops going forward;
- * dashboard/web consuming this JSON instead of keeping independent copies is
- * a named follow-up in #1604.
  */
 export function computeFunnel(byStatus) {
   const n = (k) => byStatus[k] || 0;

@@ -52,7 +52,6 @@ The review process you'll experience here is documented end-to-end in [Agentic m
 
 **Bigger contributions:**
 - New evaluation dimensions or scoring logic
-- Dashboard TUI features (in `dashboard/`)
 - New skill modes (in `modes/`)
 - Script improvements (`.mjs` utilities)
 
@@ -79,7 +78,7 @@ We credit contributors publicly and invite high-signal folks up the ladder. Want
 
 career-ops core is **local-first and human-in-the-loop** by design — it runs on your machine and drafts applications for *you* to review and submit. Centralized infrastructure — hosted job aggregation, a shared matching service, proxies or Workers the project would operate — is **not part of the core**: it's heavier than a free local tool should carry, and it's where the project is headed as a *separate, opt-in service*. See the direction here: **[Where career-ops is going](https://github.com/santifer/career-ops/discussions/904)**.
 
-Rule of thumb before you build: **provider modules, languages, CLI support, modes on the core path, dashboard, docs and fixes → the core.** Bigger centralized or automation ideas (a hosted layer, auto-apply, scraping infrastructure) → **start in that discussion**, so we can route them together instead of a large PR that can't merge.
+Rule of thumb before you build: **provider modules, languages, CLI support, modes on the core path, docs and fixes → the core.** Bigger centralized or automation ideas (a hosted layer, auto-apply, scraping infrastructure) → **start in that discussion**, so we can route them together instead of a large PR that can't merge.
 
 ### What belongs in core (the parallel-feature test)
 
@@ -114,7 +113,6 @@ To propose a source (yours or anyone's): [open a source proposal](https://github
 
 - Keep modes language-agnostic when possible (Claude handles both EN and ES)
 - Scripts should handle missing files gracefully (check `existsSync` before `readFileSync`)
-- Dashboard changes require a build (`npm run build:dashboard`) — test with real data before submitting
 - Don't commit personal data (cv.md, profile.yml, applications.md, reports/)
 
 ## What we do NOT accept
@@ -124,7 +122,7 @@ To propose a source (yours or anyone's): [open a source proposal](https://github
 - **PRs that add external API dependencies** without prior discussion in an issue.
 - **Feature PRs against bundled plugins** (`plugins/apify`, `plugins/gmail`, `plugins/notion`). Bundled plugins are stable *reference seeds* — to extend one, publish your own `career-ops-plugin-<id>` and we'll register it as the maintained successor that takes precedence once installed (see [docs/PLUGINS.md](docs/PLUGINS.md)). Bundled plugins only take security/compat fixes.
 - **PRs that add centralized or hosted infrastructure to the core** (proxies, aggregation services, shared Workers). That's the separate opt-in service, not the open-core — bring it to the [direction discussion](https://github.com/santifer/career-ops/discussions/904) first.
-- **Universal aggregation indexes as a dependency** — integrating a single third-party service that unifies listings across many sources into one pipe career-ops reads from. Reading individual boards where employers post is exactly what `providers/` is for and stays welcome; the *unified offers-aggregation layer itself* is first-party, the same boundary that keeps the web experience first-party ([#904](https://github.com/santifer/career-ops/discussions/904) / [#156](https://github.com/santifer/career-ops/discussions/156)). This boundary applies to the plugin registry as well as core.
+- **Universal aggregation indexes as a dependency** — integrating a single third-party service that unifies listings across many sources into one pipe career-ops reads from. Reading individual boards where employers post is exactly what `providers/` is for and stays welcome; the *unified offers-aggregation layer itself* is first-party, the first-party aggregation boundary ([#904](https://github.com/santifer/career-ops/discussions/904) / [#156](https://github.com/santifer/career-ops/discussions/156)). This boundary applies to the plugin registry as well as core.
 - **Integrations that send your data to a third-party service** — providers or sync features that require a third-party account or push your CV, pipeline, or notes out to an external service. career-ops is local-first and zero-keys: your job-search data stays on your machine. Reading *public* job-listing APIs locally is welcome (that's how the built-in providers work); routing your personal data through someone else's service is not.
 - **PRs that add third-party hosted entry-points or service badges to the README** — links or embeds that route users' resumes or job data through a service the project doesn't operate. The README stays to assets the project controls, and the official online experience is something we keep first-party (see [The Vision](https://github.com/santifer/career-ops/discussions/156)). Projects built on career-ops are welcome — share them in the [Discord](https://discord.gg/8pRpHETxa4) or Discussions, just not on the front page.
 - **PRs containing personal data** (real CVs, emails, phone numbers). Use `examples/` with fictional data instead.
@@ -137,13 +135,8 @@ npm run doctor                # Setup validation
 node verify-pipeline.mjs     # Health check
 node cv-sync-check.mjs        # Config check
 
-# Dashboard
-npm run build:dashboard       # go build with platform-correct binary name
-npm run serve:dashboard       # launch the TUI against the repo root
-
 # Tests
 node test-all.mjs             # Full suite — run before pushing/opening a PR
-node test-all.mjs --quick     # Full suite, skipping the dashboard build
 node test-all.mjs --only providers/themuse   # Run just one provider's test(s)
 ```
 
@@ -158,17 +151,9 @@ a rebase on the rest.
 `tests/providers/{name}.test.mjs` — it's auto-discovered (`tests/**/*.test.mjs`),
 no registration needed. Do not add a section to `test-all.mjs` for this.
 
-**Adding a test for the web app:** web suites live under `web/tests/`, mirroring
-the tested module's path below `web/src/` (`src/lib/clean-chips.mjs` →
-`tests/lib/clean-chips.test.mjs`), named `{module}.test.mjs`. `web/`'s own
-`npm test` glob-discovers them, so no registration is needed there either — but
-keep them out of `web/src/` (Next.js scans that tree) and write them as `.mjs`,
-since there is no TypeScript loader for `node --test`. `web/README.md` has the
-detail; `tests/web-test-layout.test.mjs` enforces it on every PR.
-
 **`--only` is a dev convenience, not a PR gate:** it runs *only* the discovered
 `tests/` files matching the given substring and skips every inline core
-section (syntax, scripts, dashboard, data contract, personal data, paths,
+section (syntax, scripts, data contract, personal data, paths,
 etc.). A green `--only` run is **not** a green suite — always run the full
 `node test-all.mjs` before pushing.
 

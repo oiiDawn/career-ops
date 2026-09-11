@@ -18,22 +18,13 @@
  */
 
 import { execFileSync } from 'child_process';
-import { existsSync, readFileSync, writeFileSync, mkdtempSync, mkdirSync, rmSync, utimesSync } from 'fs';
+import { existsSync, readFileSync, writeFileSync, mkdtempSync, mkdirSync, rmSync } from 'fs';
 import { join, dirname } from 'path';
 import { tmpdir } from 'os';
 import { fileURLToPath } from 'url';
 
 const ROOT = dirname(fileURLToPath(import.meta.url));
 const NODE = process.execPath;
-
-// web/ lives deliberately OUTSIDE the auto-updater's world (its own
-// release-please component; see validate-system-paths-coverage.mjs
-// EXCLUDE_PREFIXES), so installs updated via `update-system.mjs apply` have
-// the core WITHOUT the web/ tree. The web-reader tests below exercise the
-// real alias chain on fresh clones and CI, and skip cleanly on core-only
-// installs instead of crashing the whole suite with ERR_MODULE_NOT_FOUND.
-const HAS_WEB = existsSync(join(ROOT, 'web', 'src', 'lib', 'tracker-table.mjs'));
-function skipWeb(m) { console.log(`SKIP ${m} — web/ not present (core-only install; web/ is excluded from the auto-updater by design)`); }
 
 let passed = 0;
 let failed = 0;
@@ -323,51 +314,6 @@ const TSV_NO_LOCATION = '2\t2026-02-02\tGlobex\tManager\tApplied\tN/A\t✅\t—\
   rmSync(sb.dir, { recursive: true, force: true });
 }
 
-// ── Test 8: web read path resolves headers via the SHARED alias table ───────
-// web/src/lib/tracker-table.mjs (behind readApplications() in career-ops.ts)
-// loads tracker-aliases.json — the same file tracker-parse.mjs exports as
-// HEADER_ALIASES — instead of mirroring it. Passing ROOT here exercises the
-// REAL alias file, so an alias added/renamed there is either honored by the
-// web reader too or fails this test; a second drifting table can't come back.
-if (!HAS_WEB) {
-  skipWeb('web reader: shared alias table tests');
-} else {
-  const { parseApplications, loadHeaderAliases } = await import('./web/src/lib/tracker-table.mjs');
-  const { HEADER_ALIASES } = await import('./tracker-parse.mjs');
-  const WEB_10COL = `# Applications Tracker
-
-| # | Date | Company | Role | Location | Score | Status | PDF | Report | Priority | Notes |
-|---|------|---------|------|----------|-------|--------|-----|--------|----------|-------|
-| 1 | 2026-01-01 | Acme | Engineer | Remote | 4.0/5 | Applied | ✅ | — | high | seed row |
-`;
-  const rows = parseApplications(WEB_10COL, ROOT);
-  const r = rows[0];
-  if (rows.length === 1 && r.company === 'Acme' && r.role === 'Engineer') {
-    pass('web reader: Company/Role read by header on 10-col tracker');
-  } else {
-    fail(`web reader: Company/Role on 10-col tracker — got ${JSON.stringify(r)}`);
-  }
-  if (r && r.score === '4.0/5' && r.status === 'Applied') {
-    pass('web reader: Score/Status not shifted by Location column');
-  } else {
-    fail(`web reader: Score/Status on 10-col tracker — got ${JSON.stringify(r)}`);
-  }
-  if (r && r.notes === 'seed row') {
-    pass('web reader: unknown Priority column skipped, Notes intact');
-  } else {
-    fail(`web reader: Notes past unknown column — got "${r && r.notes}"`);
-  }
-  // The web reader and the Node tooling must consume the IDENTICAL table.
-  const webAliases = loadHeaderAliases(ROOT);
-  if (JSON.stringify(webAliases) === JSON.stringify(HEADER_ALIASES) && Object.keys(webAliases).length > 0) {
-    pass('web reader: alias table is byte-identical to tracker-parse HEADER_ALIASES');
-  } else {
-    fail(`web reader: alias table drifted from HEADER_ALIASES — web ${JSON.stringify(webAliases)} vs core ${JSON.stringify(HEADER_ALIASES)}`);
-  }
-}
-
-// ═══ Stage 2 (#1596): Via column ════════════════════════════════════════════
-
 const HEADER_VIA = `# Applications Tracker
 
 | # | Date | Company | Via | Role | Score | Status | PDF | Report | Notes |
@@ -564,59 +510,6 @@ const HEADER_VIA = `# Applications Tracker
   rmSync(sb.dir, { recursive: true, force: true });
 }
 
-// ── Test 16: web alias cache refreshes on change, never caches failure ──────
-// loadHeaderAliases caches per file to avoid a disk read+parse per request
-// (readApplications runs on every API route / page render), but the cache is
-// mtime-keyed: a missing/corrupt file is NEVER cached — recovery is picked up
-// without a server restart — and a rewritten file (system update changing the
-// alias table) is re-read on the next call.
-if (!HAS_WEB) {
-  skipWeb('web reader: alias cache refresh tests');
-} else {
-  const { loadHeaderAliases } = await import('./web/src/lib/tracker-table.mjs');
-  const dir = mkdtempSync(join(tmpdir(), 'co-alias-'));
-  const aliasFile = join(dir, 'tracker-aliases.json');
-  // Force distinct mtimes between rewrites — same-ms writes are otherwise
-  // indistinguishable on coarse-timestamp filesystems.
-  let tick = Date.now();
-  const bump = () => { tick += 2000; const t = new Date(tick); utimesSync(aliasFile, t, t); };
-
-  // (a) missing file → {} and NOT cached: creating the file afterwards is seen.
-  const missing = loadHeaderAliases(dir);
-  writeFileSync(aliasFile, JSON.stringify({ '#': 'num', 'company': 'company' }));
-  const recovered = loadHeaderAliases(dir);
-  if (Object.keys(missing).length === 0 && recovered['#'] === 'num' && recovered.company === 'company') {
-    pass('web reader: alias file created after a failed load is picked up (no restart)');
-  } else {
-    fail(`web reader: recovery after missing file — first ${JSON.stringify(missing)}, then ${JSON.stringify(recovered)}`);
-  }
-
-  // (b) file rewritten → new aliases visible without a process restart.
-  writeFileSync(aliasFile, JSON.stringify({ '#': 'num', 'req id': 'num' }));
-  bump();
-  const updated = loadHeaderAliases(dir);
-  if (updated['req id'] === 'num' && updated.company === undefined) {
-    pass('web reader: rewritten alias file is re-read (mtime-keyed cache)');
-  } else {
-    fail(`web reader: update not visible without restart — got ${JSON.stringify(updated)}`);
-  }
-
-  // (c) corrupt file → {} safely, and NOT cached: fixing it is seen.
-  writeFileSync(aliasFile, '{ not json');
-  bump();
-  const corrupt = loadHeaderAliases(dir);
-  writeFileSync(aliasFile, JSON.stringify({ '#': 'num' }));
-  bump();
-  const fixed = loadHeaderAliases(dir);
-  if (Object.keys(corrupt).length === 0 && fixed['#'] === 'num') {
-    pass('web reader: corrupt alias file yields {} and later fix is picked up');
-  } else {
-    fail(`web reader: corrupt handling — during ${JSON.stringify(corrupt)}, after fix ${JSON.stringify(fixed)}`);
-  }
-
-  rmSync(dir, { recursive: true, force: true });
-}
-
 // ── Test 17: pipe rows preserve empty interior cells ──────────────────────
 {
   const EMPTY_PDF = '| 42 | 2026-01-01 | Foo | Bar Engineer | 4.0/5 | Evaluated |  | [42](reports/042-foo-2026-01-01.md) | some note |';
@@ -640,67 +533,6 @@ if (!HAS_WEB) {
   rmSync(sb.dir, { recursive: true, force: true });
 }
 
-// ── Test 18: web reader honors the core's row-shape contract (#2369) ────────
-// The web reader mirrors parseTrackerRow's LOGIC (not just its alias table),
-// so it must agree with the core on which rows are readable at all:
-//   a) a row missing an INTERIOR cell shifts every later column one left, so
-//      the core REJECTS it (dynamic width guard in parseTrackerRow). The web
-//      reader used to accept it and render Score in the Role column.
-//   b) a hand-edited row WITHOUT the trailing pipe is one part narrower but
-//      complete (tracker-utils rebuildRow supports them), so the core reads
-//      its last cell. The web reader used to drop it via slice(1, -1).
-// Realistic trigger for (a): a row written before `merge-tracker --migrate-via`
-// widened the header, so it carries no Via cell.
-if (!HAS_WEB) {
-  skipWeb('web reader: row-shape contract tests');
-} else {
-  const { parseApplications } = await import('./web/src/lib/tracker-table.mjs');
-  const { resolveColumns, parseTrackerRow } = await import('./tracker-parse.mjs');
-  const VIA_HEADER = [
-    '| # | Date | Company | Via | Role | Score | Status | PDF | Report | Notes |',
-    '|---|------|---------|-----|------|-------|--------|-----|--------|-------|',
-  ];
-  const coreRows = (md) => {
-    const lines = md.split('\n');
-    const cm = resolveColumns(lines);
-    return lines.map(l => parseTrackerRow(l.trim(), cm)).filter(Boolean);
-  };
-
-  // (a) pre-migration row: 9 cells under a 10-column header.
-  const SHIFTED = [
-    ...VIA_HEADER,
-    '| 12 | 2026-01-01 | Acme | Hays | Engineer | 4.5/5 | Applied | ✅ | — | agency |',
-    '| 13 | 2026-01-02 | Globex | Engineer | 4.0/5 | Applied | ✅ | — | pre-migration |',
-  ].join('\n');
-  const shiftedWeb = parseApplications(SHIFTED, ROOT);
-  const shiftedCore = coreRows(SHIFTED);
-  if (shiftedWeb.length === shiftedCore.length && shiftedWeb.every(r => r.n !== '13')) {
-    pass('web reader: row missing an interior cell is rejected, like the core');
-  } else {
-    fail(`web reader: accepted a short row — web ${JSON.stringify(shiftedWeb.map(r => r.n))} vs core ${JSON.stringify(shiftedCore.map(r => String(r.num)))}`);
-  }
-  // The complete row next to it must still parse, unshifted.
-  const good = shiftedWeb.find(r => r.n === '12');
-  if (good && good.via === 'Hays' && good.role === 'Engineer' && good.score === '4.5/5' && good.status === 'Applied') {
-    pass('web reader: the complete Via row next to it stays unshifted');
-  } else {
-    fail(`web reader: complete Via row misread — got ${JSON.stringify(good)}`);
-  }
-
-  // (b) no trailing pipe — the last cell is data, not padding.
-  const NO_TRAILING_PIPE = [
-    '| # | Date | Company | Role | Score | Status | PDF | Report | Notes |',
-    '|---|------|---------|------|-------|--------|-----|--------|-------|',
-    '| 5 | 2026-01-01 | Acme | Engineer | 4.5/5 | Applied | ✅ | — | last note',
-  ].join('\n');
-  const tailWeb = parseApplications(NO_TRAILING_PIPE, ROOT)[0];
-  const tailCore = coreRows(NO_TRAILING_PIPE)[0];
-  if (tailWeb && tailCore && tailWeb.notes === tailCore.notes && tailWeb.notes === 'last note') {
-    pass('web reader: row without a trailing pipe keeps its last cell');
-  } else {
-    fail(`web reader: dropped the last cell — web "${tailWeb && tailWeb.notes}" vs core "${tailCore && tailCore.notes}"`);
-  }
-}
-
+// ── Summary
 console.log(`\n${passed} passed, ${failed} failed`);
 process.exit(failed > 0 ? 1 : 0);

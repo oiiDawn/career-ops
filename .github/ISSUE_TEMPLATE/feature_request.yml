@@ -42,7 +42,6 @@ body:
         - Evaluation / Scoring
         - PDF Generation
         - Portal Scanner
-        - Dashboard TUI
         - Batch Processing
         - Language / i18n
         - Documentation

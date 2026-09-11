@@ -1,0 +1,16 @@
+{
+  "tracked_paths": 1193,
+  "unique_inventory_rows": 1193,
+  "markdown_rows": 1193,
+  "all_paths_exist": true,
+  "text_lines": 246041,
+  "web_runtime_dependency_declarations": 12,
+  "go_direct_dependency_declarations": 5,
+  "existing_tracked_files_changed": false,
+  "runtime_tests": "not run; report-only audit, dependencies missing",
+  "scenario_revision": "2026-09-11 Hermes + existing cron",
+  "confirmed_retirement_files": 260,
+  "confirmed_retirement_text_lines": 41120,
+  "live_cron_jobs_inspected": 3,
+  "hermes_configs_changed": false
+}

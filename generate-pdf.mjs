@@ -14,8 +14,7 @@
  * process exits non-zero if any document failed (#2384).
  *
  * --report links the generated PDF to its tracker/report number and records
- * the linkage in data/pdf-index.tsv so downstream tools (e.g. the TUI
- * dashboard's `d`/`D` hotkeys) can locate the exact PDF for an application.
+ * the linkage in data/pdf-index.tsv so application preparation tools can locate the exact PDF for an application.
  * Without --report a manifest row is still written, just unkeyed.
  *
  * --allow-reorder downgrades the CV section-order guard from a thrown error

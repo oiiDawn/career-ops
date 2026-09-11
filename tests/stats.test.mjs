@@ -44,11 +44,11 @@ try {
     fail(`computeTrackerStats mishandles Hired: ${JSON.stringify(th.byStatus)} avgScoreApplied=${th.avgScoreApplied}`);
   }
 
-  // Funnel — Rejected counts into everApplied (mirrors dashboard ComputeProgressMetrics).
+  // Funnel — Rejected counts into everApplied.
   const f = stats.computeFunnel({ Applied: 4, Responded: 2, Interview: 1, Offer: 1, Rejected: 2, Evaluated: 9 });
   if (f.everApplied === 10 && f.everResponded === 4 && f.everInterview === 2 && f.everOffer === 1
       && f.responseRate === 40 && f.offerRate === 10 && f.smallSample === false) {
-    pass('computeFunnel cumulative ever* stages match the dashboard math');
+    pass('computeFunnel cumulative ever* stages follow the cumulative stage semantics');
   } else {
     fail(`computeFunnel wrong output: ${JSON.stringify(f)}`);
   }

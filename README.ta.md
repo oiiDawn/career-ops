@@ -69,9 +69,7 @@
   <img src="https://img.shields.io/badge/Grok_Build_CLI-000?style=flat&logo=x&logoColor=white" alt="Grok Build CLI">
   <br>
   <img src="https://img.shields.io/badge/Node.js-339933?style=flat&logo=node.js&logoColor=white" alt="Node.js">
-  <img src="https://img.shields.io/badge/Go-00ADD8?style=flat&logo=go&logoColor=white" alt="Go">
   <img src="https://img.shields.io/badge/Playwright-2EAD33?style=flat&logo=playwright&logoColor=white" alt="Playwright">
-  <img src="https://img.shields.io/badge/Bubble_Tea-FF75B5?style=flat&logo=go&logoColor=white" alt="Bubble Tea">
   <img src="https://img.shields.io/badge/License-MIT-blue.svg" alt="MIT">
   <a href="TRADEMARK.md"><img src="https://img.shields.io/badge/Trademark-Policy-blue.svg" alt="Trademark Policy"></a>
 </p>
@@ -112,7 +110,6 @@ career-ops ஒரு **Agentic** அமைப்பு. நீங்கள் �
 | **Application Email Drafts** | மதிப்பீட்டு அறிக்கை அல்லது Job Description-இலிருந்து Recruiter, Referral அல்லது Cold Application-க்கான Email வரைவை உருவாக்குகிறது. இதில் Subject, இணைப்புகளின் பட்டியல், பொருத்தமான அம்சங்கள் மற்றும் Profile அடிப்படையிலான தொடர்பு விவரங்கள் இடம்பெறும். இது வரைவு மட்டுமே; career-ops Email-ஐ அனுப்பவோ, விண்ணப்பிக்கவோ, எந்த பொத்தானையும் அழுத்தவோ செய்யாது. |
 | **Portal Scanner** | Anthropic, OpenAI, ElevenLabs, Retool, n8n உள்ளிட்ட 45-க்கும் மேற்பட்ட நிறுவனங்களும், Ashby, Greenhouse, Lever, Wellfound போன்ற தளங்களுக்கான முன்கூட்டியே அமைக்கப்பட்ட தேடல்களும். |
 | **Batch Processing** | Headless CLI Workers (`claude -p` / `opencode run`) மூலம் பல வேலை வாய்ப்புகளை இணையாக மதிப்பிடுகிறது. |
-| **Dashboard TUI** | Terminal-இல் உங்கள் Pipeline-ஐ உலாவ, வடிகட்ட, மற்றும் வரிசைப்படுத்த உதவும் Dashboard. |
 | **Human-in-the-Loop** | AI மதிப்பீடு செய்து பரிந்துரைக்கிறது; ஆனால் இறுதி முடிவும் செயல்பாடும் உங்களுடையது. career-ops எந்த விண்ணப்பத்தையும் சமர்ப்பிக்காது. <!-- hitl: absolute guarantee. Do not add "automatically", "by itself", "without your permission" or any other hedge when translating this row. --> |
 | **Pipeline Integrity** | தானியங்கி Merge, Duplicate நீக்கம், நிலை (Status) ஒருமைப்படுத்தல், மற்றும் Health Checks. |
 | **Beyond the CV** | `deep` Mode நிறுவனத்தின் AI திட்டம், சமீபத்திய மாற்றங்கள், Engineering கலாச்சாரம் மற்றும் உங்கள் Profile-ஐ எவ்வாறு வெளிப்படுத்த வேண்டும் என்பதைக் கண்டறிய உதவுகிறது. `contacto` Mode சரியான Hiring Manager, Recruiter அல்லது Team உறுப்பினரை கண்டறிந்து, ஒவ்வொரு தொடர்பு வகைக்கும் ஏற்ற 300 எழுத்துகளுக்குள் LinkedIn செய்தியை உருவாக்குகிறது. `email` Mode மதிப்பீட்டு அறிக்கை அல்லது Job Description-இலிருந்து தொழில்முறை Email வரைவை உருவாக்குகிறது. career-ops எந்த Email-ஐயும் அனுப்பவோ, விண்ணப்பிக்கவோ, எந்த நடவடிக்கையையும் தானாக மேற்கொள்ளவோ செய்யாது. விண்ணப்பம் உங்களை வரிசையில் சேர்க்கும்; ஆனால் ஆய்வுதான் உரையாடலைத் தொடங்கும். |
@@ -358,25 +355,6 @@ node scan.mjs --verify          # Zero-token discovery + Playwright liveness che
 API Scan முடிந்த பிறகு Playwright மூலம் வேலைவாய்ப்பு இன்னும் செயலிலுள்ளதா என்று சரிபார்க்கப்படும். இந்தச் சரிபார்ப்பு புதிய வேலை வாய்ப்புகளுக்கு மட்டுமே நடைபெறும் (Duplicate Entries நீக்கப்பட்ட பிறகு), எனவே தேவையற்ற கூடுதல் செலவு ஏற்படாது.
 
 
-## Dashboard TUI
-
-உள்ளமைக்கப்பட்ட Terminal Dashboard மூலம் உங்கள் Pipeline-ஐ பார்வையிடவும், வடிகட்டவும், வரிசைப்படுத்தவும் முடியும்.
-
-```bash
-npm run serve:dashboard   # TUI-ஐ தொடங்கும்
-npm run build:dashboard   # விருப்பமானது: Standalone Binary-ஐ உருவாக்கும்
-```
-
-**அம்சங்கள்:**
-
-- 6 Filter Tabs
-- 4 Sort Modes
-- Grouped / Flat View
-- Lazy-loaded Previews
-- Inline Status மாற்றங்கள்
-
-மேலும், **Experimental Web UI** (Alpha) ஒன்றும் உள்ளது. நீங்கள் அதைத் தொடங்கும் வரை எதுவும் இயங்காது. மேலும் விவரங்களுக்கு `web/README.md`-ஐப் பார்க்கவும்.
-
 ## Project Structure
 
 ```text
@@ -406,7 +384,6 @@ career-ops/
 ├── batch/
 │   ├── batch-prompt.md          # Worker Prompt
 │   └── batch-runner.sh          # Orchestrator Script
-├── dashboard/                   # Go TUI Dashboard
 ├── data/                        # உங்கள் Tracking Data (gitignored)
 ├── reports/                     # மதிப்பீட்டு அறிக்கைகள் (gitignored)
 ├── output/                      # உருவாக்கப்பட்ட PDF-கள் (gitignored)
@@ -422,7 +399,6 @@ career-ops/
 - **PDF:** Playwright / Puppeteer + HTML Template
 - **Cover Letters:** HTML Template + Playwright (A4 PDF)
 - **Scanner:** Playwright + Greenhouse API + WebSearch
-- **Dashboard:** Go + Bubble Tea + Lipgloss (Catppuccin Mocha Theme)
 - **Data:** Markdown Tables + YAML Configuration + TSV Files
 
 

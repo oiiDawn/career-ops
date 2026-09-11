@@ -7,10 +7,6 @@
 // data/ at import time). Same reason user-agent.mjs and profile-language.mjs
 // are separate modules rather than exports of a bigger one.
 //
-// The repo has already paid for a mirror once: tests/profile-keywords-parity
-// exists because web/ carries a copy of the keyword logic and the copy was
-// wrong. A second copy of THIS logic would repeat that, so there is one.
-
 // Opt-in whole-word matching for a keyword too long to get it automatically.
 // Chosen over widening the 2-3 char rule to every single-word keyword, because
 // the right-hand boundary is exactly what a NEGATIVE usually wants to keep:

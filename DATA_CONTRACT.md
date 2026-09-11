@@ -38,7 +38,7 @@ These files contain your personal data, customizations, and work product. Update
 | `data/active-interviews.md` | Your active interview processes, incl. inline `[process-friction]` notes (read by `process-quality.mjs`) |
 | `data/agent-inbox.md` | Your append-only request queue drained at session start (written by `agent-inbox.mjs`) |
 | `data/reply-candidates.json` | Your normalized employer-reply candidates (subject, body, sender, signal — read by `reply-watch.mjs`) |
-| `data/pdf-index.tsv` | PDF↔report linkage manifest (written by `generate-pdf.mjs` or `reactive-resume.mjs`, read by `find.mjs`, the dashboard, and the `email` mode) |
+| `data/pdf-index.tsv` | PDF↔report linkage manifest (written by `generate-pdf.mjs` or `reactive-resume.mjs`, read by `find.mjs` and the `email` mode) |
 | `data/prescreen-cache/*.json` | Canonical Stage 0 inputs/results keyed by URL hash. Scanner writes `incomplete`; pipeline/batch replace it after full-JD evidence extraction. Liveness is evaluated separately. |
 | `output/{report-company-role}/preparation/plan.json` | Single-role preparation plan with evidence-gap, adjacent, actual-gap, and unverified classifications plus pre-application/interview actions. |
 | `output/{report-company-role}/review/*.json` | Stage 2 reviewer result and required change plan. Draft-only, created only after the user selects a Scored role and invokes its application workflow; never submission authority. |
@@ -154,7 +154,6 @@ These files contain system logic, scripts, templates, and instructions that impr
 | `opencode.example.json` | OpenCode project config template (seed for `opencode.json`; ships Playwright MCP registration) |
 | `batch/batch-prompt.md` | Batch worker prompt |
 | `batch/batch-runner.sh` | Batch orchestrator |
-| `dashboard/*` | Go TUI dashboard |
 | `templates/*` | Base templates |
 | `fonts/*` | Self-hosted fonts |
 | `.claude/skills/*` | Skill definitions (Claude Code) |

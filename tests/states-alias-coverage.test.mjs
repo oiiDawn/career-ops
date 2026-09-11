@@ -1,20 +1,8 @@
 // tests/states-alias-coverage.test.mjs — templates/states.yml must know every
 // alias the rest of the engine already accepts.
 //
-// states.yml calls itself "Source of truth for career-ops (writer) and dashboard
-// (reader). Both systems MUST use these exact states." But normalize-statuses.mjs
-// carried alias mappings states.yml had never heard of (condicional, hold,
-// evaluar, verificar -> Evaluated; geo blocker -> SKIP), and the two lists drifted
-// silently because nothing compared them.
-//
-// The drift is not cosmetic. set-status.mjs writes the row's PREVIOUS status text
-// into data/status-log.tsv as the transition's `from` cell, and funnel-velocity.mjs
-// validates that cell against states.yml. A row sitting on an accepted-but-unlisted
-// status produced a log line funnel-velocity discarded as unparseable, so the row's
-// first tracked transition vanished from velocity and coverage math.
-//
-// The vocabulary is read out of normalize-statuses.mjs rather than hardcoded, so
-// adding an alias there without adding it to states.yml fails here.
+// Every accepted alias must resolve consistently through both consumers.
+
 import { pass, fail, ROOT } from './helpers.mjs';
 import { readFileSync } from 'fs';
 import { join } from 'path';

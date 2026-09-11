@@ -73,9 +73,7 @@
   <img src="https://img.shields.io/badge/Grok_Build_CLI-000?style=flat&logo=x&logoColor=white" alt="Grok Build CLI">
   <br>
   <img src="https://img.shields.io/badge/Node.js-339933?style=flat&logo=node.js&logoColor=white" alt="Node.js">
-  <img src="https://img.shields.io/badge/Go-00ADD8?style=flat&logo=go&logoColor=white" alt="Go">
   <img src="https://img.shields.io/badge/Playwright-2EAD33?style=flat&logo=playwright&logoColor=white" alt="Playwright">
-  <img src="https://img.shields.io/badge/Bubble_Tea-FF75B5?style=flat&logo=go&logoColor=white" alt="Bubble Tea">
   <img src="https://img.shields.io/badge/License-MIT-blue.svg" alt="MIT">
   <a href="TRADEMARK.md"><img src="https://img.shields.io/badge/Trademark-Policy-blue.svg" alt="Trademark Policy"></a>
 </p>
@@ -110,7 +108,6 @@ Gebaut von jemandem, der damit 740+ Stellenanzeigen bewertet, 100+ personalisier
 | **Anschreiben-Generator** | Recherchegestützte Anschreiben mit Keyword-Mirroring, interaktiven Angle-Prompts, Freigabe im Chat und A4-PDF über dieselbe HTML- und Playwright-Pipeline wie Lebensläufe |
 | **Portal-Scanner** | 45+ vorkonfigurierte Unternehmen (Anthropic, OpenAI, ElevenLabs, Retool, n8n...) plus eigene Queries über Ashby, Greenhouse, Lever und Wellfound |
 | **Batch Processing** | Parallele Bewertung mit headless CLI-Workern (`claude -p` / `opencode run`) |
-| **Dashboard TUI** | Terminal-UI zum Durchsuchen, Filtern und Sortieren deiner Pipeline |
 | **Human-in-the-Loop** | KI bewertet und empfiehlt, du entscheidest. Das System reicht niemals eine Bewerbung ein — die finale Entscheidung liegt immer bei dir <!-- hitl: absolute guarantee. Do not add "automatically", "by itself", "without your permission" or any other hedge when translating this row. --> |
 | **Pipeline-Integrität** | Automatisches Mergen, Deduplizieren, Status-Normalisierung und Health Checks |
 
@@ -222,18 +219,6 @@ Standardmäßig vertraut `node scan.mjs` (alias `npm run scan`) den Rückgaben d
 node scan.mjs --verify          # Zero-Token-Discovery + Playwright-Liveness-Check
 ```
 
-## Dashboard TUI
-
-Das integrierte Terminal-Dashboard lässt dich deine Pipeline visuell durchsuchen:
-
-```bash
-cd dashboard
-go build -o career-dashboard .
-./career-dashboard --path ..
-```
-
-Features: 6 Filter-Tabs, 4 Sortiermodi, gruppierte/flache Ansicht, lazy-loaded Previews, Statusänderungen inline.
-
 ## Projektstruktur
 
 ```text
@@ -249,7 +234,6 @@ career-ops/
 ├── modes/                       # Skill-Modi
 ├── templates/                   # CV-Template, Portal-Template, Statuswerte
 ├── batch/                       # Batch-Orchestrierung
-├── dashboard/                   # Go-TUI für die Pipeline
 ├── data/                        # deine Tracking-Daten (gitignored)
 ├── reports/                     # Bewertungsberichte (gitignored)
 ├── output/                      # generierte PDFs (gitignored)
@@ -263,14 +247,11 @@ career-ops/
 ![Claude Code](https://img.shields.io/badge/Claude_Code-000?style=flat&logo=anthropic&logoColor=white)
 ![Node.js](https://img.shields.io/badge/Node.js-339933?style=flat&logo=node.js&logoColor=white)
 ![Playwright](https://img.shields.io/badge/Playwright-2EAD33?style=flat&logo=playwright&logoColor=white)
-![Go](https://img.shields.io/badge/Go-00ADD8?style=flat&logo=go&logoColor=white)
-![Bubble Tea](https://img.shields.io/badge/Bubble_Tea-FF75B5?style=flat&logo=go&logoColor=white)
 
 - **Agent:** KI-Coding-CLI mit gemeinsamen Skills und Modi (`AGENTS.md` + CLI-Wrapper)
 - **PDF:** Playwright/Puppeteer + HTML-Template
 - **Anschreiben:** HTML-Template + Playwright (A4-PDF, gleiche Pipeline wie Lebensläufe)
 - **Scanner:** Playwright + Greenhouse API + WebSearch
-- **Dashboard:** Go + Bubble Tea + Lipgloss (Catppuccin-Mocha-Theme)
 - **Daten:** Markdown-Tabellen + YAML-Konfiguration + TSV-Batch-Dateien
 
 ## Ebenfalls Open Source

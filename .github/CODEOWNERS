@@ -50,16 +50,11 @@
 /.github/workflows/            @santifer
 /docs/PLUGIN_REVIEW.md         @santifer
 
-# The experimental web UI — owned by the web track (dual-track review with the
-# core maintainer on any PR that also touches root files).
-/web/ @santifer
-
 # ── Area owners ────────────────────────────────────────────────────────────
 # Not red lines: these are the day-to-day areas, routed to whoever has been
-# carrying them. Test-suite infrastructure and the Go dashboard both fall to
+# carrying them. Test-suite infrastructure falls to
 # @Scott-Emberson, who built most of what is in them (the test-all split into
-# six suites, the provider-contract suites, and the dashboard's tracker work).
+# six suites and the provider-contract suites).
 # `test-all.mjs` itself stays out on purpose: it is the harness every other
 # check runs through, so it keeps the wider review.
 /tests/     @Scott-Emberson
-/dashboard/ @Scott-Emberson

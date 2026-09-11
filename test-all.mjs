@@ -4,17 +4,16 @@
  * test-all.mjs — Comprehensive test suite for career-ops
  *
  * Run before merging any PR or pushing changes.
- * Tests: syntax, scripts, dashboard, data contract, personal data, paths.
+ * Tests: syntax, scripts, data contract, personal data, paths.
  *
  * Usage:
  *   node test-all.mjs                        # Run all tests
- *   node test-all.mjs --quick                # Skip dashboard build (faster)
  *   node test-all.mjs --only <substring>      # Run ONLY discovered tests/**\/*.test.mjs
  *                                             # files whose path contains <substring>
  *                                             # (e.g. --only providers/themuse).
  *
  *   LOUD WARNING: `--only` runs ONLY discovered tests/ files — every inline
- *   core section above (syntax, scripts, dashboard, data contract, personal
+ *   core section above (syntax, scripts, data contract, personal
  *   data, paths, etc.) is SKIPPED. A green `--only` run is NOT a green
  *   suite. Always run the full suite (no flags) before pushing.
  *
@@ -55,7 +54,7 @@ import { tmpdir } from 'os';
 import { promisify } from 'util';
 import { fileURLToPath, pathToFileURL } from 'url';
 import * as yaml from 'js-yaml';
-import { pass, fail, warn, run, lastRunFailure, formatRunFailure, fileExists, finish, ROOT, QUICK, NODE, DEFAULT_SCRIPT_TIMEOUT_MS, getBash, toBashPath, hermeticGitEnv } from './tests/helpers.mjs';
+import { pass, fail, warn, run, lastRunFailure, formatRunFailure, fileExists, finish, ROOT, NODE, DEFAULT_SCRIPT_TIMEOUT_MS, getBash, toBashPath, hermeticGitEnv } from './tests/helpers.mjs';
 import { flagValue, hasFlag } from './lib/cli-flags.mjs';
 
 /**
@@ -340,7 +339,7 @@ const scripts = [
   { name: 'tracker-writer-lock-tests.mjs', expectExit: 0, timeoutMs: 180_000 },
   // Root-level standalone suites shipped in SYSTEM_PATHS but previously never
   // executed by CI (issue #1624). All are fast (<0.5s each), so they run in
-  // both quick and full mode like their siblings above.
+  // the full suite like their siblings above.
   { name: 'test-trust-validator.mjs', expectExit: 0 },
   { name: 'test-salary-filter.mjs', expectExit: 0 },
   { name: 'detect-reposts.test.mjs', expectExit: 0 },
@@ -376,7 +375,7 @@ try {
   // Never copied, at any depth: dependency trees and git metadata. Nothing run
   // from the throwaway copy reads them (module resolution walks up into the
   // real ROOT/node_modules, which is how the root-level exclusion already
-  // worked), and a nested web/node_modules is ~400 MB on a machine that has
+  // worked), and nested node_modules can be large on a machine that has
   // installed the web app's deps — copying it dominated this section (#2387).
   const EXCLUDE_AT_ANY_DEPTH = new Set(['node_modules', '.git']);
 
@@ -1518,46 +1517,6 @@ try {
   fail(`archive-posting egress guard tests crashed: ${e.message}`);
 }
 
-// ── 4. DASHBOARD BUILD ──────────────────────────────────────────
-
-if (!QUICK) {
-  console.log('\n4. Dashboard build');
-  let hasGo = false;
-  try {
-    execSync('go version', { stdio: 'ignore' });
-    hasGo = true;
-  } catch {}
-  if (!hasGo) {
-    warn('Dashboard build skipped — go compiler not in env');
-  } else {
-    const isWindows = process.platform === 'win32';
-    const dashboardBuildTmp = mkdtempSync(join(tmpdir(), 'career-dashboard-build-'));
-    const outPath = join(dashboardBuildTmp, isWindows ? 'career-dashboard-test.exe' : 'career-dashboard-test');
-    const goEnv = { ...process.env };
-    if (isWindows && !goEnv.GOCACHE) {
-      goEnv.GOCACHE = join(tmpdir(), 'career-ops-go-build-cache');
-    }
-    if (goEnv.GOCACHE) {
-      try { mkdirSync(goEnv.GOCACHE, { recursive: true }); } catch (e) {}
-    }
-    const goBuild = run('go', ['build', '-o', outPath, '.'], {
-      cwd: join(ROOT, 'dashboard'),
-      env: goEnv,
-      stdio: ['pipe', 'pipe', 'pipe'],
-      timeout: 60000,
-    });
-    if (goBuild !== null) {
-      pass('Dashboard compiles');
-      try { rmSync(outPath, { force: true }); } catch (e) {}
-    } else {
-      fail('Dashboard build failed');
-    }
-    try { rmSync(dashboardBuildTmp, { recursive: true, force: true }); } catch (e) {}
-  }
-} else {
-  console.log('\n4. Dashboard build (skipped --quick)');
-}
-
 // ── 5. DATA CONTRACT ────────────────────────────────────────────
 
 console.log('\n5. Data contract validation');
@@ -1848,9 +1807,6 @@ const allowedFiles = [
   // Manifesto: the author signs it publicly; the ledger carries signers' names by design
   'MANIFESTO.md', 'SIGNATURES.md', '.github/PULL_REQUEST_TEMPLATE/sign-manifesto.md',
   '.github/SECURITY.md',
-  // Dashboard credit string
-  'dashboard/internal/ui/screens/pipeline.go',
-  'dashboard/internal/ui/screens/progress.go',
 ];
 
 // Build pathspec for git grep — only scan tracked files matching these
@@ -1873,7 +1829,6 @@ for (const pattern of leakPatterns) {
     for (const line of result.split('\n')) {
       const file = line.split(':')[0];
       if (allowedFiles.some(a => file.includes(a))) continue;
-      if (file.includes('dashboard/go.mod')) continue;
       warn(`Possible personal data in ${file}: "${pattern}"`);
       leakFound = true;
     }
@@ -2136,22 +2091,7 @@ try {
   fail(`PDF renderer post-launch cleanup test crashed: ${error.message}`);
 }
 
-// ── 7c. UPDATER DASHBOARD REBUILD ─────────────────────────────────
-
-console.log('\n7c. Updater dashboard rebuild');
-
 const updateSystemScript = readFile('update-system.mjs');
-if (
-  /git\('diff',\s*'--name-only',\s*'HEAD',\s*'--',\s*'dashboard'\)/.test(updateSystemScript) &&
-  /path\.startsWith\(['"]dashboard\/['"]\)\s*&&\s*path\.endsWith\(['"]\.go['"]\)/.test(updateSystemScript) &&
-  /go build -o career-dashboard \./.test(updateSystemScript) &&
-  /cwd:\s*join\(ROOT,\s*['"]dashboard['"]\)/.test(updateSystemScript) &&
-  /dashboard binary rebuild skipped/.test(updateSystemScript)
-) {
-  pass('update-system rebuilds dashboard binary when dashboard Go sources change');
-} else {
-  fail('update-system does not rebuild dashboard binary after dashboard Go source updates');
-}
 
 if (updateSystemScript.includes("'CODEX.md'")) {
   pass('update-system preserves CODEX.md as a system-layer wrapper');
@@ -2161,7 +2101,6 @@ if (updateSystemScript.includes("'CODEX.md'")) {
 
 try {
   const {
-    DASHBOARD_REBUILD_TIMEOUT_MS,
     NPM_INSTALL_TIMEOUT_MS,
     PLAYWRIGHT_INSTALL_TIMEOUT_MS,
     REEXEC_BUFFER_TIMEOUT_MS,
@@ -2179,7 +2118,6 @@ try {
     updatePathCount * UPDATE_PATH_CHECKOUT_BUDGET_MS +
     NPM_INSTALL_TIMEOUT_MS +
     PLAYWRIGHT_INSTALL_TIMEOUT_MS +
-    DASHBOARD_REBUILD_TIMEOUT_MS +
     REEXEC_BUFFER_TIMEOUT_MS;
 
   if (parsePositiveInt('42', 7) === 42 && parsePositiveInt('-1', 7) === 7 && parsePositiveInt('nope', 7) === 7) {
@@ -2318,18 +2256,10 @@ if (!/Antes de interpretar|clasifica el|salario p\u00fablico|promesa contractual
   fail('batch prompt contains Spanish system instructions despite its English canonical base');
 }
 
-const batchHtmlWritePath = batchPrompt.match(/Write HTML to `([^`]+)`/)?.[1];
-const batchPdfInputPath = batchPrompt.match(/node generate-pdf\.mjs \\\n\s+([^\s\\]+) \\/)?.[1];
-if (batchHtmlWritePath && batchHtmlWritePath === batchPdfInputPath) {
-  pass('batch prompt renders the HTML path it writes');
-} else {
-  fail(`batch prompt HTML path mismatch: writes ${batchHtmlWritePath ?? 'unknown'}, renders ${batchPdfInputPath ?? 'unknown'}`);
-}
-
 const batchFinalJson = batchPrompt.match(/### Step 6 \u2014 Final JSON([\s\S]*?)\n---/)?.[1] ?? '';
 if (
   /JSON\.stringify|JSON serializer/i.test(batchFinalJson) &&
-  /"pdf":\s*\{pdf_path_json_string_or_null\}/.test(batchFinalJson) &&
+  /"pdf":\s*null/.test(batchFinalJson) &&
   /dynamic string[\s\S]{0,160}escap/i.test(batchFinalJson)
 ) {
   pass('batch final JSON preserves native types and escapes dynamic strings');
@@ -2337,11 +2267,15 @@ if (
   fail('batch final JSON does not require typed, escaped serialization');
 }
 
-const batchTrackerStep = batchPrompt.match(/### Step 5 \u2014 Tracker TSV Line[\s\S]*?### Step 6 \u2014 Final JSON/)?.[0] ?? '';
-if (/\{\{REPORT_NUM\}\}\\t\{\{DATE\}\}/.test(batchTrackerStep) && !/Compute `\{next_num\}`/.test(batchTrackerStep)) {
-  pass('batch workers use the coordinator-reserved tracker number');
+if (
+  /reserve_report_num_retrying/.test(batchRunnerSource) &&
+  /reserve-report-num\.mjs/.test(batchRunnerSource) &&
+  batchRunnerSource.includes('s|{{REPORT_NUM}}|${esc_report_num}|g') &&
+  batchPrompt.includes('reports/{{REPORT_NUM}}-{company-slug}-{{DATE}}.md')
+) {
+  pass('batch reports use the coordinator-reserved report number');
 } else {
-  fail('batch workers still compute tracker numbers independently');
+  fail('batch report reservation or prompt handoff is missing');
 }
 
 const batchMachineSummary = batchPrompt.match(/#### Machine Summary[\s\S]*?### Step 3 \u2014 Save the Report/)?.[0] ?? '';
@@ -3855,7 +3789,7 @@ if ((batchPromptDoc.match(/advertised_comp/g) || []).length >= 2) {
 // Step 3 fence.
 const step2SchemaSection = batchPromptDoc.match(/#### Machine Summary[\s\S]*?### Step 3 \u2014 Save the Report/)?.[0] ?? '';
 const step2SchemaFence = step2SchemaSection.match(/```yaml\n([\s\S]*?)\n```/)?.[1] ?? '';
-const step3Section = batchPromptDoc.match(/### Step 3 \u2014 Save the Report[\s\S]*?### Step 4 \u2014/)?.[0] ?? '';
+const step3Section = batchPromptDoc.match(/### Step 3 \u2014 Save the Report\n([\s\S]*?)(?=^### |$(?![\s\S]))/m)?.[0] ?? '';
 const step3SummaryFence = step3Section.match(/## Machine Summary\s*\n+```yaml\n([\s\S]*?)\n```/)?.[1] ?? '';
 if (/^reports_to:/m.test(step2SchemaFence) && /^reports_to:/m.test(step3SummaryFence)) {
   pass('batch prompt carries reports_to in both Machine Summary fences');
@@ -4910,24 +4844,6 @@ try {
     fail(`tracker writers bypass shared transaction scope: ${unsafeWriters.join(', ')}`);
   }
 
-  const dashboardWriter = readFile('dashboard/internal/data/career.go');
-  const dashboardStart = dashboardWriter.indexOf('func UpdateApplicationStatusAndNotes(');
-  const dashboardTail = dashboardStart === -1 ? '' : dashboardWriter.slice(dashboardStart);
-  const nextDashboardFunction = dashboardTail.indexOf('\nfunc ', 1);
-  const dashboardBody = nextDashboardFunction === -1
-    ? dashboardTail
-    : dashboardTail.slice(0, nextDashboardFunction);
-  const acquireAt = dashboardBody.indexOf('acquireTrackerLock(');
-  const deferredReleaseAt = dashboardBody.indexOf('defer func()');
-  const readAt = dashboardBody.indexOf('os.ReadFile(filePath)');
-  const replaceAt = dashboardBody.indexOf('writeFileAtomic(filePath');
-  if (acquireAt >= 0 && deferredReleaseAt > acquireAt && readAt > deferredReleaseAt
-      && replaceAt > readAt
-      && !/os\.WriteFile\(filePath,\s*\[\]byte\(strings\.Join\(lines/.test(dashboardBody)) {
-    pass('dashboard tracker update structurally holds the lock across read and atomic replacement');
-  } else {
-    fail('dashboard tracker update escapes the cross-runtime transaction scope');
-  }
 } catch (e) {
   fail(`tracker writer lock contract tests crashed: ${e.message}`);
 }
@@ -6595,15 +6511,18 @@ run(NODE, ['archive-posting.mjs', '--pipeline', '--report=42']) === null
   ? pass('--report with --pipeline: rejected (report keys one posting)')
   : fail('--report with --pipeline: should exit non-zero');
 
-// live render: gated behind Playwright executable availability
+// Live rendering requires explicit opt-in and a browser-capable environment.
+const liveArchive = process.argv.includes('--live-archive');
 let hasBrowser = false;
 try {
   const { chromium } = await import('playwright');
   hasBrowser = existsSync(chromium.executablePath());
 } catch { /* playwright not installed */ }
 
-if (!hasBrowser) {
-  warn('archive render skipped — no Playwright browser in env');
+if (!liveArchive) {
+  warn('archive render NOT VERIFIED — run node test-all.mjs --live-archive in a browser-capable environment');
+} else if (!hasBrowser) {
+  fail('archive render requested but no Playwright browser is installed');
 } else {
   let liveJobUrl = null;
   try {
@@ -6618,7 +6537,7 @@ if (!hasBrowser) {
   } catch { /* offline — degrade gracefully */ }
 
   if (!liveJobUrl) {
-    warn('archive render skipped — Greenhouse API unreachable');
+    fail('archive render requested but no live Greenhouse URL could be obtained');
   } else {
     const JDS_DIR = join(ROOT, 'jds');
     const startedAt = Date.now();
@@ -11023,52 +10942,6 @@ try {
   fail(`non-Latin via guard tests crashed: ${e.message}`);
 }
 
-// ── GO STATUS LITERALS MUST BE states.yml ALIASES (#2704) ─────────
-// The Go dashboard's NormalizeStatus grew its own, larger alias table: it knew
-// every Turkish spelling while states.yml did not, so ONE tracker row
-// normalized three different ways — the TUI read `Mülakat` as interview, the
-// core left it as `mülakat` (matching no ACTIONABLE/ADVANCED set, so the row
-// vanished from the funnel), and the web rejected it on writeback. We ship
-// modes/tr/, so this was live for Turkish users.
-//
-// Guard the direction that actually drifts: every status literal Go matches on
-// must be resolvable through states.yml. Go may still hold MORE matching logic
-// (it uses substring Contains for some), but it must not know a spelling the
-// source of truth has never heard of.
-console.log('\n🧪 Testing Go status literals against states.yml (#2704)...');
-try {
-  const { loadCanonicalStates } = await import(pathToFileURL(join(ROOT, 'tracker-utils.mjs')).href);
-  const states = loadCanonicalStates(join(ROOT, 'templates', 'states.yml'));
-  const known = new Set();
-  for (const st of states) {
-    known.add(st.id.toLowerCase());
-    if (st.label) known.add(st.label.toLowerCase());
-    for (const a of st.aliases) known.add(String(a).toLowerCase());
-  }
-
-  const goPath = join(ROOT, 'dashboard', 'internal', 'data', 'career.go');
-  if (!existsSync(goPath)) {
-    pass('dashboard/internal/data/career.go absent — Go status guard skipped');
-  } else {
-    const go = readFileSync(goPath, 'utf-8');
-    const fnStart = go.indexOf('func NormalizeStatus');
-    const body = fnStart === -1 ? '' : go.slice(fnStart, go.indexOf('\nfunc ', fnStart + 1));
-    // Only the literals used for status matching (== or Contains), not any
-    // other string in the function.
-    const literals = [...body.matchAll(/(?:s == |Contains\(s, )"([^"]+)"/g)].map((m) => m[1].toLowerCase());
-    const unknown = [...new Set(literals)].filter((l) => !known.has(l));
-    if (literals.length === 0) {
-      fail('could not extract any status literals from Go NormalizeStatus — the guard is not actually checking anything (#2704)');
-    } else if (unknown.length === 0) {
-      pass(`every Go status literal (${new Set(literals).size}) resolves through states.yml (#2704)`);
-    } else {
-      fail(`Go NormalizeStatus knows spellings states.yml does not — add them to templates/states.yml: ${unknown.join(', ')}`);
-    }
-  }
-} catch (e) {
-  fail(`Go status literal guard crashed: ${e.message}`);
-}
-
 // ── TURKISH DOTTED-CAPITAL CASING (#2704 review) ──────────────────
 // JS lowercases `İ` (U+0130) to `i` + COMBINING DOT ABOVE (U+0307) and the mark
 // survives, so `TEKLİF` became `tekli\u0307f` and matched no alias. Uppercase
@@ -14859,605 +14732,47 @@ try {
   fail(`_http.mjs error message tests crashed: ${e.message}`);
 }
 
-// ── 55. CORE↔WEB CONTRACT FREEZE ────────────────────────────────
-// The first-party web (web/) READS these exact core formats. This section
-// freezes each surface's canonical shape: a PR that changes a surface must
-// ALSO edit these assertions, which makes the change loud in the diff and
-// forces the web-coordination step (prefer ADDITIVE — append new columns/
-// statuses/blocks at the end; renaming, removing or reordering is BREAKING
-// and needs the web updated in lockstep).
-console.log('\n55. Core↔web contract freeze');
+// ── 55. PERSISTENT DATA CONTRACTS ──────────────────────────────
+
+console.log('\n55. Persistent data contracts');
 try {
-  // 55.1 tracker header (tracker.mjs HEADER → web readApplications)
-  const trackerSrc = readFileSync(join(ROOT, 'tracker.mjs'), 'utf-8');
-  const CANONICAL_TRACKER_HEADER = '| # | Date | Company | Role | Score | Status | PDF | Report | Notes |';
-  if (trackerSrc.includes(CANONICAL_TRACKER_HEADER)) {
-    pass('tracker.mjs writes the canonical 9-col applications.md header');
-  } else {
-    fail('tracker.mjs no longer writes the canonical 9-col header — BREAKING for the web reader; coordinate web/ in lockstep');
+  const { default: assert } = await import('node:assert/strict');
+  const { normalizeTextKey } = await import('./tracker-parse.mjs');
+  const { analyzeFromContent, DEFAULT_CADENCE } = await import('./followup-cadence.mjs');
+  assert.ok(readFile('tracker.mjs').includes('| # | Date | Company | Role | Score | Status | PDF | Report | Notes |'));
+  assert.ok(readFile('scan.mjs').includes('url\\tfirst_seen\\tportal\\ttitle\\tcompany\\tstatus\\tlocation'));
+  const stateIds = [...readFile('templates/states.yml').matchAll(/^  - id: (.+)$/gm)].map(m => m[1]);
+  for (const id of ['evaluated', 'applied', 'responded', 'interview', 'offer', 'hired', 'rejected', 'discarded', 'skip']) {
+    assert.ok(stateIds.includes(id), `missing canonical state: ${id}`);
   }
-
-  // 55.2 scan-history.tsv header prefix (scan.mjs → web whats-new + first_seen map)
-  const scanSrc = readFileSync(join(ROOT, 'scan.mjs'), 'utf-8');
-  const SCAN_HISTORY_PREFIX = 'url\\tfirst_seen\\tportal\\ttitle\\tcompany\\tstatus\\tlocation';
-  if (scanSrc.includes(SCAN_HISTORY_PREFIX)) {
-    pass('scan.mjs scan-history.tsv header keeps the canonical 7-col prefix (append-only beyond it)');
-  } else {
-    fail('scan.mjs scan-history.tsv header prefix changed — BREAKING for web readers; appending new columns at the END is the additive path');
+  for (const block of ['A', 'B', 'C', 'D', 'E', 'F', 'G']) {
+    assert.ok(readFile('modes/oferta.md').includes(`## Block ${block} `));
   }
-
-  // 55.3 canonical statuses (templates/states.yml → web status pills/actions)
-  const statesSrc = readFileSync(join(ROOT, 'templates', 'states.yml'), 'utf-8');
-  // Every id in states.yml, hardcoded ON PURPOSE — deriving this list from the
-  // file it guards would make the check vacuous. It protected only 6 of the 9,
-  // so `responded`, `skip` and `hired` could be deleted from states.yml and this
-  // check still passed while claiming it "keeps every canonical status id".
-  // 55.3b below reads states.yml dynamically, so it inherits any such loss
-  // instead of catching it: with `hired` removed both checks went green while
-  // set-status.mjs would reject the terminal-success state as invalid.
-  const CANONICAL_STATE_IDS = ['evaluated', 'applied', 'responded', 'interview', 'offer', 'hired', 'rejected', 'discarded', 'skip'];
-  const missingStates = CANONICAL_STATE_IDS.filter((s) => !new RegExp(`^  - id: ${s}$`, 'm').test(statesSrc));
-  if (missingStates.length === 0) {
-    pass('templates/states.yml keeps every canonical status id (new ids may be appended)');
-  } else {
-    fail(`templates/states.yml lost canonical status id(s): ${missingStates.join(', ')} — BREAKING for the web status mapping`);
-  }
-
-  // 55.3b Every web status list must carry every canonical state. states.yml is
-  // the source of truth; the web keeps SIX hardcoded copies (title-case canonical
-  // lists + UPPERCASE tab/stage lists). `Hired` (#2050) had silently drifted out
-  // of ALL of them — a landed job was unsettable, uncounted in the funnel, and a
-  // gray "unknown" dot (#2249). Cross-check each so a future core state can't
-  // vanish from the dashboard again. The analytics funnel intentionally omits
-  // SKIP (not a funnel stage), so it's excluded there.
-  const stateLabels = [...statesSrc.matchAll(/^\s+label:\s*"?([A-Za-z]+)"?\s*$/gm)].map((m) => m[1]);
-  const webStatusLists = [
-    { file: 'web/src/lib/format.ts', re: /CANONICAL_STATES\s*=\s*\[([\s\S]*?)\]/, upper: false, exclude: [] },
-    { file: 'web/src/app/actions/registry.ts', re: /CANON_STATUS\s*=\s*\[([\s\S]*?)\]/, upper: false, exclude: [] },
-    { file: 'web/src/app/actions/registry.ts', re: /TAB_VALUES\s*=\s*\[([\s\S]*?)\]/, upper: true, exclude: [] },
-    { file: 'web/src/components/pipeline-view.tsx', re: /TABS\s*=\s*\[([\s\S]*?)\]/, upper: true, exclude: [] },
-    { file: 'web/src/app/analytics/page.tsx', re: /STAGES[^=]*=\s*\[([\s\S]*?)\];/, upper: true, exclude: ['SKIP'] },
-    // The states ACL used to be checked here too. It moved to its own block
-    // below, because it now has TWO valid shapes and this table only knows one.
+  const emitted = analyzeFromContent('# Applications Tracker\n\n| # | Date | Company | Role | Score | Status | PDF | Report | Notes |\n|---|---|---|---|---|---|---|---|---|\n| 1 | 2026-06-01 | Acme | Engineer | 4.2/5 | Applied | ❌ | [1](../reports/001-acme.md) | t |\n', '');
+  assert.deepEqual(emitted.cadenceDefaults, DEFAULT_CADENCE);
+  const pairs = [
+    // [a, b, mustMatch, why]
+    ['İstanbul Tekstil', 'Istanbul Tekstil', true, 'Turkish dotted capital: the dot is an artifact of toLowerCase, not typed'],
+    ['Türk İlaç', 'Türk Ilaç', true, 'same artifact mid-word'],
+    ['Żubr', 'Zubr', false, 'Polish ż: the dot is a letter the user typed'],
+    ['Ėmė', 'Eme', false, 'Lithuanian ė: same class as ż'],
+    ['Ġenerali', 'Generali', false, 'Maltese ġ, and Generali is a different real company'],
+    ['Škoda', 'Skoda', false, 'the original collision this key exists to prevent'],
+    ['Nestlé', 'Nestle', false, 'accent typed by the user'],
+    ['İŞ BANKASI', 'Is Bankasi', false, 'Ş is a different letter, not a casing artifact'],
   ];
-  if (stateLabels.length > 0) {
-    const drift = [];
-    for (const { file, re, upper, exclude } of webStatusLists) {
-      const p = join(ROOT, file);
-      if (!existsSync(p)) continue;
-      const block = readFileSync(p, 'utf-8').match(re)?.[1] ?? '';
-      const present = new Set([...block.matchAll(/"([A-Za-z]+)"/g)].map((m) => m[1]));
-      const want = (upper ? stateLabels.map((l) => l.toUpperCase()) : stateLabels).filter((l) => !exclude.includes(l));
-      const missing = want.filter((l) => !present.has(l));
-      if (missing.length) drift.push(`${file} (${missing.join(', ')})`);
-    }
-    if (drift.length === 0) {
-      pass('every web status list covers all canonical states from states.yml (#2249)');
-    } else {
-      fail(`web status list(s) missing canonical state(s) — dashboard can't set/count them (#2249): ${drift.join(' | ')}`);
-    }
-
-    // 55.3b+ the degraded-path FALLBACK in the states ACL (career-ops-ui's
-    // find, #2282). It promised to mirror states.yml, drifted to 8 states
-    // while the live path had 9, and later to 31 missing aliases (#2705).
-    //
-    // TWO shapes are correct and this asserts both, because the earlier
-    // version asserted only the first and therefore turned a genuine
-    // improvement into a red build: either (a) the literal table is present
-    // and complete, or (b) there is NO table because the fallback derives
-    // from CANONICAL_STATES, which the check above already freezes against
-    // states.yml. Deriving from something already frozen beats guarding a
-    // copy — the copy you delete cannot drift.
-    //
-    // The shape that must never pass is a literal table that is INCOMPLETE.
-    // That is the only one that fails silently: a state missing from the
-    // fallback reads exactly like a state the product does not have.
-    const aclPath = join(ROOT, 'web', 'src', 'lib', 'core', 'states.ts');
-    if (existsSync(aclPath)) {
-      const aclSrc = readFileSync(aclPath, 'utf-8');
-      const literal = aclSrc.match(/const FALLBACK[^=]*=\s*\[([\s\S]*?)\n\];/)?.[1];
-      if (literal !== undefined) {
-        const present = new Set([...literal.matchAll(/"([A-Za-z]+)"/g)].map((m) => m[1]));
-        const missing = stateLabels.filter((l) => !present.has(l));
-        if (missing.length) {
-          fail(`states ACL FALLBACK is missing canonical state(s) it claims to mirror (#2282): ${missing.join(', ')}`);
-        } else {
-          pass('states ACL FALLBACK carries every canonical state (#2282)');
-        }
-        // Assert the ASSIGNMENT, not the appearance of the name. `/CANONICAL_STATES/`
-        // over the whole file was satisfied by the header COMMENT, i.e. by prose,
-        // and worse: the literal regex above is a brittle syntactic match (that
-        // exact name, that exact shape), so routing its miss here flipped its
-        // failure direction from red to green. A reformat or a rename would have
-        // passed silently with seven states unaccounted for. A future legitimate
-        // form (`= buildFrom(CANONICAL_STATES)`) fails this on purpose: widening
-        // the guard should be a decision, not a silence. (career-ops-ui's find.)
-      } else if (/const FALLBACK[^=]*=\s*CANONICAL_STATES\b/.test(aclSrc)) {
-        pass('states ACL fallback derives from the frozen CANONICAL_STATES instead of copying states.yml (#2282)');
-      } else {
-        fail('states ACL has neither a complete FALLBACK table nor a derivation from CANONICAL_STATES — the degraded path can now drift unwatched (#2282)');
-      }
-    }
-
-    // The assistant preamble also enumerates the states in PROSE (the setStatus
-    // list + the filterPipeline tab enum). Those drift the same way — the AI
-    // couldn't offer to set/filter by Hired — so check them too (#2249).
-    const assistantPath = join(ROOT, 'web', 'src', 'app', 'api', 'assistant', 'route.ts');
-    if (existsSync(assistantPath)) {
-      const src = readFileSync(assistantPath, 'utf-8');
-      const proseChecks = [
-        { name: 'setStatus canonical-states list', text: src.match(/Canonical states:\s*([^.]*)\./)?.[1] ?? '', upper: false },
-        { name: 'filterPipeline tab enum', text: src.match(/tab ∈\s*([^;]*);/)?.[1] ?? '', upper: true },
-      ];
-      const proseDrift = [];
-      for (const { name, text, upper } of proseChecks) {
-        const want = upper ? stateLabels.map((l) => l.toUpperCase()) : stateLabels;
-        const missing = want.filter((l) => !new RegExp(`\\b${l}\\b`).test(text));
-        if (missing.length) proseDrift.push(`${name} (${missing.join(', ')})`);
-      }
-      if (proseDrift.length === 0) {
-        pass('assistant preamble prose enumerates every canonical state (#2249)');
-      } else {
-        fail(`assistant preamble missing canonical state(s) in prose (#2249): ${proseDrift.join(' | ')}`);
-      }
-    }
+  for (const [a, b, mustMatch, why] of pairs) {
+    assert.equal(normalizeTextKey(a) === normalizeTextKey(b), mustMatch, why);
   }
-
-  // 55.3c the cadence copy is GONE — the web now derives its baseline from the
-  // core (#2369). Two halves: the core must still EMIT the pure defaults that
-  // the web's /api/followups/cadence reads, and the web must not quietly
-  // reintroduce a local table (a fallback copy drifts exactly like the original
-  // did — states.ts FALLBACK, #2282).
-  {
-    // Assert the EMITTED payload, not just the source text: a regex over the
-    // source proves the literal is present, not that the contract the web
-    // parses is intact. analyzeFromContent() is the same code path --json
-    // prints, driven from strings so it needs no tracker on disk.
-    const { analyzeFromContent, DEFAULT_CADENCE } = await import(pathToFileURL(join(ROOT, 'followup-cadence.mjs')).href);
-    const emitted = analyzeFromContent(
-      '# Applications Tracker\n\n| # | Date | Company | Role | Score | Status | PDF | Report | Notes |\n' +
-      '|---|------|---------|------|-------|--------|-----|--------|-------|\n' +
-      '| 1 | 2026-06-01 | Acme | Engineer | 4.2/5 | Applied | ❌ | [1](../reports/001-acme.md) | t |\n',
-      '',
-    );
-    const defaults = emitted?.cadenceDefaults;
-    const cadKeys = Object.keys(DEFAULT_CADENCE);
-    const schemaOk = defaults && typeof defaults === 'object'
-      && cadKeys.length > 0
-      && cadKeys.every((k) => Number.isInteger(defaults[k]) && defaults[k] >= 0)
-      && Object.keys(defaults).length === cadKeys.length;
-    if (schemaOk) {
-      pass('followup-cadence --json emits a complete integer cadenceDefaults for the web to derive from (#2369)');
-    } else {
-      fail(`cadenceDefaults payload broken — the web cadence form loses its baseline (#2369): ${JSON.stringify(defaults)}`);
-    }
-    // Every key the web maps must exist under the core's un-suffixed spelling.
-    const webKeys = ['applied_first_days', 'applied_subsequent_days', 'applied_max_followups', 'responded_initial_days', 'responded_subsequent_days', 'interview_thankyou_days'];
-    const mapped = webKeys.every((k) => {
-      const coreKey = k === 'applied_max_followups' ? k : k.replace(/_days$/, '');
-      return Number.isInteger(defaults?.[coreKey]);
-    });
-    if (mapped) {
-      pass('every web PROFILE_CADENCE_KEY maps onto a core cadenceDefaults key (#2369)');
-    } else {
-      fail('the web _days key mapping no longer lines up with the core cadenceDefaults keys (#2369)');
-    }
-    const webFollowups = join(ROOT, 'web', 'src', 'lib', 'followups.ts');
-    if (existsSync(webFollowups)) {
-      const webSrc = readFileSync(webFollowups, 'utf-8');
-      if (!/export const CADENCE_DEFAULTS/.test(webSrc)) {
-        pass('web/src/lib/followups.ts keeps no hand-copied cadence table (#2369)');
-      } else {
-        fail('CADENCE_DEFAULTS was reintroduced in web/src/lib/followups.ts — derive from the core instead (#2369)');
-      }
-    }
-  }
-
-  // 55.3d the web onboarding banner's prereq list must match doctor.mjs.
-  // doctorState() in web/src/lib/career-ops.ts hand-copies USER_LAYER_PREREQS
-  // as a deliberate fast-path (server components can't execFile doctor per
-  // render) — if the core gains a fifth prereq, the banner silently stops
-  // asking for it and the user believes they're configured. Same mechanism as
-  // #2282, different symptom (career-ops-ui's census, 31-jul).
-  {
-    const corePrereqBlock = readFileSync(join(ROOT, 'doctor.mjs'), 'utf-8')
-      .match(/const USER_LAYER_PREREQS = \[([\s\S]*?)\n\];/)?.[1] ?? '';
-    const corePrereqs = [...corePrereqBlock.matchAll(/path:\s*'([^']+)'/g)].map((m) => m[1]);
-    const webDoctorPath = join(ROOT, 'web', 'src', 'lib', 'career-ops.ts');
-    if (corePrereqs.length > 0 && existsSync(webDoctorPath)) {
-      const webPrereqBlock = readFileSync(webDoctorPath, 'utf-8')
-        .match(/const prereqs[^=]*=\s*\[([\s\S]*?)\n\s*\];/)?.[1] ?? '';
-      const webPrereqs = new Set([...webPrereqBlock.matchAll(/\[\s*"([^"]+)"/g)].map((m) => m[1]));
-      const missingPrereqs = corePrereqs.filter((p) => !webPrereqs.has(p));
-      if (missingPrereqs.length === 0 && webPrereqs.size === corePrereqs.length) {
-        pass('web doctorState prereqs match doctor.mjs USER_LAYER_PREREQS (#2369)');
-      } else {
-        fail(`web onboarding prereqs drifted from doctor.mjs (#2369): missing=[${missingPrereqs.join(', ')}] webCount=${webPrereqs.size} coreCount=${corePrereqs.length}`);
-      }
-    }
-  }
-
-  // 55.4 report format blocks (modes/oferta.md → web report parser)
-  const ofertaSrc = readFileSync(join(ROOT, 'modes', 'oferta.md'), 'utf-8');
-  const REPORT_BLOCKS = ['Block A', 'Block B', 'Block C', 'Block D', 'Block E', 'Block F', 'Block G'];
-  const missingBlocks = REPORT_BLOCKS.filter((b) => !ofertaSrc.includes(`## ${b} `));
-  if (missingBlocks.length === 0) {
-    pass('modes/oferta.md keeps the A-G report block structure (new blocks may be appended)');
-  } else {
-    fail(`modes/oferta.md lost report block(s): ${missingBlocks.join(', ')} — BREAKING for the web report view`);
-  }
-
-  // 55.5 cross-check: the web parser still speaks the same column names
-  const webParserPath = join(ROOT, 'web', 'src', 'lib', 'career-ops.ts');
-  if (existsSync(webParserPath)) {
-    const webSrc = readFileSync(webParserPath, 'utf-8');
-    const ESSENTIAL_COLS = ['Company', 'Role', 'Score', 'Status'];
-    const missingCols = ESSENTIAL_COLS.filter((c) => !webSrc.toLowerCase().includes(c.toLowerCase()));
-    if (missingCols.length === 0) {
-      pass('web/src/lib/career-ops.ts still references the essential tracker columns');
-    } else {
-      fail(`web parser no longer references column(s): ${missingCols.join(', ')} — core and web drifted`);
-    }
-  } else {
-    warn('web/src/lib/career-ops.ts not found — web layer moved? update contract freeze section');
-  }
-
-  // 55.6 pdf mode must never hand the agent write access (#2185).
-  // The web's "pdf" agent tailors content and nothing else: it emits the CV
-  // through a <<cv-html>> envelope and the BACKEND writes every file. A write
-  // grant here would be unscoped, so a prompt injection in a posting or report
-  // (both enter that agent's context) could redirect it at cv.md.
-  //
-  // Asserted on VALUES — the built argv and the built prompt. FIVE source-text
-  // versions of this guard were defeated by rewriting route.ts around them (see
-  // web/src/lib/claude-invocation.mjs's header). The one structural rule left is
-  // that route.ts may not spell a tool flag itself, which is what stops an inline
-  // argv from hiding beside a legitimate claudeCliArgs() call.
-  //
-  // In the REQUIRED suite on purpose: web-ci.yml is informative-only, so asserting
-  // this only there would gate nothing. Importing is safe — these are
-  // dependency-free ESM modules and the root suite runs on Node >= 18.
-  const webLib = join(ROOT, 'web', 'src', 'lib');
-  const runRoutePath = join(ROOT, 'web', 'src', 'app', 'api', 'run', 'route.ts');
-  if (!existsSync(webLib)) {
-    // Expected for a data-only install: web/ is in no SYSTEM_PATHS entry.
-    warn('web/ not present in this checkout — skipping the pdf write-scope freeze (#2185)');
-  } else {
-    // web/ IS here, so a missing file means a move, not an absence — fail rather
-    // than skip, because a skip is how this freeze would silently stop guarding.
-    const required = {
-      'claude-invocation.mjs': join(webLib, 'claude-invocation.mjs'),
-      'cv-envelope.mjs': join(webLib, 'cv-envelope.mjs'),
-      'run-prompts.mjs': join(webLib, 'run-prompts.mjs'),
-      'api/run/route.ts': runRoutePath,
-    };
-    const missing = Object.entries(required).filter(([, f]) => !existsSync(f)).map(([name]) => name);
-    if (missing.length > 0) {
-      fail(`web/ exists but ${missing.join(', ')} is missing — the #2185 write-scope freeze cannot verify (was it moved?)`);
-    } else {
-      let invocation;
-      let prompts;
-      try {
-        invocation = await import(pathToFileURL(required['claude-invocation.mjs']).href);
-        prompts = await import(pathToFileURL(required['run-prompts.mjs']).href);
-        // Imported for its side effect of resolving: run-prompts pulls cv-envelope
-        // for CV_ENVELOPE_INSTRUCTION, so a break there would surface here anyway,
-        // but naming it keeps the failure message specific.
-        await import(pathToFileURL(required['cv-envelope.mjs']).href);
-      } catch (err) {
-        fail(`web pdf write-scope modules could not be imported (${err.message}) — the #2185 freeze cannot verify`);
-      }
-      // Gate the web unit suites from the REQUIRED check too. web-ci.yml is
-      // informative-only, so without this a contributor strengthening those files
-      // adds nothing to CI. This deliberately overlaps the value assertions below:
-      // those give a named, greppable #2185 signal and still hold if the web suite
-      // is ever trimmed, which is the failure this section exists to catch.
-      // Discovered, not hand-listed: a list silently stops gating whatever is added
-      // next, and this section previously covered 4 of the 6 files present.
-      let webUnits = [];
-      try {
-        webUnits = readdirSync(join(ROOT, 'web', 'tests', 'lib'))
-          .filter((f) => f.endsWith('.test.mjs'))
-          .sort()
-          .map((f) => `web/tests/lib/${f}`);
-      } catch (err) {
-        // Fail rather than throw to the outer catch, which would skip every value
-        // assertion below while reporting only "freeze section crashed".
-        fail(`web/tests/lib is unreadable (${err.message}) — the #2185 unit suites cannot be gated`);
-      }
-      // Three distinct states, so the message never misdescribes the failure: the
-      // unreadable case already called fail() above, an empty directory is its own
-      // fault, and only a non-empty list is actually run.
-      if (webUnits.length === 0) {
-        if (existsSync(join(ROOT, 'web', 'tests', 'lib'))) {
-          fail('web/tests/lib contains no *.test.mjs — the #2185 unit suites are not being gated');
-        }
-      } else if (run(NODE, ['--test', ...webUnits], { timeout: 180000 }) !== null) {
-        pass('web pdf write-scope unit suites pass (#2185)');
-      } else {
-        // The signal distinguishes a timeout/kill from an assertion failure —
-        // run()'s default 30s is short for six suites in one child process.
-        const killed = lastRunFailure()?.signal;
-        fail(`web pdf write-scope unit suites failed${killed ? ` (killed: ${killed})` : ''} (run: node --test ${webUnits.join(' ')})`);
-      }
-
-      if (invocation && prompts) {
-        const { claudeCliArgs, argValue, toolNames, grantsWriteCapability, WRITE_CAPABLE_TOOLS } = invocation;
-        const pdfArgs = claudeCliArgs({ kind: 'pdf', prompt: 'freeze-probe' });
-        const allowed = argValue(pdfArgs, '--allowedTools');
-        const disallowed = argValue(pdfArgs, '--disallowedTools');
-
-        if (!grantsWriteCapability({ allowed, disallowed })) {
-          pass('web pdf command line grants no write-capable tool (#2185)');
-        } else {
-          const granted = WRITE_CAPABLE_TOOLS.filter((t) => toolNames(allowed).includes(t));
-          fail(`web pdf command line grants write access via ${granted.join(', ')} — an unscoped write grant is the #2185 hole`);
-        }
-
-        // Denied by name, not merely omitted: --permission-mode acceptEdits exists
-        // to auto-approve edit tools, so "unmentioned" is the one status a
-        // file-writing tool must never have.
-        const undenied = WRITE_CAPABLE_TOOLS.filter((t) => !toolNames(disallowed).includes(t));
-        if (undenied.length === 0) {
-          pass('web pdf command line explicitly denies every write-capable tool (#2185)');
-        } else {
-          fail(`web pdf command line no longer denies ${undenied.join(', ')} — #2172/#2185 guardrail weakened`);
-        }
-
-        // EVERY kind, not just pdf: a write tool that is neither allowed nor denied
-        // can still be auto-approved by --permission-mode acceptEdits, and a
-        // pdf-only probe let exactly that ship for the persisting kinds.
-        const unmentioned = [];
-        for (const kind of invocation.KNOWN_KINDS) {
-          const scope = invocation.toolScopeFor(kind);
-          const named = [...toolNames(scope.allowed), ...toolNames(scope.disallowed)];
-          for (const tool of WRITE_CAPABLE_TOOLS) {
-            if (!named.includes(tool)) unmentioned.push(`${kind}:${tool}`);
-          }
-        }
-        if (unmentioned.length === 0) {
-          pass('web tool scopes leave no write-capable tool unmentioned for any kind (#2185)');
-        } else {
-          fail(`web tool scopes leave ${unmentioned.join(', ')} neither allowed nor denied — acceptEdits may auto-approve them (#2185)`);
-        }
-
-        // The PROMPT is asserted by run-prompts.test.mjs, which this section already
-        // runs above — restating its regexes here would be two copies of one intent.
-        // What is checked here is only what that suite cannot see: that the shipped
-        // prompt is the one the route actually sends (below).
-        // The one structural rule: the route delegates its argv. If it spells any
-        // tool flag itself, an inline pdf arm could grant writes while every value
-        // check above still describes claudeCliArgs's untouched output.
-        // Strip comments with a scanner that respects string and template literals.
-        // A `.replace(/\/\/.*$/, '')` per line also fires inside strings: a URL on the
-        // same line as a tool flag deletes the flag, so a route spelling its own
-        // --allowedTools would pass unnoticed. Only `//` OUTSIDE a literal is a comment.
-        const stripJsComments = (src) => {
-          let out = '';
-          let quote = null;   // "'" | '"' | '`' when inside a literal
-          let block = false;  // inside a /* */ comment
-          let line = false;   // inside a // comment
-          for (let i = 0; i < src.length; i++) {
-            const c = src[i];
-            const next = src[i + 1];
-            if (line) { if (c === '\n') { line = false; out += c; } continue; }
-            if (block) { if (c === '*' && next === '/') { block = false; i++; } continue; }
-            if (quote) {
-              // A backslash escapes the next character, so an escaped quote does not
-              // close the literal and an escaped backslash does not escape what follows.
-              if (c === '\\') { out += c + (next ?? ''); i++; continue; }
-              if (c === quote) quote = null;
-              out += c;
-              continue;
-            }
-            if (c === '/' && next === '/') { line = true; continue; }
-            if (c === '/' && next === '*') { block = true; i++; continue; }
-            // A `/` here can also open a REGEX literal, and a quote inside one (say
-            // /["']/) would otherwise flip the scanner into string state and swallow
-            // the rest of the file. Distinguish regex from division the usual way:
-            // regex can only follow an operator or an opener, never a value.
-            if (c === '/') {
-              const prev = out.replace(/\s+$/, '').slice(-1);
-              if (prev === '' || '(,=:[!&|?{};+-*%~^<>'.includes(prev)) {
-                out += c;
-                for (i++; i < src.length; i++) {
-                  const r = src[i];
-                  out += r;
-                  if (r === '\\') { out += src[i + 1] ?? ''; i++; continue; }
-                  if (r === '[') { // a class can contain an unescaped `/`
-                    for (i++; i < src.length && src[i] !== ']'; i++) {
-                      out += src[i];
-                      if (src[i] === '\\') { out += src[i + 1] ?? ''; i++; }
-                    }
-                    out += src[i] ?? '';
-                    continue;
-                  }
-                  if (r === '/' || r === '\n') break;
-                }
-                continue;
-              }
-            }
-            if (c === '"' || c === "'" || c === '`') { quote = c; out += c; continue; }
-            out += c;
-          }
-          return out;
-        };
-        const routeCode = stripJsComments(readFileSync(runRoutePath, 'utf-8'))
-          .split('\n')
-          .filter((l) => !/^\s*import\b/.test(l))
-          .join('\n');
-        const spelledFlags = ['--allowedTools', '--disallowedTools', '--permission-mode']
-          .filter((flag) => routeCode.includes(flag));
-        const argvCallSites = (routeCode.match(/claudeCliArgs\s*\(/g) ?? []).length;
-        // `kind` must reach claudeCliArgs as a SHORTHAND property. Property order
-        // and line wrapping are free, but `{ kind: <anything> }` is refused:
-        // `claudeCliArgs({ kind: kind === "pdf" ? "evaluate" : kind, prompt })`
-        // once passed every check while pdf received the persisting scope.
-        const passesKindVerbatim = /claudeCliArgs\s*\(\s*\{(?:[^{}]*,)?\s*kind\s*[,}]/.test(routeCode);
-        if (spelledFlags.length === 0 && argvCallSites === 1 && passesKindVerbatim) {
-          pass('web run route delegates its whole argv, spelling no tool flag and remapping no kind (#2185)');
-        } else {
-          const why = spelledFlags.length > 0
-            ? `it spells ${spelledFlags.join(', ')} itself`
-            : argvCallSites !== 1
-              ? `it builds argv at ${argvCallSites} site(s), expected exactly 1`
-              : 'it does not pass `kind` through verbatim (a remapped kind hands pdf another kind\'s scope)';
-          fail(`web run route no longer delegates its argv — ${why}, so the value checks above may not describe what pdf actually ships (#2185)`);
-        }
-      }
-    }
-  }
-
-  // 55.7 The company/role matching key: core vs the web's declared mirror (#2666).
-  //
-  // The browser cannot reach the user's checkout, so web/src/lib/core/
-  // normalize-text-key.mjs is a COPY by necessity, declared as such. A conscious
-  // copy without an assertion is exactly the failure this repo has now hit five
-  // times (states.ts, CADENCE_DEFAULTS, doctor prereqs, the #2590 cache, and the
-  // three divergent company norms of #2666 itself).
-  //
-  // Compare CORE vs MIRROR, not core vs the derived path: the derived path
-  // imports the core, so it CANNOT diverge — asserting on it would guard the one
-  // thing that cannot break while ignoring the one that can. The mirror is also
-  // the path nobody exercises in normal operation (it only runs on a partial
-  // checkout), which is precisely why it needs a test rather than usage.
-  //
-  // Expected values are DERIVED from the core, never hand-written: a hand-written
-  // expectation would freeze today's answer and stop tracking the source.
-  const corpusPath = join(ROOT, 'tests', 'fixtures', 'company-key-corpus.json');
-  const mirrorPath = join(ROOT, 'web', 'src', 'lib', 'core', 'normalize-text-key.mjs');
-  if (!existsSync(join(ROOT, 'web', 'src'))) {
-    warn('web/ not present in this checkout — skipping the company-key parity freeze (#2666)');
-  } else if (!existsSync(corpusPath) || !existsSync(mirrorPath)) {
-    // web/ IS here, so a missing file is a move, not an absence. Failing rather
-    // than skipping: a skip is how this freeze would quietly stop guarding.
-    fail(`web/ exists but ${!existsSync(corpusPath) ? 'tests/fixtures/company-key-corpus.json' : 'web/src/lib/core/normalize-text-key.mjs'} is missing — the #2666 key parity cannot verify (moved?)`);
-  } else {
-    try {
-      const corpus = JSON.parse(readFileSync(corpusPath, 'utf-8'));
-      const core = await import(pathToFileURL(join(ROOT, 'tracker-parse.mjs')).href);
-      const mirror = await import(pathToFileURL(mirrorPath).href);
-      const coreFn = core.normalizeTextKey, mirrorFn = mirror.normalizeTextKey;
-      if (typeof coreFn !== 'function' || typeof mirrorFn !== 'function') {
-        fail('normalizeTextKey is not exported by the core and/or the web mirror — the #2666 parity cannot verify');
-      } else {
-        // undefined cannot be written in JSON but is a real input (a missing
-        // cell), and it is half of the null/undefined bug — so it is appended here.
-        const inputs = [...corpus.cases.map((c) => c.input), undefined];
-        const drift = [];
-        for (const sep of ['', ' ']) {
-          for (const input of inputs) {
-            const a = coreFn(input, sep), b = mirrorFn(input, sep);
-            if (a !== b) drift.push(`${JSON.stringify(input)} sep=${JSON.stringify(sep)}: core=${JSON.stringify(a)} mirror=${JSON.stringify(b)}`);
-          }
-        }
-        if (drift.length === 0) {
-          pass(`web company-key mirror matches the core on all ${inputs.length} corpus cases x2 separators (#2666)`);
-        } else {
-          fail(`web company-key mirror DRIFTED from the core — ${drift.length} case(s): ${drift.slice(0, 3).join(' | ')}`);
-        }
-
-        // 55.7b PAIR SEMANTICS — what parity alone cannot see.
-        // The comparison above proves core and mirror AGREE. It says nothing
-        // about whether they agree on the RIGHT answer: two identical wrong
-        // implementations pass it silently. That is not hypothetical — on
-        // 12-ago the Turkish dotted-I fix shipped as NFD → strip U+0307 → NFC,
-        // which also decomposed the PRECOMPOSED dots of ż, ė and ġ and
-        // collapsed Żubr/Zubr, Ėmė/Eme and Ġenerali/Generali. Both sides were
-        // equally wrong, so parity stayed green and the corpus (which had no
-        // dotted-letter case) could not fail either. Polish, Lithuanian and
-        // Maltese employers silently became one key with their ASCII spelling.
-        // These assertions fix the OUTCOME, not the implementation.
-        const pairs = [
-          // [a, b, mustMatch, why]
-          ['İstanbul Tekstil', 'Istanbul Tekstil', true, 'Turkish dotted capital: the dot is an artifact of toLowerCase, not typed'],
-          ['Türk İlaç', 'Türk Ilaç', true, 'same artifact mid-word'],
-          ['Żubr', 'Zubr', false, 'Polish ż: the dot is a letter the user typed'],
-          ['Ėmė', 'Eme', false, 'Lithuanian ė: same class as ż'],
-          ['Ġenerali', 'Generali', false, 'Maltese ġ, and Generali is a different real company'],
-          ['Škoda', 'Skoda', false, 'the original collision this key exists to prevent'],
-          ['Nestlé', 'Nestle', false, 'accent typed by the user'],
-          ['İŞ BANKASI', 'Is Bankasi', false, 'Ş is a different letter, not a casing artifact'],
-        ];
-        const wrong = [];
-        for (const [a, b, mustMatch, why] of pairs) {
-          const matched = coreFn(a, '') === coreFn(b, '');
-          if (matched !== mustMatch) {
-            wrong.push(`${JSON.stringify(a)} vs ${JSON.stringify(b)}: ${matched ? 'match' : 'differ'}, expected ${mustMatch ? 'match' : 'differ'} (${why})`);
-          }
-        }
-        if (wrong.length === 0) {
-          pass(`company-key pair semantics hold on all ${pairs.length} pairs (casing artifacts fold, typed marks do not)`);
-        } else {
-          fail(`company-key pair semantics BROKEN — ${wrong.length}: ${wrong.slice(0, 3).join(' | ')}`);
-        }
-        // Guard of the guard, in TWO directions, because each covers a hole the
-        // other cannot see:
-        //  (a) the RULES could regress in the core itself, and
-        //  (b) the CORPUS could be thinned until the comparison above passes
-        //      vacuously — "matches on all 0 cases" is a green that proves nothing.
-        // (b) was found by mutation: deleting Škoda and 日本電産 from the corpus
-        // left every check green, because (a) queries the core directly.
-        const inputStrings = corpus.cases.map((c) => String(c.input));
-        const mustCarry = ['Škoda', 'Koda', '日本電産', 'Nestlé'];
-        const missing = mustCarry.filter((m) => !inputStrings.includes(m));
-        const rulesHold = coreFn('Škoda', ' ') !== coreFn('Koda', ' ') && coreFn('日本電産', ' ') !== '';
-        if (missing.length === 0 && corpus.cases.length >= 10 && rulesHold) {
-          pass(`company-key corpus still carries its teeth (${corpus.cases.length} cases incl. the collision pair, rules hold) (#2666)`);
-        } else if (!rulesHold) {
-          fail('the company-key rules regressed: Škoda now collides with Koda and/or CJK keys to empty — this is the #2666 data-loss bug returning');
-        } else {
-          fail(`the company-key corpus lost its teeth: ${missing.length ? `missing ${missing.join(', ')}` : `only ${corpus.cases.length} cases left`} — the parity check above would pass without exercising the failure it exists for`);
-        }
-      }
-    } catch (err) {
-      fail(`company-key parity check could not run (${err.message}) — treat as unverified, not as passing (#2666)`);
-    }
-  }
-
-  // 55.8 Where the key comes from, per surface (#2666, structural half).
-  //
-  // Shapes are NOT interchangeable: the server can reach the user's live core
-  // (dynamic import via careerOpsRoot) and must derive from it; a "use client"
-  // component physically cannot, so it imports the shared mirror. What none of
-  // them may do is define a normalizer of its own — that is how three divergent
-  // company keys shipped in the first place.
-  //
-  // The ASCII-class check is scoped to THESE THREE FILES on purpose. A repo-wide
-  // grep for [^a-z0-9] measured 71% false positives (domain slugs, filename
-  // slugs, a regex boundary class — all legitimate), and a check that shouts at
-  // correct code gets silenced. Here the same expression would be the bug.
-  const keySurfaces = [
-    { file: join(ROOT, 'web', 'src', 'app', 'api', 'whats-new', 'route.ts'), needs: 'getNormalizeTextKey', how: 'derive from the live core' },
-    { file: join(ROOT, 'web', 'src', 'components', 'explore', 'explorer-view.tsx'), needs: 'normalize-text-key', how: 'import the shared mirror (client cannot reach the core)' },
-    { file: join(ROOT, 'web', 'src', 'app', 'actions', 'registry.ts'), needs: 'normalize-text-key', how: 'import the shared mirror' },
-  ];
-  if (existsSync(join(ROOT, 'web', 'src'))) {
-    for (const { file, needs, how } of keySurfaces) {
-      const name = file.slice(ROOT.length + 1);
-      if (!existsSync(file)) { fail(`${name} is missing — the #2666 key-source freeze cannot verify (moved?)`); continue; }
-      const src = readFileSync(file, 'utf-8');
-      if (!src.includes(needs)) {
-        fail(`${name} no longer references ${needs} — it must ${how}, never key company names on its own (#2666)`);
-      } else if (src.split('\n')
-        // Comment lines are stripped first: the honest fix for this bug ships a
-        // comment WARNING against the pattern ("never [^a-z0-9]"), and flagging
-        // that would punish the file for documenting its own trap. Measured:
-        // this exact false positive fired on explorer-view.tsx the first time
-        // this check ran. Line-level is proportionate here — the scope is three
-        // known files, and a full JS parse to catch a block comment would be
-        // more machinery than the risk deserves.
-        .filter((l) => { const t = l.trimStart(); return !t.startsWith('//') && !t.startsWith('*') && !t.startsWith('/*'); })
-        .some((l) => /\[\^a-z0-9\]/i.test(l))) {
-        fail(`${name} contains an ASCII-only character class — that is the exact key that made "Škoda" collide with "Koda" and emptied CJK names (#2666)`);
-      } else {
-        pass(`${name} takes its matching key from the right place (#2666)`);
-      }
-    }
-  }
-
+  const corpus = JSON.parse(readFile('tests/fixtures/company-key-corpus.json'));
+  const inputs = corpus.cases.map(c => String(c.input));
+  assert.ok(corpus.cases.length >= 10);
+  for (const name of ['Škoda', 'Koda', '日本電産', 'Nestlé']) assert.ok(inputs.includes(name));
+  assert.notEqual(normalizeTextKey('日本電産'), '');
+  assert.notEqual(normalizeTextKey('Škoda'), normalizeTextKey('Koda'));
+  pass('persistent headers, states, report blocks, cadence defaults and Unicode identity hold');
 } catch (e) {
-  fail(`core↔web contract freeze section crashed: ${e.message}`);
+  fail(`persistent data contract failed: ${e.message}`);
 }
 
 // ── 55b. OFFER-PREP POSTURE FREEZE (#1634) ──────────────────────

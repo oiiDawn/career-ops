@@ -54,6 +54,7 @@ try {
 const ALL_PATHS = [...SYSTEM_PATHS, ...USER_PATHS, ...LOCAL_PATHS];
 
 const EXCLUDES = [
+  '.codex/config.toml',
   '.coderabbit.yaml',
   '.editorconfig',
   '.envrc',
@@ -81,17 +82,10 @@ const EXCLUDES = [
 // this repository only, leaving a candidate's CV stageable in every fork.
 const RECONCILED_NOT_CHECKED_OUT = ['.gitignore'];
 
-// Trees that live in the repo but deliberately OUTSIDE the updater's world:
-// web/ is the experimental web UI — its own release-please component, never
-// shipped by update-system.mjs, never in the npm package. Excluding it here is
-// part of that isolation contract, not a coverage gap.
-const EXCLUDE_PREFIXES = ['web/'];
-
 function covered(file) {
   // If explicitly excluded, it is covered
   if (EXCLUDES.includes(file)) return true;
   if (RECONCILED_NOT_CHECKED_OUT.includes(file)) return true;
-  if (EXCLUDE_PREFIXES.some((p) => file.startsWith(p))) return true;
 
   return ALL_PATHS.some((path) =>
     path.endsWith('/') ? file.startsWith(path) : file === path,
@@ -123,8 +117,6 @@ if (process.argv.includes('--self-test')) {
 
   // Test sibling mismatch (strict prefix match)
   assert(covered('providers-sibling/justjoin.mjs') === false, 'providers-sibling/justjoin.mjs must NOT be covered');
-  assert(covered('web/package.json') === true, 'web/ tree must be covered (isolation-contract prefix exclude)');
-  assert(covered('web-dashboard/index.html') === false, 'web-dashboard/ must NOT ride the web/ prefix exclude');
   assert(covered('.npmignore') === true, '.npmignore must be covered (excluded)');
 
   // Test unrelated file

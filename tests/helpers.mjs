@@ -8,7 +8,6 @@ import { fileURLToPath } from 'url';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 export const ROOT = join(__dirname, '..');   // repo root (tests/ lives one level down)
-export const QUICK = process.argv.includes('--quick');
 export const NODE = process.execPath;
 
 // Windows keeps a handle open on a just-exited child's files for a short

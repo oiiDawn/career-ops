@@ -7,8 +7,8 @@ This file lists who maintains career-ops and how contributors grow into review a
 | Role | Who | Areas |
 |------|-----|-------|
 | Lead maintainer | [@santifer](https://github.com/santifer) | All areas; final say on architecture, scoring, and the data contract |
-| Reviewer | [@FReptar0](https://github.com/FReptar0) | Dashboard, tracker, CI, updater — triage, labels, first-pass reviews; his approvals unblock merges |
-| Area owner | [@Scott-Emberson](https://github.com/Scott-Emberson) | Test-suite infrastructure (`tests/`) and the Go dashboard (`dashboard/`) — code owner on both, so PRs touching them route to him for review |
+| Reviewer | [@FReptar0](https://github.com/FReptar0) | Tracker, CI, updater — triage, labels, first-pass reviews; his approvals unblock merges |
+| Area owner | [@Scott-Emberson](https://github.com/Scott-Emberson) | Test-suite infrastructure (`tests/`) — code owner, so PRs touching them route to him for review |
 
 Reviewers and additional maintainers are added as the contributor ladder below produces them. This list growing slowly is by design — see "Trust & access" below.
 

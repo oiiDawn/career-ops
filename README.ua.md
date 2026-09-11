@@ -58,9 +58,7 @@
   <img src="https://img.shields.io/badge/GitHub_Copilot-000?style=flat&logo=githubcopilot&logoColor=white" alt="GitHub Copilot">
   <br>
   <img src="https://img.shields.io/badge/Node.js-339933?style=flat&logo=node.js&logoColor=white" alt="Node.js">
-  <img src="https://img.shields.io/badge/Go-00ADD8?style=flat&logo=go&logoColor=white" alt="Go">
   <img src="https://img.shields.io/badge/Playwright-2EAD33?style=flat&logo=playwright&logoColor=white" alt="Playwright">
-  <img src="https://img.shields.io/badge/Bubble_Tea-FF75B5?style=flat&logo=go&logoColor=white" alt="Bubble Tea">
   <img src="https://img.shields.io/badge/License-MIT-blue.svg" alt="MIT">
   <a href="TRADEMARK.md"><img src="https://img.shields.io/badge/Trademark-Policy-blue.svg" alt="Trademark Policy"></a>
 </p>
@@ -94,7 +92,6 @@ career-ops працює агентно: Claude Code переходить на к
 | **Генерація ATS PDF**         | Резюме з впровадженими ключовими словами, дизайн Space Grotesk + DM Sans                                                                         |
 | **Сканер порталів**           | 45+ попередньо налаштованих компаній (Anthropic, OpenAI, ElevenLabs, Retool, n8n...) + кастомні запити через Ashby, Greenhouse, Lever, Wellfound |
 | **Пакетна обробка**           | Паралельна оцінка з `claude -p` воркерами                                                                                                        |
-| **Дашборд TUI**               | Термінальний інтерфейс для перегляду, фільтрації та сортування вашого конвеєра                                                                   |
 | **Human-in-the-Loop**         | AI оцінює та рекомендує, ви вирішуєте та дієте. Система ніколи не подає заявку — остаточне рішення завжди за вами <!-- hitl: absolute guarantee. Do not add "automatically", "by itself", "without your permission" or any other hedge when translating this row. -->                                |
 | **Цілісність конвеєра**       | Автоматичне злиття, дедуплікація, нормалізація статусів, перевірки стану                                                                         |
 
@@ -194,17 +191,6 @@ career-ops — це одна слеш-команда з кількома реж�
 
 **Дошки вакансій:** Ashby, Greenhouse, Lever, Wellfound, Workable, RemoteFront
 
-## Дашборд TUI
-
-Вбудований термінальний дашборд дозволяє візуально переглядати поточний стан вашого конвеєра:
-
-```bash
-npm run serve:dashboard   # launch the TUI
-npm run build:dashboard   # optional: build the standalone binary
-```
-
-Функції: 6 вкладок фільтрації, 4 режими сортування, групований/плаский вигляд, lazy-load попереднього перегляду, inline зміна статусів.
-
 ## Структура проєкту
 
 ```text
@@ -228,7 +214,6 @@ career-ops/
 ├── batch/
 │   ├── batch-prompt.md          # Самодостатній промпт воркера
 │   └── batch-runner.sh          # Скрипт-оркестратор
-├── dashboard/                   # Go TUI для перегляду конвеєра
 ├── data/                        # Ваші дані відстеження (gitignored)
 ├── reports/                     # Звіти оцінок (gitignored)
 ├── output/                      # Згенеровані PDF (gitignored)
@@ -242,13 +227,10 @@ career-ops/
 ![Claude Code](https://img.shields.io/badge/Claude_Code-000?style=flat&logo=anthropic&logoColor=white)
 ![Node.js](https://img.shields.io/badge/Node.js-339933?style=flat&logo=node.js&logoColor=white)
 ![Playwright](https://img.shields.io/badge/Playwright-2EAD33?style=flat&logo=playwright&logoColor=white)
-![Go](https://img.shields.io/badge/Go-00ADD8?style=flat&logo=go&logoColor=white)
-![Bubble Tea](https://img.shields.io/badge/Bubble_Tea-FF75B5?style=flat&logo=go&logoColor=white)
 
 - **Агент**: Claude Code з кастомними навичками та режимами
 - **PDF**: Playwright/Puppeteer + HTML-шаблон
 - **Сканер**: Playwright + Greenhouse API + WebSearch
-- **Дашборд**: Go + Bubble Tea + Lipgloss (тема Catppuccin Mocha)
 - **Дані**: Markdown-таблиці + YAML-конфігурація + TSV-пакетні файли
 
 ## Також у відкритому коді

@@ -4,11 +4,7 @@
  * mark-pdf-ready.mjs — canonical CLI to flip a tracker row's PDF column ❌→✅ (#2172).
  *
  * data/applications.md is a shared surface with multiple readers and writers.
- * Before this script, the PDF column had NO canonical writer at all — every
- * caller (the web dashboard's "pdf" mode) hand-edited the markdown table via
- * an LLM prompt instruction. This gives it the same one-canonical-write-path
- * treatment set-status.mjs already gives the Status column: same lock, same
- * atomic write, same shared tracker-parse/tracker-utils primitives.
+ * Uses the shared tracker lock, atomic writer and report-number resolver.
  *
  * Usage:
  *   node mark-pdf-ready.mjs <report#> [--dry-run] [--json]

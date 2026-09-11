@@ -173,7 +173,7 @@ console.log('6. first add on the default path self-heals .gitignore (idempotent)
 // ---------------------------------------------------------------------------
 console.log('7. concurrent adds do not lose items (append, not rewrite)');
 {
-  // The queue's whole point is that anything — a dashboard, a script, cron —
+  // The queue's whole point is that anything — an agent, a script, cron —
   // can drop a request in without a session running, so simultaneous adds are
   // the expected case, not an exotic one. A read-whole-file/write-whole-file
   // cycle silently dropped every item that landed between the read and the
