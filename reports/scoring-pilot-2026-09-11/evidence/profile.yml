@@ -1,0 +1,136 @@
+# Candidate identity, targeting, and operating preferences for career-ops.
+
+candidate:
+  full_name: "Jiaming Zhang"
+  email: "oii.zhangjm@gmail.com"
+  phone: "+86 177 9591 5018"
+  location: "Xi'an, Shaanxi, China"
+  linkedin: "https://www.linkedin.com/in/jiaming-zhang-070277290/"
+  portfolio_url: ""
+  github: "https://github.com/oiiDawn"
+  photo: ""
+  photo_style: rounded
+
+target_roles:
+  primary:
+    - "AI Agent Engineer"
+    - "Applied AI Engineer"
+    - "Full Stack Engineer - AI Applications"
+  archetypes:
+    - name: "AI Agent / Agentic Applications Engineer"
+      level: "Mid-Senior"
+      fit: "primary"
+    - name: "Applied AI Engineer"
+      level: "Mid-Senior"
+      fit: "primary"
+    - name: "Full Stack / Backend Engineer"
+      level: "Mid-Senior"
+      fit: "secondary"
+    - name: "AI Platform / LLMOps Engineer"
+      level: "Mid-Senior"
+      fit: "adjacent"
+
+narrative:
+  headline: "AI Agent and full-stack engineer building evaluated production workflows"
+  exit_story: ""
+  superpowers:
+    - "End-to-end ownership from product discovery and architecture to production operations"
+    - "Production MCP and Agent integration with authorization, data minimization, and evaluation"
+    - "Full-stack delivery across TypeScript, Python, C/C++, data, cloud, and observability"
+  proof_points:
+    - name: "VivoFlow"
+      url: ""
+      hero_metric: "100+ active users; project reviews reduced from roughly half a day to about 1.5 hours"
+    - name: "DingTalk AI Agent"
+      url: ""
+      hero_metric: "Delivered independently in roughly 1-2 weeks for approximately 300 employees"
+    - name: "Medical-image Annotation Platform"
+      url: ""
+      hero_metric: "30+ annotators processed roughly 7,000 images in about two weeks"
+    - name: "Kupo World"
+      url: "https://kupo.world"
+      hero_metric: "10,000+ visits in the first three days"
+
+compensation:
+  target_range: "CNY 300K-400K annual gross total compensation, depending on city tier"
+  currency: "CNY"
+  minimum: "CNY 300K annual gross total compensation"
+  by_location:
+    mainland_tier_1: "CNY 350K-400K annual gross total compensation"
+    mainland_new_tier_1: "CNY 300K minimum annual gross total compensation"
+    hong_kong: "HKD 720K minimum annual gross base salary for a standard five-day role; HKD 900K-1.1M target"
+    hong_kong_non_five_day: "Raise the HKD 720K base floor in proportion to expected weekly workdays: 5.5 days HKD 792K, 6 days HKD 864K; add at least 15% (HKD 828K floor) for routine evening/weekend/on-call work not captured by fixed workdays"
+  location_flexibility: "On-site, hybrid, or remote in mainland China/Hong Kong; mainland roles limited to tier-1 and new-tier-1 cities"
+
+location:
+  country: "China"
+  city: "Xi'an"
+  timezone: "Asia/Shanghai"
+  visa_status: ""
+  authorized_in: []
+  hong_kong_work_authorization: "Mainland residents may use ASMTP; treat employer support as an operational confirmation, not a hard gate unless the employer explicitly requires existing Hong Kong work rights or refuses the route"
+  target_markets:
+    - "Mainland China"
+    - "Hong Kong"
+    - "Roles explicitly open to candidates based in China"
+  mainland_tier_1_cities: ["Beijing", "Shanghai", "Guangzhou", "Shenzhen"]
+  mainland_new_tier_1_cities: ["Chengdu", "Hangzhou", "Chongqing", "Wuhan", "Suzhou", "Xi'an", "Nanjing", "Changsha", "Zhengzhou", "Tianjin", "Hefei", "Qingdao", "Dongguan", "Ningbo", "Foshan"]
+
+employment_preferences:
+  required: "Full-time employee under a written employment contract with the actual legal employer; fixed-term or open-ended contracts are acceptable"
+  excluded: ["outsourced role", "labor dispatch", "contractor", "freelance", "no formal employment contract"]
+  work_arrangement: ["on-site", "hybrid", "remote"]
+  five_day_workweek: "Soft preference; do not reject solely for a non-five-day signal, but raise the Hong Kong salary floor according to the non-five-day adjustment"
+  non_five_day_comp_adjustment: "Apply to every market: multiply the applicable location salary floor by expected weekly workdays divided by 5; for routine evening/weekend/on-call work not captured by fixed days, add at least 15% unless paid overtime or equivalent time off fully compensates it"
+
+company_preferences:
+  minimum_employee_count: 50
+  unknown_size_policy: "Keep during scan; verify before recommending an application"
+  priority: "Foreign companies and Hong Kong companies with a mainland China or Hong Kong legal employer and technology team"
+  priority_company_seeds:
+    - "Microsoft"
+    - "SAP"
+    - "NVIDIA"
+    - "AMD"
+    - "Arm"
+    - "Apple"
+    - "Amazon/AWS"
+    - "Bosch"
+    - "Cisco"
+    - "Ericsson"
+    - "HSBC"
+    - "IBM (excluding GBS outsourcing roles)"
+    - "Intel"
+    - "Morgan Stanley"
+    - "Oracle"
+    - "PayPal"
+    - "Philips"
+    - "Qualcomm"
+    - "Red Hat"
+    - "State Street"
+    - "Trend Micro"
+  seed_policy: "Use these 955.WLB-derived names only to prioritize current-role verification; do not assume the current team has good WLB"
+  domestic_company_policy: "Do not exclude solely for a six-day week, alternating weekends, or routine evening/weekend work; raise the applicable location salary floor using the non-five-day adjustment and surface the trade-off for confirmation"
+  wlb_evidence_policy: "955.WLB is a positive research lead, not a guarantee; 996.ICU is a negative review signal, not an automatic blacklist"
+
+language:
+  output: zh-CN
+
+spend_tier: standard
+
+attractiveness:
+  model: attractiveness-v1
+  weights:
+    direction: 0.35
+    compensation: 0.30
+    team: 0.25
+    company: 0.10
+
+scan:
+  extractor: cli
+
+cv:
+  output_format: "reactive-resume"
+  reactive_resume:
+    api_base_url: "http://127.0.0.1:3000/api/openapi"
+    base_resume_id: "01a036df-4cc9-7584-b4c8-bfb3de31f71c"

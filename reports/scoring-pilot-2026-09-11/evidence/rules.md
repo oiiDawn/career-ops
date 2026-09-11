@@ -180,11 +180,10 @@ CV as tailored.
 1. 冻结完整 JD、批准的候选来源和本规则，记录源路径与 SHA-256。历史报告只供审计，不能作为候选事实或完整 JD 的替代品。完整 JD 缺失则记录 incomplete，不生成评分报告；历史快照试评必须注明未复核当前有效性。
 2. 权重只读取 `config/profile.yml` 的 `attractiveness.weights`。四维为 direction（实际工作内容与职业方向）、compensation（相对所在地个人底线和目标的薪酬福利）、team（工时、管理、协作、自主权、工作安排）、company（业务前景、稳定性、技术投入）。能力缺口、资格门槛和真实性独立展示；同一负面事实只在一个吸引力维度计分。公司名气本身不加分；公司资料不等于团队资料；明确远程是 team 的正面依据，现场办公不扣分。
 3. 先定档再加权：1=明显不符合偏好；2=明显不足、需要较大妥协；3=达到可接受水平；4=明显诱人、符合期待；5=非常理想且有充分证据。分项仅取整数；普通后端在可接受方向内，不能仅因非 AI 岗打低分。薪酬刚达到个人最低线为3分，达到明确个人目标支持4分，5分需要显著超出目标的证据；没有具体目标时不能自行补造。薪酬区间上限、OTE、股权或公司支付能力不能冒充保证底薪。
-   direction 定档边界：5=JD 明确以首选 Agent/Applied AI 产品系统为主要工作，并明确承担从设计到交付或运营的职责；4=明确符合全栈/后端/AI 工程方向且有具体产品贡献，但首选 AI 产品职责并非主要工作或未明确；3=可接受的软件岗位，缺乏上述方向增益；2=明显偏离但仍有可迁移内容；1=主要工作不在可接受方向内。未声明行业偏好不扣分，也不阻止5分；候选人技能或年限不足单列竞争力，不改变工作内容本身的吸引力。team 评价实际管理与工作安排，不重复给 direction 的产品职责加分。
 4. 证据不足以判定整个维度时 score=null，计算范围[1,5]；有部分正面线索可写在理由中，但不能凭想象缩窄范围。已知维度为[score,score]。总下限/上限分别为四维下限/上限的加权和，保留两位小数以便复算；coverage 为已知维度权重之和（0–1）。范围不是统计置信区间，中点不是估计分数。全部未知也不能跳过完整 JD 前置条件。
 5. 高吸引力且条件充分核实的岗位优先申请；高潜力但未知项多的岗位优先补证。不得仅按区间下限排序；不得把旧4.0/4.5匹配分阈值搬到吸引力范围上。既有 Stage 0 门槛不变；试评不宣称已通过实时门槛或直接触发申请。
 6. 保持以下二级标题及顺序：`## Machine Summary`、`## A. 岗位概览`、`## B. 能力竞争力`、`## C. 入职吸引力`、`## D. 薪酬与需求`、`## E. CV 变更计划`、`## F. 面试与补证`、`## G. 岗位真实性`、`## Risk Summary`、`## Evaluation Checklist`。能力映射逐项列出 JD 的实质必备与加分要求，拆开复合要求，使用 Proven/Adjacent/Gap/Unverified，并列候选证据、招聘影响及应对；不得将原型、进行中或相邻经验提升为生产证明。Checklist 汇总地点、雇佣、规模、工时、待遇、真实性及未解决的能力问题。
-7. Machine Summary 使用 `scoring_model: attractiveness-v1`、`scope: pilot`、`score: null`（不给旧消费者伪造单分）、`company`、`role`、`complete_jd: true`、`jd_source`（冻结 JD 的 source id）、`sources`、`dimensions`、`attractiveness`。sources 为 `{id, path, sha256}` 数组（路径相对仓库）；dimensions 的四个键各为 `{score, rationale, evidence: [{source, quote}]}`，引用须逐字来自冻结来源。未知项也须解释缺失信息；已知项必须有证据。attractiveness 为 `{lower, upper, coverage}`，只由确定性计算生成。报告正文必须使用相同范围，不展示一个旧式总分。
+7. Machine Summary 使用 `scoring_model: attractiveness-v1`、`scope: pilot`、`score: null`（不给旧消费者伪造单分）、`company`、`role`、`complete_jd: true`、`sources`、`dimensions`、`attractiveness`。sources 为 `{id, path, sha256}` 数组（路径相对仓库）；dimensions 的四个键各为 `{score, rationale, evidence: [{source, quote}]}`，引用须逐字来自冻结来源。未知项也须解释缺失信息；已知项必须有证据。attractiveness 为 `{lower, upper, coverage}`，只由确定性计算生成。报告正文必须使用相同范围，不展示一个旧式总分。
 8. 交付前运行 `node scoring-report.mjs <报告路径>...`。必须通过标题顺序、完整 JD 声明、分项范围、权重、源哈希、引文及总分复算检查，再人工逐项审核证据是否支持判定、能力映射是否覆盖 JD。机械校验不能证明语义公允。重复盲评使用同一冻结材料，保留每次原始判定并报告差异，不能用重复计算代替重复评估。
 
 <!-- How you like results formatted. Examples:

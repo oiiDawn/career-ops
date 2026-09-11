@@ -1,0 +1,173 @@
+{
+  "scoring_model": "attractiveness-v1",
+  "rounds": {
+    "1": {
+      "a2b2": {
+        "a": {
+          "dimensions": {
+            "direction": 4,
+            "compensation": null,
+            "team": null,
+            "company": null
+          },
+          "lower": 2.05,
+          "upper": 4.65,
+          "coverage": 0.35
+        },
+        "b": {
+          "dimensions": {
+            "direction": 5,
+            "compensation": null,
+            "team": null,
+            "company": null
+          },
+          "lower": 2.4,
+          "upper": 5,
+          "coverage": 0.35
+        },
+        "endpoint_disagreement": 0.35
+      },
+      "nls": {
+        "a": {
+          "dimensions": {
+            "direction": 4,
+            "compensation": null,
+            "team": null,
+            "company": null
+          },
+          "lower": 2.05,
+          "upper": 4.65,
+          "coverage": 0.35
+        },
+        "b": {
+          "dimensions": {
+            "direction": 4,
+            "compensation": null,
+            "team": null,
+            "company": null
+          },
+          "lower": 2.05,
+          "upper": 4.65,
+          "coverage": 0.35
+        },
+        "endpoint_disagreement": 0
+      }
+    },
+    "2": {
+      "a2b2": {
+        "a": {
+          "dimensions": {
+            "direction": 5,
+            "compensation": null,
+            "team": null,
+            "company": null
+          },
+          "lower": 2.4,
+          "upper": 5,
+          "coverage": 0.35
+        },
+        "b": {
+          "dimensions": {
+            "direction": 5,
+            "compensation": null,
+            "team": null,
+            "company": null
+          },
+          "lower": 2.4,
+          "upper": 5,
+          "coverage": 0.35
+        },
+        "endpoint_disagreement": 0
+      },
+      "nls": {
+        "a": {
+          "dimensions": {
+            "direction": 4,
+            "compensation": null,
+            "team": null,
+            "company": null
+          },
+          "lower": 2.05,
+          "upper": 4.65,
+          "coverage": 0.35
+        },
+        "b": {
+          "dimensions": {
+            "direction": 4,
+            "compensation": null,
+            "team": null,
+            "company": null
+          },
+          "lower": 2.05,
+          "upper": 4.65,
+          "coverage": 0.35
+        },
+        "endpoint_disagreement": 0
+      }
+    }
+  },
+  "validation": [
+    {
+      "report": "a2b2.md",
+      "valid": true,
+      "company": "A2B2.ai",
+      "role": "AI Engineer",
+      "lower": 2.4,
+      "upper": 5,
+      "coverage": 0.35
+    },
+    {
+      "report": "nls.md",
+      "valid": true,
+      "company": "实际雇主未披露（NLS 招聘代理）",
+      "role": "AI Engineer - Global AI Fintech Firm - Hong Kong",
+      "lower": 2.05,
+      "upper": 4.65,
+      "coverage": 0.35
+    }
+  ],
+  "incomplete": "阿斯利康：两位评估者两轮均判完整JD缺失，不计算范围",
+  "limitation": "两份完整JD、两位评估者，第二轮细化方向锚点；不是总体方差估计或新样本泛化验证。",
+  "checks": [
+    {
+      "command": [
+        "node",
+        "tests/scoring-report.test.mjs"
+      ],
+      "exit_code": 0,
+      "stdout": "scoring-report: arithmetic, evidence integrity and malformed-report checks passed\n",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "node",
+        "--check",
+        "scoring-report.mjs"
+      ],
+      "exit_code": 0,
+      "stdout": "",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "node",
+        "--check",
+        "tests/scoring-report.test.mjs"
+      ],
+      "exit_code": 0,
+      "stdout": "",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "node",
+        "scoring-report.mjs",
+        "reports/scoring-pilot-2026-09-11/a2b2.md",
+        "reports/scoring-pilot-2026-09-11/nls.md"
+      ],
+      "exit_code": 0,
+      "stdout": "{\"path\":\"reports/scoring-pilot-2026-09-11/a2b2.md\",\"valid\":true,\"company\":\"A2B2.ai\",\"role\":\"AI Engineer\",\"lower\":2.4,\"upper\":5,\"coverage\":0.35}\n{\"path\":\"reports/scoring-pilot-2026-09-11/nls.md\",\"valid\":true,\"company\":\"实际雇主未披露（NLS 招聘代理）\",\"role\":\"AI Engineer - Global AI Fintech Firm - Hong Kong\",\"lower\":2.05,\"upper\":4.65,\"coverage\":0.35}\n",
+      "stderr": ""
+    }
+  ]
+}

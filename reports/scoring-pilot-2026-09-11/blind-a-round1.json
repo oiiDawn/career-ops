@@ -1,0 +1,181 @@
+{
+  "reviewer": "blind-a",
+  "scoring_model": "attractiveness-v1",
+  "scope": "pilot",
+  "historical_snapshot_only": true,
+  "current_liveness_verified": false,
+  "roles": {
+    "a2b2": {
+      "company": "A2B2.ai",
+      "role": "AI Engineer",
+      "complete_jd": true,
+      "dimensions": {
+        "direction": {
+          "score": 4,
+          "rationale": "实际职责集中于 Agent、检索、Python 后端和输出可靠性，与首选职业方向明确一致；端到端功能交付也契合偏好。金融领域本身未被列为特别偏好，充分支持诱人档，尚不足以认定非常理想。",
+          "evidence": [
+            {
+              "source": "a2b2",
+              "quote": "You will work on the agent systems, retrieval pipelines, and backend services that turn wealth domain knowledge into reliable, working AI capabilities."
+            },
+            {
+              "source": "targeting",
+              "quote": "| Primary | **AI Agent / Agentic Applications Engineer** | Production MCP integration, tool constraints, RAG grounding, evaluation, and full-stack delivery |"
+            }
+          ]
+        },
+        "compensation": {
+          "score": null,
+          "rationale": "冻结 JD 未给薪资、保证底薪或福利金额，不能判断是否达到香港底线或目标。",
+          "evidence": [
+            {
+              "source": "profile",
+              "quote": "HKD 720K minimum annual gross base salary for a standard five-day role; HKD 900K-1.1M target"
+            }
+          ]
+        },
+        "team": {
+          "score": null,
+          "rationale": "端到端所有权及资深工程师辅导是正面线索，但工时、工作安排、管理实践和实际自主权边界未披露，不能判定整个团队维度。",
+          "evidence": [
+            {
+              "source": "a2b2",
+              "quote": "You will take ownership of features end to end - from prompt and tool design, through the Python services that run them, to the APIs that surface them to our members - with support and mentorship from senior engineers on architecture and design decisions."
+            }
+          ]
+        },
+        "company": {
+          "score": null,
+          "rationale": "已有服务费商业模式与早期阶段说明，仍缺营收、融资续航、客户采用、规模及稳定技术投入证据；早期不自动等于差，也不足以定可接受档。",
+          "evidence": [
+            {
+              "source": "a2b2",
+              "quote": "Operating solely on a service-fee model, A2B2.ai prioritizes clarity, trust, and delivers data directly into the investor's workflow."
+            },
+            {
+              "source": "a2b2",
+              "quote": "Comfortable with ambiguity - A2B2 is early stage, the role will evolve, and you see that as the opportunity."
+            }
+          ]
+        }
+      },
+      "capability_summary": "生产 MCP、DingTalk Agent、回归评估、TypeScript 和端到端交付有直接证据；Python async 与 PostgreSQL 调优深度需具体案例验证。LangChain / LangGraph 是原型经验，Langfuse、Temporal、Go、多模型交叉审查未获证明。0–3 年与候选三年以上经历的级别适配需确认，不计入吸引力扣分。",
+      "key_unknowns": [
+        "香港实际工作地点及雇佣实体、ASMTP 支持",
+        "公司是否至少 50 人、融资续航和客户规模",
+        "保证底薪与目标、五天工时及加班补偿",
+        "Python async / PostgreSQL 的实际要求及候选证明"
+      ]
+    },
+    "astrazeneca": {
+      "company": "阿斯利康",
+      "role": "AI Engineer / Senior AI Engineer",
+      "complete_jd": false,
+      "status": "incomplete",
+      "dimensions": {
+        "direction": {
+          "score": null,
+          "rationale": "完整 JD 前置条件未满足：冻结文本多处省略，Experience / Junior Level 等要求缺失；此 null 表示暂不评分，不能生成吸引力范围。",
+          "evidence": []
+        },
+        "compensation": {
+          "score": null,
+          "rationale": "完整 JD 前置条件未满足：冻结文本多处省略，Experience / Junior Level 等要求缺失；此 null 表示暂不评分，不能生成吸引力范围。",
+          "evidence": []
+        },
+        "team": {
+          "score": null,
+          "rationale": "完整 JD 前置条件未满足：冻结文本多处省略，Experience / Junior Level 等要求缺失；此 null 表示暂不评分，不能生成吸引力范围。",
+          "evidence": []
+        },
+        "company": {
+          "score": null,
+          "rationale": "完整 JD 前置条件未满足：冻结文本多处省略，Experience / Junior Level 等要求缺失；此 null 表示暂不评分，不能生成吸引力范围。",
+          "evidence": []
+        }
+      },
+      "capability_summary": "仅可做未评分线索：可见 GenAI / Agentic AI、RAG、API 和企业集成职责，与现有生产 Agent 及医疗工作流经历相关；完整分级要求缺失，不能给完整竞争力判断。",
+      "key_unknowns": [
+        "补齐全部职责、Junior / Senior 分级要求及加分项",
+        "薪酬、团队工时、实际雇佣与工作安排",
+        "业务稳定性和技术投入证据；不能从公司名称加分"
+      ],
+      "incomplete_evidence": [
+        {
+          "source": "astrazeneca",
+          "quote": "**Experience\n** **Junior Level\n**\n\n..."
+        }
+      ]
+    },
+    "nls": {
+      "company": "实际雇主未披露（NLS 招聘代理）",
+      "role": "AI Engineer - Global AI Fintech Firm - Hong Kong",
+      "complete_jd": true,
+      "dimensions": {
+        "direction": {
+          "score": 4,
+          "rationale": "职责为 AI 辅助软件交付、Agent 规则与评审工作流，并参与产品和 UX；符合全栈与 Agent 工程方向，实际重心偏工程生产力而非完整 LLM 产品智能层，支持明显诱人档。",
+          "evidence": [
+            {
+              "source": "nls",
+              "quote": "Define and iterate on agent “rules,” skills, and workflows for code generation and review."
+            },
+            {
+              "source": "nls",
+              "quote": "Help shape product and UX through feature design and practical engineering input."
+            },
+            {
+              "source": "targeting",
+              "quote": "| Secondary | **Full Stack / Backend Engineer** | TypeScript and Python services, contract-first APIs, testing, data, deployment, and operations |"
+            }
+          ]
+        },
+        "compensation": {
+          "score": null,
+          "rationale": "年薪上限有潜力进入个人目标，但未说明保证底薪、下限及奖金构成，不能把上限当成可获得底薪。股权亦不能补足底薪。",
+          "evidence": [
+            {
+              "source": "nls",
+              "quote": "Posted 4 days ago  Permanent  Up to HKD 1,000,000 per annum"
+            },
+            {
+              "source": "targeting",
+              "quote": "Hong Kong five-day-role baseline: HKD 720K annual gross base salary (HKD 60K/month); target HKD 900K-1.1M annual gross base salary."
+            }
+          ]
+        },
+        "team": {
+          "score": null,
+          "rationale": "弹性混合办公和影响团队文化是正面线索；未明确远程天数、五天工作制、实际工时与管理情况，证据不足以判整个维度。",
+          "evidence": [
+            {
+              "source": "nls",
+              "quote": "Flexible work schedule in a hybrid setup"
+            },
+            {
+              "source": "nls",
+              "quote": "Influence engineering practices and team culture as the organization scales."
+            }
+          ]
+        },
+        "company": {
+          "score": null,
+          "rationale": "仅有匿名客户和扩张描述，不能确认规模、资金、客户营收、稳定性与技术投入；页面 NLS 人数属于招聘代理，不能移用于实际雇主。",
+          "evidence": [
+            {
+              "source": "nls",
+              "quote": "Our client, a global AI fintech company, are actively seeking an experienced Senior Software Engineer to become a vital part of their expanding engineering team."
+            }
+          ]
+        }
+      },
+      "capability_summary": "Agent 工具规则、全栈交付、产品设计有对应经历，学历满足。4+ 年指定语言经验没有充分证明：CV 只陈述三年以上专业交付，不可按首份工作年份连续累加；生产 AI 满一年也需按具体上线日期核实。Rust 未证明，但要求 Python / Rust / TypeScript 三选一，不构成单独必备缺口。",
+      "key_unknowns": [
+        "真实雇主、至少 50 人规模和直签员工合同",
+        "保证底薪区间、奖金股权构成",
+        "混合办公频率、工时、加班补偿、ASMTP 支持",
+        "4+ 年指定语言经验门槛是否接受现有履历"
+      ]
+    }
+  }
+}
