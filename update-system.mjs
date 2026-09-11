@@ -154,6 +154,7 @@ const SYSTEM_PATHS = [
   'preparation-plan.mjs',
   'lib/prescreen-core.mjs',
   'lib/prescreen-cache.mjs',
+  'lib/is-main-module.mjs',
   'lib/ascii-fold.mjs',
   'lib/cli-flags.mjs',
   'lib/gemini-node-floor.mjs',
