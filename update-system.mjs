@@ -159,6 +159,7 @@ const SYSTEM_PATHS = [
   'lib/cli-flags.mjs',
   'lib/gemini-node-floor.mjs',
   'lib/local-today.mjs',
+  'lib/outcome-dir.mjs',
   'lib/latex-escape.mjs',
   'scan-hn.mjs',
   'scripts/check-syntax.mjs',
