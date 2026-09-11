@@ -25,13 +25,13 @@
     },
     "gate_evidence": {
       "status": "pass",
-      "finding": "Checklist已将新2–10人数作为明确冲突信号，并要求确认签约实体及人数后决定Fail，未错误自动通过或借未知抹掉风险。法律运营主体已披露，但实际劳动雇主仍未确定，雇佣Unknown不与条款发现矛盾。其余地点、待遇、资格支持及当前有效性未知；历史JD没有被公司检索替代实时核验。 正式Checklist现已包含联网研究完成状态与记录链接；搜索完成未被等同门槛通过。 已核对新增URL为原岗位，Legitimacy明确Unconfirmed且注明历史JD未实时核验，与门槛记录一致。"
+      "finding": "size 判 Fail（据新规则推理定档）：五条独立同向信号无反向——LinkedIn 品牌页自填 2–10 人；法律实体 Equora AI Limited 2026-04-30 才注册（公司目录，BRN80313661）；官网明写 A2B2 '计划在 2026 年 launch'；JD 自称 early stage / the role will evolve。无任何来源给出 ≥50 人证据，最佳情形也只有注册 4 个月的新公司加待发布产品，无法排除关键反向解释的唯一反方是'品牌页人数不等于全公司'，但该反方无任何支撑证据。置信度高，规模 <50 踩用户 ≥50 门槛 → Fail → discard。其余 Unknown 项（location/employment/compensation/eligibility/liveness）未改写为条件失败，与证据一致。"
     }
   },
   "gates": {
     "location": "Unknown",
     "employment": "Unknown",
-    "size": "Unknown",
+    "size": "Fail",
     "compensation": "Unknown",
     "eligibility": "Unknown",
     "liveness": "Unknown"

@@ -191,7 +191,8 @@ CV as tailored.
 
 - `scoring-report.mjs` 的命令行交付检查同时读取 `<报告路径>.review.json`。独立复核者提供 reviewer、report_sha256、verdict=approve，以及 checks 中 jd_complete/source_grounding/dimension_support/capability_coverage/no_double_count/gate_evidence 各自的 `{status: pass, finding}`。复核须解释引文如何支持档位、是否遗漏必备能力；不能仅核对字面存在。哈希绑定整份报告，修改后重新复核。复核记录是责任记录，不是数字签名，也不保证评估者永不出错。
 - 复核还提供 gates（location/employment/size/compensation/eligibility/liveness，每项 Pass/Fail/Unknown）及 ready（boolean，表示工时等申请前必要条件已充分核实）。历史快照的 liveness=Unknown、ready=false。不能把信息未知写成条件失败。
-- 正式决策读取 profile 的 `attractiveness.acceptable_line`，这是吸引力可接受线，不是旧匹配分阈值。任意硬门槛Fail→discard；否则上限低于线→deprioritize；否则门槛有Unknown、ready=false或下限低于线→verify；其余→apply。等于线视为达到。完整JD缺失不产生评分，不进入该评分队列。
+- 正式决策读取 profile 的 `attractiveness.acceptable_line`，这是吸引力可接受线，不是旧匹配分阈值。任意硬门槛Fail→discard；否则上限低于线→deprioritize；否则门槛有Unknown、申请条件未核实或下限低于线→verify；其余→apply。等于线视为达到。完整JD缺失不产生评分，不进入该评分队列。
+- Agent 可基于多个独立、同向且无可信反向证据的强信号进行事实推理并定档，不必机械等待单一来源直接给出结论。必须在复核记录中写明事实、适用范围、推理链、置信度与反向证据检查；品牌页自填、搜索摘要或市场数据单独不足以判定硬门槛，但与注册时间、官网业务阶段、JD 明示阶段等独立信号一致时，可支持 `Fail` 或 `Pass`。无法排除关键反向解释时仍用 `Unknown`。
 - `node scoring-decisions.mjs` 只读读取 data/pipeline.md 的 Scored，重新验证报告与复核，生成 decisions、needs_review 和 invalid。shortlist、日报和申请选择统一使用此结果；invalid 不得进入推荐池。新评估发布前也可用显式 queue.json 验证，gate/readiness 必须与报告复核一致。deadline为已知ISO日期或null，effort_days为有依据的补证/准备预计工作日或null；无证据不填数。
 - 先分apply/verify/deprioritize/discard；组内按已知截止日期较早、预计工作量较少、证据覆盖较高排列；仅apply组再按下限降序，其余以id稳定打破平局。缺失日期或工作量排在该字段已知项后。此顺序是透明的行动调度，不是假定未知机会不值得去；重叠区间不声称存在满意度的严格排序。
 - 补充定档锚点用于定档校准：compensation的1/2分别是明显/轻微低于个人底线（均不能补偿硬门槛），3达到底线但未达目标，4达到明确目标，5有显著超出目标上沿的保证收入证据；无法区分相邻档时记录分歧，不能随意加小数。
