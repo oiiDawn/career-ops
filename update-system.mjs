@@ -1971,9 +1971,17 @@ async function apply() {
     // recovery command. Declared outside the try because the catch reads it.
     let usedIndexCommit = false;
 
+    // The staging and scoped-commit paths must use the same file-only list.
+    // Passing a manifest directory to `git commit -- <dir>` reads matching
+    // tracked files from the working tree, including files the target tree no
+    // longer ships. That can sweep a user's unstaged edit into the updater
+    // commit even though staging never touched it (#3504). Exclusion
+    // pathspecs remain in the expanded list so preserved files stay out.
+    const expandedPathsToStage = expandToShippedFiles(pathsToStage);
+
     try {
       prepareMaterializedSkillEntrypointsForStage(materializedSkillEntrypoints);
-      addPaths(pathsToStage);
+      addPaths(expandedPathsToStage);
       // Scope the commit to only the staged update paths (#915 bug 2).
       // A bare `git commit` would sweep any unrelated pre-staged files into
       // the update commit. Passing the explicit pathspec list constrains the
@@ -2009,22 +2017,24 @@ async function apply() {
       if (usedIndexCommit) {
         git('commit', '-m', `chore: auto-update system files to v${remote}`);
       } else {
-        git('commit', '-m', `chore: auto-update system files to v${remote}`, '--', ...pathsToStage);
+        git('commit', '-m', `chore: auto-update system files to v${remote}`, '--', ...expandedPathsToStage);
       }
     } catch (e) {
       let commitFailed = false;
       try {
         const entries = gitStatusEntries();
         const changedPaths = new Set(entries.map(entry => entry.path));
-        const allTargetPaths = [...pathsToStage, ...materializedSkillEntrypoints];
+        const allTargetPaths = [
+          ...expandedPathsToStage.filter((spec) => !spec.startsWith(EXCLUDE_PATHSPEC_PREFIX)),
+          ...materializedSkillEntrypoints,
+        ];
         commitFailed = allTargetPaths.some(p => changedPaths.has(p));
       } catch (err) {
         commitFailed = true;
       }
 
       if (commitFailed) {
-        const allTargetPaths = [...pathsToStage, ...materializedSkillEntrypoints];
-        const pathspec = allTargetPaths.map(p => `'${p.replace(/'/g, "'\\''")}'`).join(' ');
+        const pathspec = expandedPathsToStage.map(p => `'${p.replace(/'/g, "'\\''")}'`).join(' ');
         // Print the command matching the path actually taken. Suggesting the
         // pathspec form after the index form was selected would tell the user to
         // run the very thing that drops the staged mode bits — a recovery step
@@ -2139,11 +2149,15 @@ function rollback() {
 
     if (restored.length > 0) addPaths(restored);
     const rollbackPaths = [...restored, ...removed];
+    // Keep rollback's scoped commit aligned with the file-level staging list.
+    // A directory pathspec would otherwise include tracked files still present
+    // in the worktree but absent from the backup tree (#3504).
+    const expandedRollbackPaths = expandToShippedFiles(rollbackPaths, latest);
     try {
       // Scope the commit to the rollback paths (#915 bug 2). A bare
       // `git commit` would sweep unrelated staged files into the rollback.
-      if (rollbackPaths.length > 0) {
-        git('commit', '-m', `chore: rollback system files from ${latest}`, '--', ...rollbackPaths);
+      if (expandedRollbackPaths.length > 0) {
+        git('commit', '-m', `chore: rollback system files from ${latest}`, '--', ...expandedRollbackPaths);
       }
     } catch {
       // Tolerate any commit failure here — the common case is the
