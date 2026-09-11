@@ -23,6 +23,10 @@ import { join, dirname, resolve, extname } from 'path';
 import { fileURLToPath } from 'url';
 import { execFileSync } from 'child_process';
 import { parseTrackerRow, resolveColumns, extractTrackerReportNumbers } from './tracker-parse.mjs';
+// The vocabulary this CLI accepts is also READ by calibrate.mjs, which cannot
+// import this file (top-level CLI, exits on load). Shared so the two cannot
+// drift — they already had (#3315 shipped a 7-entry copy of these 14).
+import { OUTCOME_MAP } from './lib/outcome-types.mjs';
 import { roleFuzzyMatch } from './role-matcher.mjs';
 import {
   normalizeCompany,
@@ -30,6 +34,7 @@ import {
   resolveTrackerPath,
   resolveWorkspaceRoot,
 } from './tracker-utils.mjs';
+import { resolveOutcomeDir } from './lib/outcome-dir.mjs';
 import { parsePdfIndex } from './find.mjs';
 import { findCaptureForReport } from './jd-capture.mjs';
 
@@ -56,22 +61,6 @@ function today() {
   return new Date().toISOString().split('T')[0];
 }
 
-const OUTCOME_MAP = {
-  interview_progress: { state: 'Interview', defaultNote: 'Stage updated' },
-  stage_reached: { state: 'Interview', defaultNote: 'Stage updated' },
-  interview: { state: 'Interview', defaultNote: 'Interview stage' },
-  offer_received: { state: 'Offer', defaultNote: 'Offer received' },
-  offer: { state: 'Offer', defaultNote: 'Offer received' },
-  hired: { state: 'Hired', defaultNote: 'Offer accepted' },
-  accepted: { state: 'Hired', defaultNote: 'Offer accepted' },
-  offer_declined: { state: 'Discarded', defaultNote: 'Offer declined by candidate' },
-  declined: { state: 'Discarded', defaultNote: 'Offer declined by candidate' },
-  rejected: { state: 'Rejected', defaultNote: 'Application rejected' },
-  rejection: { state: 'Rejected', defaultNote: 'Application rejected' },
-  no_response: { state: 'Discarded', defaultNote: 'No response / ghosted' },
-  ghosted: { state: 'Discarded', defaultNote: 'No response / ghosted' },
-  interview_only: { state: 'Interview', defaultNote: 'Interview process completed' },
-};
 
 const USAGE = `Usage: node outcome.mjs <report#|company> <outcome_type> [options]
 
@@ -204,7 +193,26 @@ matchedRow = candidates[0];
 const companySlug = slugify(matchedRow.company);
 const roleSlug = slugify(matchedRow.role);
 const repoRoot = resolveWorkspaceRoot(appsFile);
-const outcomeDir = join(repoRoot, 'data', 'outcomes', `${matchedRow.num}_${companySlug}_${roleSlug}`);
+// Reuse this row's existing journal directory when it has one. The name used to
+// be rebuilt from the tracker's CURRENT text every time, so editing the Role
+// cell between two recordings sent the second entry to a different directory
+// and split an append-only journal in half — with every reader keying on the
+// leading `{num}_` and picking whichever it read last. The row NUMBER is the
+// identity; the slugs are a label on it.
+const outcomesRoot = join(repoRoot, 'data', 'outcomes');
+const { name: outcomeDirName, existing: existingOutcomeDirs } =
+  resolveOutcomeDir(outcomesRoot, matchedRow.num, `${matchedRow.num}_${companySlug}_${roleSlug}`);
+const outcomeDir = join(outcomesRoot, outcomeDirName);
+// A split that predates this fix is not repaired automatically — moving a
+// user's recorded artifacts is not this command's job — but it is said out
+// loud, because until it is merged some readers will see only one half.
+if (existingOutcomeDirs.length > 1) {
+  console.error(
+    `⚠ #${matchedRow.num} has ${existingOutcomeDirs.length} outcome directories, so its journal is split: ` +
+    `${existingOutcomeDirs.join(', ')}. Appending to ${outcomeDirName} (most recently written). ` +
+    'Merge the entries into one directory to get a single history.',
+  );
+}
 
 const noteToAppend = flags.note || (flags.stage ? `${outcomeConfig.defaultNote}: ${flags.stage}` : outcomeConfig.defaultNote);
 
