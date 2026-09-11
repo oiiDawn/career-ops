@@ -280,6 +280,7 @@ const SYSTEM_PATHS = [
   'paste-reply-tests.mjs',
   'outcome.mjs',
   'tests/outcome.test.mjs',
+  'calibrate.mjs',
   'batch/batch-prompt.md',
   'batch/batch-runner.sh',
   'batch/aggregate-tokens.mjs',
