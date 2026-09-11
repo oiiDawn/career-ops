@@ -160,6 +160,7 @@ const SYSTEM_PATHS = [
   'lib/gemini-node-floor.mjs',
   'lib/local-today.mjs',
   'lib/outcome-dir.mjs',
+  'lib/mjs-files.mjs',
   'lib/is-main-module.mjs',
   'lib/outcome-types.mjs',
   'lib/latex-escape.mjs',
