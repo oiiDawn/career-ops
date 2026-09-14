@@ -39,6 +39,7 @@ These files contain your personal data, customizations, and work product. Update
 | `data/agent-inbox.md` | Your append-only request queue drained at session start (written by `agent-inbox.mjs`) |
 | `data/reply-candidates.json` | Your normalized employer-reply candidates (subject, body, sender, signal — read by `reply-watch.mjs`) |
 | `data/pdf-index.tsv` | PDF↔report linkage manifest (written by `generate-pdf.mjs` or `reactive-resume.mjs`, read by `find.mjs` and the `email` mode) |
+| `data/scan-jds/*.json` | Browser JD snapshots keyed by canonical URL hash, with requested/final URL, retrieval timestamp and capture/failure status. Captured text is not a completeness or liveness verdict. Score reuses snapshots for 24 hours, then refreshes; failed captures remain retryable. |
 | `data/prescreen-cache/*.json` | Canonical Stage 0 inputs/results keyed by URL hash. Scanner writes `incomplete`; pipeline/batch replace it after full-JD evidence extraction. Liveness is evaluated separately. |
 | `output/{report-company-role}/preparation/plan.json` | Single-role preparation plan with evidence-gap, adjacent, actual-gap, and unverified classifications plus pre-application/interview actions. |
 | `output/{report-company-role}/review/*.json` | Stage 2 reviewer result and required change plan. Draft-only, created only after the user selects a Scored role and invokes its application workflow; never submission authority. |

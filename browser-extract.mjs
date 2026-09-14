@@ -136,7 +136,7 @@ const USAGE = `Usage:
   --mode jd|listing   jd (default) returns { url, title, text }; listing returns { url, jobs }
   --max N             listing: maximum postings to return (default ${DEFAULT_LISTING_MAX})
   --max-chars N       jd: text cap (default ${JD_TEXT_CAP}); raise it for a long JD
-  --timeout MS        navigation timeout (default ${DEFAULT_TIMEOUT_MS})
+  --timeout MS        navigation and content-readiness budget (default ${DEFAULT_TIMEOUT_MS})
   --help, -h          Show this help`;
 
 /**
@@ -195,20 +195,20 @@ export function parseArgs(argv) {
   };
 }
 
-// Read the raw DOM inside the page: title, main visible text, and visible
-// anchors. Runs in the browser context; returns plain data only.
+/** Extract readable content and visible links without changing the live document. */
 async function readDom(page) {
   return page.evaluate(() => {
-    const title = (document.querySelector('h1')?.innerText || document.title || '').trim();
+    const title = ((location.hostname.endsWith('.myworkdayjobs.com') ? document.title : '')
+      || document.querySelector('h1')?.innerText || document.title || '').trim();
 
-    // Main text: prefer <main>/[role=main]/<article>, else body; strip nav chrome.
     const root =
       document.querySelector('main, [role="main"], article') || document.body;
     let text = '';
     if (root) {
       const clone = root.cloneNode(true);
       clone.querySelectorAll('script, style, nav, header, footer, noscript').forEach((el) => el.remove());
-      text = clone.innerText || '';
+      clone.querySelectorAll('p, div, section, li, h1, h2, h3, h4, br').forEach(el => el.append('\n'));
+      text = clone.textContent || '';
     }
 
     const anchors = Array.from(document.querySelectorAll('a[href]'))
@@ -222,6 +222,18 @@ async function readDom(page) {
 
     return { title, text, anchors };
   });
+}
+
+/** Workday renders its shell before the JD; wait for the description, not a fixed sleep. */
+export async function readPage(page, { mode = 'jd', timeout = DEFAULT_TIMEOUT_MS } = {}) {
+  if (mode === 'jd' && new URL(page.url()).hostname.endsWith('.myworkdayjobs.com')) {
+    await page.waitForFunction(() => {
+      const description = document.querySelector('[data-automation-id="jobPostingDescription"]');
+      return Boolean(description?.innerText?.trim())
+        || /job (?:is no longer available|has been removed|you are looking for.*(?:not|no longer))|position (?:has been filled|is no longer available)/i.test(document.body?.innerText ?? '');
+    }, undefined, { timeout });
+  } else await page.waitForTimeout(Math.min(HYDRATION_WAIT_MS, timeout));
+  return readDom(page);
 }
 
 async function main() {
@@ -279,8 +291,9 @@ async function main() {
       return route.continue();
     });
     const page = await context.newPage();
+    const started = Date.now();
     await page.goto(url, { waitUntil: 'domcontentloaded', timeout });
-    await page.waitForTimeout(HYDRATION_WAIT_MS); // let SPAs hydrate
+    const raw = await readPage(page, { mode, timeout: Math.max(1, timeout - (Date.now() - started)) });
 
     // Belt-and-suspenders: never emit content read from a private final URL.
     const finalUrl = page.url();
@@ -290,8 +303,6 @@ async function main() {
       process.exitCode = 1;
       return;
     }
-    const raw = await readDom(page);
-
     const result = mode === 'listing'
       ? normalizeListing(raw.anchors, finalUrl, max)
       : normalizeJd(raw, finalUrl, maxChars);

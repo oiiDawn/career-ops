@@ -58,6 +58,7 @@ import { withPortalHealthLock } from './portal-health-lock.mjs';
 import { localToday } from './lib/local-today.mjs';
 import { evaluatePrescreen, hashValue } from './lib/prescreen-core.mjs';
 import { writePrescreenCache } from './lib/prescreen-cache.mjs';
+import { captureScanJds } from './lib/scan-jd.mjs';
 import { isMainModule } from './lib/is-main-module.mjs';
 import { promoteKnownFragmentIdentity } from './url-key.mjs';
 
@@ -2749,6 +2750,8 @@ async function main() {
 
   // 6. Write results
   if (!dryRun && verifiedOffers.length > 0) {
+    const jdCapture = await captureScanJds(verifiedOffers);
+    console.log('JD capture: ' + JSON.stringify(jdCapture));
     persistScanPrescreens(verifiedOffers);
     await appendToPipeline(verifiedOffers);
     await appendToScanHistory(verifiedOffers, date);

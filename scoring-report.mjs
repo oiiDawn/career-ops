@@ -14,6 +14,10 @@ export const HEADINGS = [
   'D. 薪酬与需求', 'E. CV 变更计划', 'F. 面试与补证', 'G. 岗位真实性',
   'Risk Summary', 'Evaluation Checklist',
 ];
+export const SCORING_HEADINGS = [
+  'Machine Summary', 'A. 岗位概览', 'B. 能力竞争力', 'C. 入职吸引力',
+  'D. 薪酬与需求', 'E. 补证问题', 'G. 岗位真实性', 'Risk Summary', 'Evaluation Checklist',
+];
 
 function requireValue(condition, message) {
   if (!condition) throw new Error(message);
@@ -77,15 +81,17 @@ export function validateResearch(research, sources) {
 
 /** Validate structure, frozen sources, literal citations and arithmetic; semantic review remains required. */
 export function validateReport(text, { root = ROOT } = {}) {
+  const fence = text.match(/## Machine Summary\s*\n+```(?:yaml|yml)\s*\n([\s\S]*?)\n```/);
+  requireValue(fence, 'missing Machine Summary YAML');
+  const summary = load(fence[1]);
+  requireValue(summary?.report_format === undefined || summary.report_format === 'scoring-v2', 'unknown report format');
   const headings = [...text.matchAll(/^## (.+)$/gm)];
-  requireValue(headings.map(m => m[1]).join('|') === HEADINGS.join('|'), 'report headings must match the scoring contract in order');
+  const expected = summary.report_format === 'scoring-v2' ? SCORING_HEADINGS : HEADINGS;
+  requireValue(headings.map(m => m[1]).join('|') === expected.join('|'), 'report headings must match the scoring contract in order');
   for (let i = 0; i < headings.length; i++) {
     const body = text.slice(headings[i].index + headings[i][0].length, headings[i + 1]?.index ?? text.length).trim();
     requireValue(body.length >= 20, `empty section: ${headings[i][1]}`);
   }
-  const fence = text.match(/## Machine Summary\s*\n+```(?:yaml|yml)\s*\n([\s\S]*?)\n```/);
-  requireValue(fence, 'missing Machine Summary YAML');
-  const summary = load(fence[1]);
   requireValue(summary?.scoring_model === 'attractiveness-v1', 'not an attractiveness-v1 report');
   requireValue(summary.score === null, 'attractiveness must not publish a scalar score');
   requireValue(summary.complete_jd === true, 'complete JD required; record incomplete without a scored report');
