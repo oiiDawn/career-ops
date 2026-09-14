@@ -12,6 +12,7 @@ import sys
 import threading
 import time
 import uuid
+import yaml
 
 ROOT = Path(__file__).resolve().parents[1]
 HERMES = Path.home() / '.hermes' / 'hermes-agent'
@@ -43,6 +44,45 @@ def node(command, directory=None, timeout=15):
     if result.returncode:
         raise RuntimeError(result.stderr.strip())
     return json.loads(result.stdout)
+
+
+def maybe_push(directory):
+    """Push only gate-safe reports meeting the configured combined-score alert line."""
+    directory = Path(directory)
+    try:
+        report_path = directory / 'report.md'
+        report = report_path.read_text()
+        match = re.match(r'## Machine Summary\s*\n+```(?:yaml|yml)\s*\n([\s\S]*?)\n```', report)
+        if not match:
+            raise ValueError('Machine Summary YAML block missing')
+        summary = yaml.safe_load(match.group(1))
+        score = summary['attractiveness']
+        lower, upper, coverage = (float(score[key]) for key in ('lower', 'upper', 'coverage'))
+        review = read(directory / 'report.md.review.json')
+        alert_line = float(yaml.safe_load((ROOT / 'config/profile.yml').read_text()).get('attractiveness', {}).get('alert_line', 4.0))
+        if 'Fail' in review.get('gates', {}).values() or lower + (upper - lower) * coverage < alert_line:
+            return
+        title = f'高分岗位 · {summary["company"]} · {summary["role"]} · 吸引力 {lower}–{upper}/5（覆盖率{coverage * 100:.0f}%）'
+        argv = [
+            'python3', '/Users/oii/.hermes/skills/automation/discord-thread-deliver/scripts/discord_thread_post.py',
+            '--channel', '1519136110515585184',
+            '--title', (title[:97] + '…') if len(title) > 100 else title,
+            '--file', str(report_path),
+        ]
+        clean_env = {key: value for key, value in os.environ.items() if key.lower() not in ('http_proxy', 'https_proxy', 'all_proxy', 'no_proxy')}
+        result = subprocess.run(argv, cwd=ROOT, capture_output=True, text=True, timeout=40, env=clean_env)
+        server_error = '400' in result.stderr or '403' in result.stderr or 'Discord API' in result.stderr
+        if result.returncode and not server_error:
+            proxy_env = {**clean_env, 'HTTPS_PROXY': 'http://127.0.0.1:7890', 'HTTP_PROXY': 'http://127.0.0.1:7890',
+                         'ALL_PROXY': 'socks5://127.0.0.1:7890', 'NO_PROXY': 'localhost,127.0.0.1'}
+            result = subprocess.run(argv, cwd=ROOT, capture_output=True, text=True, timeout=40, env=proxy_env)
+        if result.returncode:
+            raise RuntimeError(result.stderr.strip() or f'Discord poster exited {result.returncode}')
+        with (directory / 'worker.log').open('a') as log:
+            log.write('Discord high-score push succeeded\n')
+    except Exception as error:
+        with (directory / 'worker.log').open('a') as log:
+            log.write(f'WARNING Discord high-score push failed: {str(error).replace(chr(10), " ")}\n')
 
 
 def stop_work(*_):
@@ -371,6 +411,7 @@ def worker(directory):
         decision = checkpoint(directory, 'review', review_inputs, review)
     save(directory / 'report.md.review.json', decision)
     node('publish', directory)
+    maybe_push(directory)
 
 
 def supervise(command, soft=870, hard=900):

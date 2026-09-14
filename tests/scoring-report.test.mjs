@@ -93,8 +93,8 @@ try {
   writeFileSync(join(root, 'reports/new.md.review.json'), JSON.stringify({ ...review, gates, ready: true }));
   writeFileSync(join(root, 'reports/old.md'), '**Score:** 5.0/5');
   const pipeline = '## Scored\n- [~] #1 | Report: reports/new.md\n- [~] #2 | Report: reports/old.md\n- [~] #3 | Report: reports/missing.md\n## Processed\n- [~] #4 | Report: reports/new.md';
-  const shortlist = readShortlist(pipeline, { root, profile: { attractiveness: { model: 'attractiveness-v1', weights, acceptable_line: 3 } } });
-  assert.equal(shortlist.decisions[0].action, 'apply');
+  const shortlist = readShortlist(pipeline, { root, profile: { attractiveness: { model: 'attractiveness-v1', weights, alert_line: 4 } } });
+  assert.equal(shortlist.decisions[0].action, 'deprioritize');
   assert.deepEqual(shortlist.needs_review.map(x => x.id), ['2']);
   assert.deepEqual(shortlist.invalid.map(x => x.id), ['3']);
   assert.equal(shortlist.decisions.length, 1);
