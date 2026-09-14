@@ -1,0 +1,40 @@
+{
+  "verdict": "approve",
+  "checks": {
+    "jd_complete": {
+      "status": "pass",
+      "finding": "冻结JD完整，含岗位标题（Manager, Full Stack Engineer）、地点（Shanghai Hongkou, CN - AIA Group Office）、工时类型（Full time）、职位编号JR-69087、发布时间（Posted 29 Days Ago）及四类职责（全栈应用开发、系统架构与集成、云与DevOps、安全与合规、协作与敏捷交付）与完整Preferred Job Requirements。报告声明的complete_jd:true属实，无缺失必备项。"
+    },
+    "source_grounding": {
+      "status": "pass",
+      "finding": "逐字核对引文：direction三处引文（enterprise applications across frontend/backend、modern web technologies…cloud services、enterprise-grade web applications…）均逐字见于JD；company维度引文（pioneering innovators for over 100 years）逐字见于JD；web1引自ServiceNow案例AIA定位、web2引自同一页TDA表述均与抓取文本一致。研究记录对watchjobs/Glassdoor仅标注search_only/failed并明确不采用，未以第三方摘要冒充实证，grounding无误。"
+    },
+    "dimension_support": {
+      "status": "pass",
+      "finding": "direction=4成立：JD为明确企业级全栈岗位且有具体产品贡献，符合规则4档；JD无Agent/Applied AI产品主要职责，不达5档，判4合理。compensation=null正确：JD未披露薪酬，研究未获本岗位官方/权威数据，个人目标CNY 350K无法证明，按规则未知维度取范围[1,5]。team=null正确：群体级TDA资料（web2）不能等价于上海虹口具体团队工时/管理/远程，保留Unknown符合规则。company=3成立：JD超百年经营+数字化转型与web1/web2大型上市泛亚寿险集团及TDA投入一致，判定保守且注明缺最新财务证据。范围复算正确：下限2.25（4×0.35+3×0.10+1×0.30+1×0.25）、上限4.45（4×0.35+5×0.30+5×0.25+3×0.10）、覆盖率0.45（0.35+0.10），与正文一致。"
+    },
+    "capability_coverage": {
+      "status": "pass",
+      "finding": "表格覆盖JD全部实质要求：前后端开发、JS/TS/HTML5/CSS3及框架、后端语言、REST API与微服务、关系与NoSQL数据库、Azure/AWS/GCP、Docker/Kubernetes/云原生、Git、CI/CD/自动化测试/发布、敏捷、监控日志可观测、安全编码认证授权、审计风险合规、性能可扩展性与排障、跨职能协作、技术沟通与利益相关者、指导初级工程师、分析排障、学士学位、金融保险行业、5+年全部逐项列出，无遗漏。原型/进行中/相邻经验未被提升为生产证明：RAG标注为原型、Gitee Actions CI/CD标注进行中且明示生产成熟度不足、DingTalk 300人交付如实标注真实用户试用；VivoFlow按cv/targeting确认为生产work，判定Proven有依据。"
+    },
+    "no_double_count": {
+      "status": "pass",
+      "finding": "各负面/未知事实只在一个吸引力维度计分：薪酬未披露仅在compensation，团队工时/远程/自主权仅在team，公司技术投入证据不足仅在company（保持3不升4），方向非AI Agent仅在direction（按规则方向增益不重复入team）；未将年限、云平台、K8s等能力缺口计入任何吸引力维度，单列为竞争力。同一事实无跨维度重复扣分。"
+    },
+    "gate_evidence": {
+      "status": "pass",
+      "finding": "location：上海虹口属候选人一线城市目标，通过。employment：JD官方Workday页面标注Full time，无外包/派遣信号，官方雇主门户+全职声明为同向独立强信号，支持通过，合同法律实体仍列为补证项不作失败。size：研究确认亚太最大独立上市泛亚寿险集团、2.3万+员工，远超50人门槛，通过。compensation：未披露且研究未证实达到CNY 350K，正确保留Unknown而非判Fail。eligibility：北京航空航天大学软件工程学士满足学历偏好，大陆工作地为候选人合法市场，通过；3.3年vs5+及云平台缺口归为竞争力非硬性门槛，处理正确。liveness：浏览器快照（检索时间2026-09-11T12:15:30Z）显示页面完整加载、含Apply按钮、完整JD、Posted 29 Days Ago及JR-69087，无下架失效信号，通过。gates与报告Checklist一致。"
+    }
+  },
+  "gates": {
+    "location": "Pass",
+    "employment": "Pass",
+    "size": "Pass",
+    "compensation": "Unknown",
+    "eligibility": "Pass",
+    "liveness": "Pass"
+  },
+  "ready": false,
+  "reviewer": "score-review-f1722f8f4b01",
+  "report_sha256": "552a12bcd6beada42d0c8e523d6a896bab47d9460975a85f3e2b4f30f9ec0ab4"
+}

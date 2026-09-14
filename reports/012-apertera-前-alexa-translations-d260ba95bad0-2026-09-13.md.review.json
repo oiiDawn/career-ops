@@ -1,0 +1,40 @@
+{
+  "verdict": "approve",
+  "ready": false,
+  "checks": {
+    "jd_complete": {
+      "status": "pass",
+      "finding": "完整JD已冻结，含岗位说明、职责、全部必备/加分要求及侧栏（中高级、全职），与jd_source原文逐字一致，无缺失段落。"
+    },
+    "source_grounding": {
+      "status": "pass",
+      "finding": "引文逐字核对：jd职责三段、web1($82,232)、web3(51-200人)、web2(20余年/75%律所/2026-06-01更名)均与冻结源吻合；雇主身份（加拿大私企、多伦多总部）由web2/web3印证；侧栏行业/职能矛盾已正确标注为平台分类噪声。"
+    },
+    "dimension_support": {
+      "status": "pass",
+      "finding": "direction=4有AI工程方向+产品贡献证据支撑且未达5理由是主责偏训练侧；company=4由更名、ISO/SOC2、客户证据支撑；compensation/team证据不足置null且范围[1,5]合规；吸引力2.35–4.55、覆盖率0.45复算正确。"
+    },
+    "capability_coverage": {
+      "status": "pass",
+      "finding": "逐项覆盖全部必备与加分项：SFT(必备all-of)、3+年GenAI经验标Gap，Huggingface/Bedrock为Unverified，PyTorch/TF、云平台为Adjacent，判定有据；生产(VivoFlow MCP/钉钉Agent)与原型(LangChain RAG)区分正确，职责拆分完整。"
+    },
+    "no_double_count": {
+      "status": "pass",
+      "finding": "训练侧缺口仅在能力矩阵计一次，未复用至任何吸引力维度；compensation/team未知仅在C维说明；方向产品贡献未重复计入team维度；薪酬市场基准未冒充岗位包。"
+    },
+    "gate_evidence": {
+      "status": "pass",
+      "finding": "地点深圳(tier-1)、全职、规模51-200≥50、发布1周且有申请按钮均有据；薪酬与雇佣实体按规则置Unknown而非臆断；SFT、3+年GenAI等硬性缺口如实记录为Gap，未虚构成通过。"
+    }
+  },
+  "gates": {
+    "location": "Pass",
+    "employment": "Unknown",
+    "size": "Pass",
+    "compensation": "Unknown",
+    "eligibility": "Fail",
+    "liveness": "Pass"
+  },
+  "reviewer": "score-review-c8765194c8ca",
+  "report_sha256": "d260ba95bad0dd4e91b89398713e0a45b39f45be01ba2c897b7efe79389c6cdb"
+}

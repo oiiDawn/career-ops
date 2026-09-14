@@ -1,0 +1,40 @@
+{
+  "verdict": "approve",
+  "ready": false,
+  "checks": {
+    "jd_complete": {
+      "status": "pass",
+      "finding": "完整JD覆盖4项职责与8项资质（含学位/年限/C/C++/AI好奇/PyTorch/自主/英语/客户沟通），报告逐条映射12项，并识别正文『CPU computing engineer』与标题语义差异；无实质要求遗漏。"
+    },
+    "source_grounding": {
+      "status": "pass",
+      "finding": "direction与company引文逐字匹配冻结JD及web2财报（营收+106%/数据中心+117%）；薪酬、团队维度均如实标注来源限制与失败；H20出口管制仅作风险语境、溯源research记录，不影响计分。"
+    },
+    "dimension_support": {
+      "status": "pass",
+      "finding": "direction=2、company=4均有逐字证据支撑档位定义；权重复算1.65–3.85、覆盖率0.45准确；薪酬/团队因证据不足记null并说明缺失原因，未凭想象收窄。"
+    },
+    "capability_coverage": {
+      "status": "pass",
+      "finding": "12项资质逐条判定Proven/Adjacent/Gap/Unverified；RAG明确标为原型、VivoFlow与DingTalk为生产交付，区分正确；PyTorch与GPU/CUDA缺口如实为Gap，未将相邻经验拔高。"
+    },
+    "no_double_count": {
+      "status": "pass",
+      "finding": "能力缺口（GPU/TensorRT/PyTorch、经验年限）仅在竞争力与风险章节体现，未计入吸引力任何维度；公司4分仅凭web2财报证据计一次；薪酬未披露未以市场汇总冒充岗位报价。"
+    },
+    "gate_evidence": {
+      "status": "pass",
+      "finding": "地点上海为一线城市符合政策；全职直接雇佣、页面无外包信号；NVIDIA上市且单季营收$96.2B远超50人；薪酬未披露记Unknown；硕士满足、经验约3.3年及PyTorch缺失记Unverified；岗位经官方Workday页于2026-09-13检索时活跃（Posted Yesterday、Apply按钮）。"
+    }
+  },
+  "gates": {
+    "location": "Pass",
+    "employment": "Pass",
+    "size": "Pass",
+    "compensation": "Unknown",
+    "eligibility": "Unknown",
+    "liveness": "Pass"
+  },
+  "reviewer": "score-review-9c8a07c93b16",
+  "report_sha256": "b130ce4cbeca8dbeccd3e0fe8cc5ad13cc5c526b9571a14a8f8b96ed57b7e27c"
+}

@@ -1,0 +1,40 @@
+{
+  "verdict": "approve",
+  "ready": false,
+  "checks": {
+    "jd_complete": {
+      "status": "pass",
+      "finding": "JD 完整：职位、Position ID P946333、杭州、全职、职责/任职/优先资格/成功标准齐全，与冻结文本一致，complete_jd=true 成立。"
+    },
+    "source_grounding": {
+      "status": "pass",
+      "finding": "方向/团队/公司引文均逐字取自冻结 JD 与 web1 年报页且实质支撑档位；未见捏造或断章取义。"
+    },
+    "dimension_support": {
+      "status": "pass",
+      "finding": "direction=5 因 JD 以生产级 Agentic AI 平台为主要职责并覆盖设计至交付运营；company=4 有年报增长与投入证据；未知维度留 null，2.70–4.90 覆盖45% 复算正确。"
+    },
+    "capability_coverage": {
+      "status": "pass",
+      "finding": "B 表逐条覆盖 JD 必备/优先/胜任力与成功标准（含记忆、结构化输出、重排、可观测性），复合要求已拆分；原型/生产/进行中区分明确，Gap 如实标注。"
+    },
+    "no_double_count": {
+      "status": "pass",
+      "finding": "金融领域、生产 RAG、Lakehouse 等缺口仅在 B 独立列示，未影响四维评分；无跨维重复计分，未套用旧匹配阈值。"
+    },
+    "gate_evidence": {
+      "status": "pass",
+      "finding": "地点（杭州新一线）、资格硬门槛、活跃性均有证据为 Pass；雇佣与薪酬未知不判失败；规模依官方年报强信号可推 Pass。"
+    }
+  },
+  "gates": {
+    "location": "Pass",
+    "employment": "Unknown",
+    "size": "Pass",
+    "compensation": "Unknown",
+    "eligibility": "Pass",
+    "liveness": "Pass"
+  },
+  "reviewer": "score-review-48ff8bb54227",
+  "report_sha256": "6e088577273f0e98606df75556e438d30dbca4fb705eb61ffae469cfdef815b5"
+}

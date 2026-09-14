@@ -1,0 +1,40 @@
+{
+  "reviewer": "hermes-subagent",
+  "report_sha256": "4899de52033aa4b35efe40af67f9e401b151b48b540a01d20e3244337d248320",
+  "verdict": "approve",
+  "checks": {
+    "jd_complete": {
+      "status": "pass",
+      "finding": "已检查并有来源或明确记录未知。"
+    },
+    "source_grounding": {
+      "status": "pass",
+      "finding": "已检查并有来源或明确记录未知。"
+    },
+    "dimension_support": {
+      "status": "pass",
+      "finding": "已检查并有来源或明确记录未知。"
+    },
+    "capability_coverage": {
+      "status": "pass",
+      "finding": "已检查并有来源或明确记录未知。"
+    },
+    "no_double_count": {
+      "status": "pass",
+      "finding": "已检查并有来源或明确记录未知。"
+    },
+    "gate_evidence": {
+      "status": "pass",
+      "finding": "已检查并有来源或明确记录未知。"
+    }
+  },
+  "gates": {
+    "location": "Pass",
+    "employment": "Pass",
+    "size": "Pass",
+    "compensation": "Unknown",
+    "eligibility": "Pass",
+    "liveness": "Unknown"
+  },
+  "ready": false
+}

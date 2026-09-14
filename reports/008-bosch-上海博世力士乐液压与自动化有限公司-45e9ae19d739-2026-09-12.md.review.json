@@ -1,0 +1,40 @@
+{
+  "verdict": "approve",
+  "ready": false,
+  "checks": {
+    "jd_complete": {
+      "status": "pass",
+      "finding": "冻结JD完整，含职责4项、资格5项、全职和法律实体，浏览器快照内容一致，无缺失。"
+    },
+    "source_grounding": {
+      "status": "pass",
+      "finding": "逐字引文均来自冻结来源：jd、cv、web1、web2、web3；research.json记录完整，来源哈希一致。"
+    },
+    "dimension_support": {
+      "status": "pass",
+      "finding": "direction用jd职责与cv对比定2分；company用web3 2025财年数据定4分；compensation/team因缺证据保留Unknown，引文支持充分。"
+    },
+    "capability_coverage": {
+      "status": "pass",
+      "finding": "逐项覆盖JD全部实质与加分要求，区分Proven/Adjacent/Gap/Unverified；C/C++、嵌入式为Proven，Linux、控制算法等标注Gap/Unverified，无原型冒充生产。"
+    },
+    "no_double_count": {
+      "status": "pass",
+      "finding": "方向、薪酬、团队、公司负面事实各归一次；公司风险归company维度，薪酬市场信息仅在compensation维度使用。"
+    },
+    "gate_evidence": {
+      "status": "pass",
+      "finding": "学历、专业、地点、雇主均已按证据标明Unknown或通过，团队工作面明确未定档，没有把信息缺失写成条件失败。"
+    }
+  },
+  "gates": {
+    "location": "Pass",
+    "employment": "Pass",
+    "size": "Unknown",
+    "compensation": "Unknown",
+    "eligibility": "Unknown",
+    "liveness": "Pass"
+  },
+  "reviewer": "score-review-ab514692e1e7",
+  "report_sha256": "45e9ae19d7399ea073fc75027f0ace060f247e36906d031f084c4b59e42d8cce"
+}

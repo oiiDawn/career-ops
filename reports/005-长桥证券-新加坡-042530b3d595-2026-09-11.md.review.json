@@ -1,0 +1,40 @@
+{
+  "verdict": "approve",
+  "ready": false,
+  "checks": {
+    "jd_complete": {
+      "status": "pass",
+      "finding": "冻结JD完整：含岗位职责4项、任职要求5项、加分项5项、地点深圳、全职、中高级，薪资未披露属信息缺失而非JD不完整。职类标'销售和业务开发'疑为领英分类错误，不影响正文实质。"
+    },
+    "source_grounding": {
+      "status": "pass",
+      "finding": "Machine Summary引文与web1/jd逐字一致；research仅f3为retrieved并带原文，f1/f2/f4/f5正确标failed/search_only并注明验证码拦截、正文抓取失败及匿名低可信度。雇主'新加坡vs深圳'身份差异已如实标记，未断言法律实体。"
+    },
+    "dimension_support": {
+      "status": "pass",
+      "finding": "direction(5)由JD'落地生产业务/可观测体系/量化评测'覆盖设计到交付职责支持；company(4)由web1持牌券商(BPX066)、九地团队、32000产品、Pre-A 5000万美元与AI技术投入支持，缺最新财务故不给5，裁量在3-4边界可接受；薪酬/团队null理由充分。覆盖率0.45与区间2.70-4.90复算正确。"
+    },
+    "capability_coverage": {
+      "status": "pass",
+      "finding": "JD全部4项职责、5项必备、5项加分逐一映射为Proven/Adjacent/Gap/Unverified；LangChain RAG与LangGraph明确标注本地原型，VivoFlow MCP与钉钉Agent标为生产，两者如实区分，无抬高或漏项。"
+    },
+    "no_double_count": {
+      "status": "pass",
+      "finding": "薪资未披露仅在compensation计分；团队证据缺失仅在team；雇主实体、公司规模、工时等仅出现在门槛/补证/风险部分，未参与任何维度计分，同一事实未重复计分。"
+    },
+    "gate_evidence": {
+      "status": "pass",
+      "finding": "三维均执行检索（5条查询），失败源保留cntext失败原因（验证码、仅导航外壳）；liveness由浏览器快照(2026-09-11)的'1周前'发布、80申请者、含申请按钮支持；薪资/雇主未知处置正确，未将信息缺失写成失败。"
+    }
+  },
+  "gates": {
+    "location": "Pass",
+    "employment": "Unknown",
+    "size": "Pass",
+    "compensation": "Unknown",
+    "eligibility": "Pass",
+    "liveness": "Pass"
+  },
+  "reviewer": "score-review-d02a42541a03",
+  "report_sha256": "042530b3d59532c257c06f5ee96f907f4eb91c9449256cc04e8ed562904c276d"
+}

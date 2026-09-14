@@ -1,4 +1,0 @@
-{"reviewer":"blind-b 正式报告独立语义复核",
-"report_sha256":"479f7347a9aa6cf2be3030a4921955696e4c534883d1b0e11f53b0d71d9caf15",
-"verdict":"approve",
-"checks":{"jd_complete":{"status":"pass","finding":"已核验完整 JD , 职责与资质齐全 , 可支持本次评估 。"},
