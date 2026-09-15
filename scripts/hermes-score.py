@@ -59,7 +59,7 @@ def maybe_push(directory):
         score = summary['attractiveness']
         lower, upper, coverage = (float(score[key]) for key in ('lower', 'upper', 'coverage'))
         review = read(directory / 'report.md.review.json')
-        alert_line = float(yaml.safe_load((ROOT / 'config/profile.yml').read_text()).get('attractiveness', {}).get('alert_line', 4.0))
+        alert_line = float(yaml.safe_load((ROOT / 'config/profile.yml').read_text())['attractiveness']['alert_line'])
         if 'Fail' in review.get('gates', {}).values() or lower + (upper - lower) * coverage < alert_line:
             return
         title = f'高分岗位 · {summary["company"]} · {summary["role"]} · 吸引力 {lower}–{upper}/5（覆盖率{coverage * 100:.0f}%）'
@@ -140,7 +140,7 @@ compensation:{score,rationale,evidence:[]},team:{score,rationale,evidence:[]},co
 sections:{overview,capabilities,compensation,questions,legitimacy,risks,checklist}}.
 Candidate source IDs are cv/profile/targeting/articles; JD is jd. Research source IDs are supplied web1, web2,...
 Every quote must be a contiguous EXACT substring of the supplied source, no edits or ellipses.
-Unknown dimensions remain score:null. Adjacent market pay and company-wide employee reviews do not establish exact role pay/team conditions.
+Compensation and team may receive a non-null integer score from convergent same-direction signals: for example, market salary benchmark plus company size plus role level/city; company culture as a clue; verifiable same-team practice supporting team; or financials supporting company. Use score:null only when there is no convergent signal, such as a genuinely anonymous employer with no data. For every non-null score, the rationale must write out the fact -> scope -> inference -> rating chain, and at least one real quoted evidence source is required.
 Sections are concise Markdown strings, no level-two headings. Capabilities map EVERY material responsibility AND required/preferred qualification
 to Proven/Adjacent/Gap/Unverified, exact candidate evidence, hiring impact and response. Use one compact row per qualification.
 Checklist covers all gates and unresolved capabilities. Questions are evidence gaps only, no interview coaching.
