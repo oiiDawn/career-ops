@@ -18,7 +18,7 @@ data/parser-output/**
 !data/parser-output/.gitkeep
 !data/parser-output/**/.gitkeep
 reports/*.md
-reports/*.md.review.json
+reports/**/*.md.review.json
 !reports/.gitkeep
 output/*
 !output/.gitkeep
