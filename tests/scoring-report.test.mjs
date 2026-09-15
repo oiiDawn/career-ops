@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createHash } from 'node:crypto';
 import { dump } from 'js-yaml';
-import { calculateAttractiveness, HEADINGS, scoreLabel, validateReport, validateReviewedReport, validateResearch } from '../scoring-report.mjs';
+import { calculateAttractiveness, SCORING_HEADINGS, scoreLabel, validateReport, validateReviewedReport, validateResearch } from '../scoring-report.mjs';
 import { readShortlist } from '../scoring-decisions.mjs';
 import { looksLikeScoreCell, parseScalarScore } from '../tracker-parse.mjs';
 
@@ -58,20 +58,23 @@ try {
   };
   for (const [path, text] of Object.entries(files)) writeFileSync(join(root, path), text);
   const summary = {
-    company: 'Sample', role: 'Engineer', scoring_model: 'attractiveness-v1', score: null,
+    report_format: 'scoring-v2', company: 'Sample', role: 'Engineer', scoring_model: 'attractiveness-v1', score: null,
     complete_jd: true, jd_source: 'jd', dimensions,
     sources: Object.entries(files).map(([path, text]) => ({
       id: path.split('.')[0], path, sha256: createHash('sha256').update(text).digest('hex'),
     })),
     attractiveness: calculateAttractiveness(dimensions, weights),
   };
-  const render = value => HEADINGS.map(heading => `## ${heading}\n\n${heading === 'Machine Summary'
+  const renderWithHeadings = (value, headings) => headings.map(heading => `## ${heading}\n\n${heading === 'Machine Summary'
     ? `\`\`\`yaml\n${dump(value)}\`\`\``
     : heading === 'C. 入职吸引力'
       ? `${scoreLabel(value.attractiveness)}\n\n${Object.entries(value.dimensions).map(([key, d]) => `| ${key} | ${d.score ?? 'Unknown'} | ${weights[key] * 100}% | evidence |`).join('\n')}`
       : 'Manually reviewed content, evidence, limitations and next action.'}`).join('\n\n');
+  const render = value => renderWithHeadings(value, SCORING_HEADINGS);
   const text = render(summary);
   assert.equal(validateReport(text, { root }).coverage, 0.7);
+  const legacyText = renderWithHeadings(summary, ['Machine Summary', ...SCORING_HEADINGS.slice(0, -1)]);
+  assert.equal(validateReport(legacyText, { root }).coverage, 0.7);
   const currentRules = structuredClone(summary);
   writeFileSync(join(root, 'rules.md'), 'research-required-v1');
   currentRules.sources = currentRules.sources.filter(s => s.id !== 'research');

@@ -15,8 +15,8 @@ export const HEADINGS = [
   'Risk Summary', 'Evaluation Checklist',
 ];
 export const SCORING_HEADINGS = [
-  'Machine Summary', 'A. 岗位概览', 'B. 能力竞争力', 'C. 入职吸引力',
-  'D. 薪酬与需求', 'E. 补证问题', 'G. 岗位真实性', 'Risk Summary', 'Evaluation Checklist',
+  'A. 岗位概览', 'B. 能力竞争力', 'C. 入职吸引力', 'D. 薪酬与需求',
+  'E. 补证问题', 'G. 岗位真实性', 'Risk Summary', 'Evaluation Checklist', 'Machine Summary',
 ];
 
 function requireValue(condition, message) {
@@ -79,6 +79,14 @@ export function validateResearch(research, sources) {
   }
 }
 
+function sectionBodies(text) {
+  const headings = [...text.matchAll(/^## (.+)$/gm)];
+  return new Map(headings.map((heading, index) => [
+    heading[1],
+    text.slice(heading.index + heading[0].length, headings[index + 1]?.index ?? text.length).trim(),
+  ]));
+}
+
 /** Validate structure, frozen sources, literal citations and arithmetic; semantic review remains required. */
 export function validateReport(text, { root = ROOT } = {}) {
   const fence = text.match(/## Machine Summary\s*\n+```(?:yaml|yml)\s*\n([\s\S]*?)\n```/);
@@ -87,10 +95,14 @@ export function validateReport(text, { root = ROOT } = {}) {
   requireValue(summary?.report_format === undefined || summary.report_format === 'scoring-v2', 'unknown report format');
   const headings = [...text.matchAll(/^## (.+)$/gm)];
   const expected = summary.report_format === 'scoring-v2' ? SCORING_HEADINGS : HEADINGS;
-  requireValue(headings.map(m => m[1]).join('|') === expected.join('|'), 'report headings must match the scoring contract in order');
-  for (let i = 0; i < headings.length; i++) {
-    const body = text.slice(headings[i].index + headings[i][0].length, headings[i + 1]?.index ?? text.length).trim();
-    requireValue(body.length >= 20, `empty section: ${headings[i][1]}`);
+  const actualHeadings = headings.map(m => m[1]);
+  const legacyExpected = summary.report_format === 'scoring-v2'
+    ? ['Machine Summary', ...SCORING_HEADINGS.slice(0, -1)]
+    : expected;
+  requireValue([expected, legacyExpected].some(order => actualHeadings.join('|') === order.join('|')), 'report headings must match the scoring contract in order');
+  const bodies = sectionBodies(text);
+  for (const [name, body] of bodies) {
+    requireValue(body.length >= 20, `empty section: ${name}`);
   }
   requireValue(summary?.scoring_model === 'attractiveness-v1', 'not an attractiveness-v1 report');
   requireValue(summary.score === null, 'attractiveness must not publish a scalar score');
@@ -133,10 +145,9 @@ export function validateReport(text, { root = ROOT } = {}) {
   for (const key of Object.keys(result)) {
     requireValue(summary.attractiveness[key] === result[key], `${key}: expected ${result[key]}`);
   }
-  const body = text.slice(headings[1].index);
-  const labels = body.split('\n').filter(line => line.includes('入职吸引力：'));
+  const labels = text.split('\n').filter(line => line.includes('入职吸引力：'));
   requireValue(labels.length === 1 && labels[0] === scoreLabel(result), 'body must contain exactly one matching score/range');
-  const scoreSection = text.slice(headings[3].index, headings[4].index);
+  const scoreSection = bodies.get('C. 入职吸引力');
   const rows = scoreSection.split('\n').filter(line => /^\s*\|/.test(line))
     .map(line => line.split('|').slice(1, -1).map(cell => cell.trim()));
   requireValue(rows.every(cells => DIMENSIONS.includes(cells[0]) || cells[0] === '维度' || /^[-: ]+$/.test(cells[0])), 'unexpected score table row');

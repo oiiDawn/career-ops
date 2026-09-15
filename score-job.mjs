@@ -132,22 +132,21 @@ export function renderReport(packet, evidence, assessment) {
     dimensions: assessment.dimensions,
     attractiveness: calculateAttractiveness(assessment.dimensions, profile.attractiveness.weights),
   };
-  const cell = s => String(s).replaceAll('|', '\\|').replaceAll('\n', ' ');
-  const table = '| 维度 | 分数 | 权重 | 理由 |\n|---|---|---|---|\n' + Object.entries(summary.dimensions).map(([key, d]) =>
-    `| ${key} | ${d.score ?? 'Unknown'} | ${Number((profile.attractiveness.weights[key] * 100).toFixed(6))}% | ${cell(d.rationale)} |`).join('\n');
+  const table = '| 维度 | 分数 | 权重 |\n|---|---|---|\n' + Object.entries(summary.dimensions).map(([key, d]) =>
+    `| ${key} | ${d.score ?? 'Unknown'} | ${Number((profile.attractiveness.weights[key] * 100).toFixed(6))}% |`).join('\n');
   const research = assessment.research;
-  const researchText = `### 外部研究记录\n\n研究日期：${research.searched_at}\n\n${research.queries.map(q => `- ${q}`).join('\n')}\n\n` +
-    Object.entries(research.dimensions).map(([key, d]) => `- ${key}：${d.conclusion}；下一步：${d.next_step}`).join('\n') + '\n\n' +
-    research.findings.map(f => `- [${f.entity}](${f.url}) · ${f.scope} · ${f.status} · 来源日期：${f.published_at ?? '未知'}\n  摘录：${f.quote ?? '未取得正文'}；限制：${f.limitation}`).join('\n');
+  const researchText = `### 外部研究记录\n\n${research.findings.map(f => `- ${f.id} ${f.url} ${f.entity}`).join('\n') || '- 无外部研究发现'}`;
   const sections = assessment.sections ?? {};
-  const bodies = [
-    `\`\`\`yaml\n${dump(summary, { lineWidth: -1, noRefs: true })}\`\`\``,
-    sections.overview, sections.capabilities, `${scoreLabel(summary.attractiveness)}\n\n${table}`,
-    sections.compensation, `${sections.questions ?? ''}\n\n${researchText}`, sections.legitimacy,
-    sections.risks, `${sections.checklist ?? ''}\n\n联网研究：完成；记录见 E. 补证问题。`,
-  ];
-  if (bodies.some(body => typeof body !== 'string' || body.trim().length < 20 || /^## /m.test(body))) throw new Error('Report section missing or contains extra level-two headings');
-  const report = SCORING_HEADINGS.map((h, i) => `## ${h}\n\n${bodies[i]}`).join('\n\n') + '\n';
+  const bodies = new Map([
+    ['A. 岗位概览', sections.overview], ['B. 能力竞争力', sections.capabilities],
+    ['C. 入职吸引力', `${scoreLabel(summary.attractiveness)}\n\n${table}`],
+    ['D. 薪酬与需求', sections.compensation], ['E. 补证问题', `${sections.questions ?? ''}\n\n${researchText}`],
+    ['G. 岗位真实性', sections.legitimacy], ['Risk Summary', sections.risks],
+    ['Evaluation Checklist', `${sections.checklist ?? ''}\n\n联网研究：完成；记录见 E. 补证问题。`],
+    ['Machine Summary', `\`\`\`yaml\n${dump(summary, { lineWidth: -1, noRefs: true })}\`\`\``],
+  ]);
+  if ([...bodies.values()].some(body => typeof body !== 'string' || body.trim().length < 20 || /^## /m.test(body))) throw new Error('Report section missing or contains extra level-two headings');
+  const report = SCORING_HEADINGS.map(h => `## ${h}\n\n${bodies.get(h)}`).join('\n\n') + '\n';
   validateReport(report, { root });
   atomicWrite(resolve(directory, 'report.md'), report);
   return { report, report_sha256: hash(report), sources: Object.fromEntries(Object.entries(files).map(([id, path]) => [id, readFileSync(path, 'utf8')])) };
