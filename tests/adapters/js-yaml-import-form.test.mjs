@@ -1,4 +1,4 @@
-// tests/js-yaml-import-form.test.mjs — no source file may import js-yaml's default
+// tests/adapters/js-yaml-import-form.test.mjs — no source file may import js-yaml's default
 // export.
 //
 // js-yaml 5 ships a native ESM build with NO default export, so
@@ -31,6 +31,7 @@ import { pass, fail, ROOT } from '../helpers.mjs';
 import { readFileSync } from 'fs';
 import { execFileSync } from 'child_process';
 import { join, relative } from 'path';
+import { fileURLToPath } from 'url';
 
 console.log('\njs-yaml must never be imported via its (nonexistent) default export');
 
@@ -96,8 +97,9 @@ const unreadable = [];
 // This file is exempt from its own sweep: it necessarily CONTAINS both offending
 // forms, as the literals the detector self-check below is built from. Exempting
 // it by exact path (not by a name pattern) keeps the exemption from widening to
-// any other file that happens to look similar.
-const SELF = join(ROOT, 'tests', 'js-yaml-import-form.test.mjs');
+// any other file that happens to look similar; deriving that path from this
+// module keeps the exemption valid when the file moves.
+const SELF = fileURLToPath(import.meta.url);
 
 const scanned = sourceFiles();
 for (const file of scanned) {
