@@ -39,8 +39,6 @@ ATTEMPT_SECONDS = 900
 
 ATTEMPT_CALLS = 20
 
-MODEL_RUNNER = "career_ops.model_runner"
-
 
 def load_project_environment(root: Path) -> None:
     """Load project settings while preserving explicit inherited environment values."""

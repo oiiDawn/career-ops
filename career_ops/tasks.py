@@ -11,11 +11,7 @@ import json
 import os
 import re
 import shutil
-import shlex
-import signal
 import sqlite3
-import subprocess
-import sys
 import time
 from pathlib import Path
 from urllib.parse import parse_qs, urlsplit
@@ -23,10 +19,15 @@ from langgraph.checkpoint.sqlite import SqliteSaver
 from langgraph.graph import END, START, StateGraph
 from career_ops.discovery.configured import capture_jd
 from career_ops.applications.resume_renderer import render_resume
-from career_ops.context import ATTEMPT_CALLS, ATTEMPT_SECONDS, INPUT_ROOT, MODEL_RUNNER, ROOT, WORKFLOW_VERSION
+from career_ops.applications.apply_graph import apply_evaluate as run_apply
+from career_ops.context import ATTEMPT_CALLS, ATTEMPT_SECONDS, INPUT_ROOT, ROOT, WORKFLOW_VERSION
+from career_ops.evaluation.scan_graph import run_scan
+from career_ops.evaluation.score_graph import run_score
 from career_ops.input_contracts import apply_inputs, canonical_scan_input, canonical_score_input, digest, score_inputs, validate_resume_payload, verify_package_files
 from career_ops.task_state import WorkflowState
 from career_ops.db import BusinessStore
+from career_ops.llm import DEADLINE, load_stub
+from career_ops.model import USAGE
 
 
 def task_view(store: BusinessStore, task: sqlite3.Row) -> dict:
@@ -114,57 +115,49 @@ class Runtime:
             os._exit(86)
 
     def run_model(self, phase: str, payload: dict, state: WorkflowState) -> dict:
-        """Call one fresh model process while enforcing the module budget."""
+        """Run one model-backed module graph in process while enforcing the module budget."""
         task = self.store.task(state["task_id"])
         calls_before = task["attempt_tool_calls"]
-        if task["attempt_tool_calls"] >= ATTEMPT_CALLS:
+        if calls_before >= ATTEMPT_CALLS:
             raise TimeoutError("tool_budget_exhausted")
-        configured = os.environ.get("CAREER_OPS_MODEL_RUNNER")
-        command = shlex.split(configured) if configured else [sys.executable, "-m", MODEL_RUNNER]
+        remaining = ATTEMPT_SECONDS - task["attempt_elapsed_seconds"] - (time.monotonic() - self.started_at)
+        if remaining <= 0:
+            raise TimeoutError("time_budget_exhausted")
+        deadline = time.monotonic() + remaining
+        draft_root = Path(os.environ.get("CAREER_OPS_DRAFT_ROOT", self.store.path.parent / "workflow-drafts"))
+        stub = load_stub("CAREER_OPS_MODEL_STUB")
+        phases = {
+            "scan_evaluate": lambda: run_scan(payload["inputs"], draft_root),
+            "apply_evaluate": lambda: run_apply(payload, draft_root),
+            "evaluate": lambda: run_score(payload["inputs"], draft_root, ROOT),
+        }
+        deadline_token = DEADLINE.set(deadline)
+        usage_token = USAGE.set((str(self.store.path), state["task_id"], ATTEMPT_CALLS))
         try:
-            remaining = ATTEMPT_SECONDS - task["attempt_elapsed_seconds"] - (time.monotonic() - self.started_at)
-            if remaining <= 0:
-                raise TimeoutError("time_budget_exhausted")
-            with subprocess.Popen(
-                [*command, phase], stdin=subprocess.PIPE, stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE, text=True, start_new_session=True, cwd=ROOT,
-                env={**os.environ, "CAREER_OPS_DRAFT_ROOT": os.environ.get(
-                    "CAREER_OPS_DRAFT_ROOT", str(self.store.path.parent / "workflow-drafts")
-                ), "CAREER_OPS_USAGE_DB": str(self.store.path),
-                    "CAREER_OPS_USAGE_TASK_ID": state["task_id"],
-                    "CAREER_OPS_TOOL_LIMIT": str(ATTEMPT_CALLS)},
-            ) as process:
-                try:
-                    stdout, stderr = process.communicate(json.dumps(payload, ensure_ascii=False), timeout=max(1, remaining))
-                except subprocess.TimeoutExpired:
-                    try:
-                        os.killpg(process.pid, signal.SIGKILL)
-                    except ProcessLookupError:
-                        pass
-                    process.communicate()
-                    raise
-                result = subprocess.CompletedProcess(command, process.returncode, stdout, stderr)
-        except subprocess.TimeoutExpired as error:
-            self.store.add_usage(state["task_id"], time.monotonic() - self.started_at, 0)
-            self.started_at = time.monotonic()
-            raise TimeoutError("time_budget_exhausted") from error
-        if result.returncode:
+            value = stub(phase, payload) if stub else phases[phase]()
+        except Exception as error:
             task = self.store.add_usage(state["task_id"], time.monotonic() - self.started_at, 0)
             self.started_at = time.monotonic()
+            if time.monotonic() >= deadline:
+                raise TimeoutError("time_budget_exhausted") from error
             if task["attempt_tool_calls"] >= ATTEMPT_CALLS:
-                raise TimeoutError("tool_budget_exhausted")
-            raise RuntimeError(result.stderr.strip() or f"model runner exited {result.returncode}")
+                raise TimeoutError("tool_budget_exhausted") from error
+            raise
+        finally:
+            DEADLINE.reset(deadline_token)
+            USAGE.reset(usage_token)
         try:
-            value = json.loads(result.stdout)
+            if time.monotonic() >= deadline:
+                raise TimeoutError("time_budget_exhausted")
             if not isinstance(value, dict):
-                raise ValueError("Model runner response must be an object")
+                raise ValueError("Model phase response must be an object")
             reported_calls = int(value.pop("tool_calls", 0))
-        except (ValueError, TypeError, OverflowError):
+        except (ValueError, TypeError, OverflowError, TimeoutError):
             self.store.add_usage(state["task_id"], time.monotonic() - self.started_at, 0)
             self.started_at = time.monotonic()
             raise
         durable_calls = self.store.task(state["task_id"])["attempt_tool_calls"] - calls_before
-        calls = reported_calls if configured and not durable_calls else 0
+        calls = reported_calls if stub and not durable_calls else 0
         task = self.store.add_usage(state["task_id"], time.monotonic() - self.started_at, calls)
         self.started_at = time.monotonic()
         if task["attempt_tool_calls"] >= ATTEMPT_CALLS:

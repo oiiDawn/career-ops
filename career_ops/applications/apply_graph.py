@@ -120,7 +120,7 @@ def apply_evaluate(payload: dict, draft_root: Path) -> dict:
         prompt = _prompt(state["payload"])
         decision = model_adapter.call_agent(
             "apply_evaluate", prompt + json.dumps(state["payload"], ensure_ascii=False),
-            [], directory,
+            [],
         )[0]
         return {"prompt": prompt, "decision": decision, "tool_calls": 1}
 
@@ -145,7 +145,7 @@ def apply_evaluate(payload: dict, draft_root: Path) -> dict:
             + state["defect"]
             + "\n"
             + json.dumps({"inputs": state["payload"], "incomplete_package": state["decision"]}, ensure_ascii=False),
-            [], directory,
+            [],
         )[0]
         return {"decision": decision, "tool_calls": state["tool_calls"] + 1}
 

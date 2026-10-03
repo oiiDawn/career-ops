@@ -1,6 +1,5 @@
 /** Discover source-scoped URLs and read structured job details before returning postings. */
 import { execFile } from 'node:child_process';
-import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { chromium } from 'playwright';
@@ -62,9 +61,9 @@ function postingKey(value) {
 
 function webSearch(query) {
   return new Promise((resolve, reject) => {
-    const child = execFile(join(homedir(), '.hermes/hermes-agent/venv/bin/python'),
-      [fileURLToPath(new URL('../../../career_ops/web_search.py', import.meta.url))],
-      { timeout: 45_000, maxBuffer: 2 * 1024 * 1024 }, (error, stdout, stderr) => {
+    const root = fileURLToPath(new URL('../../../', import.meta.url));
+    const child = execFile(join(root, '.venv/bin/python'), ['-B', '-m', 'career_ops.web_search'],
+      { cwd: root, timeout: 45_000, maxBuffer: 2 * 1024 * 1024 }, (error, stdout, stderr) => {
         if (error) { reject(new Error(`Web search failed: ${(stderr || error.message).slice(-1500)}`)); return; }
         try { resolve(JSON.parse(stdout)); } catch { reject(new Error('Web search returned invalid JSON')); }
       });

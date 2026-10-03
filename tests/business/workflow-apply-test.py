@@ -14,7 +14,7 @@ from career_ops.db import BusinessStore
 from career_ops.input_contracts import validate_resume_payload
 
 PYTHON = ROOT / ".venv" / "bin" / "python"
-RUNNER = f"{PYTHON} {ROOT / 'tests' / 'fixtures' / 'workflow-model-runner.py'}"
+RUNNER = str(ROOT / 'tests' / 'fixtures' / 'workflow-model-runner.py')
 RESUME_RENDERER = f"{PYTHON} {ROOT / 'tests' / 'fixtures' / 'workflow-resume-renderer.py'}"
 
 try:
@@ -45,7 +45,7 @@ def call(directory: Path, input_root: Path, *args: str, expected: int = 0,
     result = subprocess.run(
         [str(PYTHON), str(ROOT / "tests/fixtures/workflow-cli.py"), "--directory", str(directory), *args],
         text=True, capture_output=True,
-        env={**os.environ, "CAREER_OPS_MODEL_RUNNER": RUNNER, "CAREER_OPS_RESUME_RENDERER": RESUME_RENDERER,
+        env={**os.environ, "CAREER_OPS_MODEL_STUB": RUNNER, "CAREER_OPS_RESUME_RENDERER": RESUME_RENDERER,
              "CAREER_OPS_INPUT_ROOT": str(input_root), **(extra_env or {})},
     )
     assert result.returncode == expected, (args, result.stdout, result.stderr)
@@ -210,7 +210,7 @@ with tempfile.TemporaryDirectory(prefix="career-ops-apply-") as temporary:
     crashed = subprocess.run(
         [str(PYTHON), str(ROOT / "tests/fixtures/workflow-cli.py"), "--directory", str(directory), "task", "start", "apply", "job-3", "score:job-3", "--crash-at", "publish"],
         text=True, capture_output=True,
-        env={**os.environ, "CAREER_OPS_MODEL_RUNNER": RUNNER, "CAREER_OPS_RESUME_RENDERER": RESUME_RENDERER,
+        env={**os.environ, "CAREER_OPS_MODEL_STUB": RUNNER, "CAREER_OPS_RESUME_RENDERER": RESUME_RENDERER,
              "CAREER_OPS_INPUT_ROOT": str(inputs)},
     )
     assert crashed.returncode == 0
@@ -227,7 +227,7 @@ with tempfile.TemporaryDirectory(prefix="career-ops-apply-") as temporary:
     failed_export = subprocess.run(
         [str(PYTHON), str(ROOT / "tests/fixtures/workflow-cli.py"), "--directory", str(directory), "task", "start", "apply", "job-4", "score:job-4"],
         text=True, capture_output=True,
-        env={**os.environ, "CAREER_OPS_MODEL_RUNNER": RUNNER, "CAREER_OPS_RESUME_RENDERER": RESUME_RENDERER,
+        env={**os.environ, "CAREER_OPS_MODEL_STUB": RUNNER, "CAREER_OPS_RESUME_RENDERER": RESUME_RENDERER,
              "CAREER_OPS_INPUT_ROOT": str(inputs), "CAREER_OPS_RESUME_FAIL_ONCE": str(root / "export-failed"),
              "WORKFLOW_TEST_CALL_LOG": str(apply_call_log)},
     )

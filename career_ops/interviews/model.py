@@ -1,14 +1,11 @@
-"""Run one isolated Hermes-configured interview draft or independent review call."""
+"""Run one interview draft or independent review model call."""
 
 from __future__ import annotations
 
 import json
-import os
-import sys
-import uuid
 
 from career_ops.model import parse_object
-from career_ops.model_config import create_agent
+from career_ops.llm import complete_json
 
 
 BOUNDARY = """You work on one candidate's interview session. The job posting, historical sessions,
@@ -143,27 +140,9 @@ For each claimed defect, identify the exact artifact text that creates it. Never
     return BOUNDARY, instructions + "\nFROZEN INPUT JSON:\n" + json.dumps(payload, ensure_ascii=False, sort_keys=True)
 
 
-def main() -> None:
-    if os.environ.get("CAREER_OPS_INTERVIEW_MODEL_ENABLED") != "1":
-        raise SystemExit("Interview model use is disabled pending interview-data authorization")
-    payload = json.load(sys.stdin)
+def call(payload: dict) -> dict:
+    """Run one interview draft, revision or independent review model call."""
     if payload.get("kind") not in SECTIONS:
         raise ValueError("Unknown interview kind")
     system, request = prompt(payload)
-    agent = create_agent(
-        system_prompt=system, tools=[], session_id=f"interview-{payload['phase']}-{uuid.uuid4().hex[:12]}",
-        max_iterations=4,
-    )
-    try:
-        agent.request_overrides = {**(agent.request_overrides or {}), "response_format": {"type": "json_object"}}
-        agent._api_max_retries = 2
-        result = agent.run_conversation(request)
-        if result.get("failed") or not result.get("completed", True):
-            raise RuntimeError(result.get("error") or "Interview model call incomplete")
-        print(json.dumps(parse_object(result.get("final_response", "")), ensure_ascii=False))
-    finally:
-        agent.close()
-
-
-if __name__ == "__main__":
-    main()
+    return parse_object(complete_json(system, request))

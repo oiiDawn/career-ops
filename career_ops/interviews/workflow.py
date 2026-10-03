@@ -8,14 +8,13 @@ import json
 import os
 from pathlib import Path
 import re
-import shlex
-import subprocess
 import sys
 import time
 from typing import TypedDict
 
 from langgraph.checkpoint.sqlite import SqliteSaver
 from langgraph.graph import END, START, StateGraph
+from openai import APITimeoutError
 
 from career_ops.input_contracts import digest as text_digest, score_inputs
 from career_ops.interviews.context import INPUT_ROOT, load_context
@@ -26,6 +25,8 @@ from career_ops.interviews.store import InterviewStore, REVIEW_CHECKS, digest, r
 
 
 from career_ops.context import ROOT
+from career_ops.interviews import model as interview_model
+from career_ops.llm import DEADLINE, load_stub
 MAX_CORRECTIONS = 2
 MAX_MODEL_CALLS = 12
 MAX_ELAPSED_SECONDS = 1800
@@ -247,9 +248,6 @@ class Runtime:
             raise TimeoutError("interview_model_budget_exhausted")
         if os.environ.get("CAREER_OPS_INTERVIEW_MODEL_ENABLED") != "1":
             raise RuntimeError("Interview model use is disabled pending interview-data authorization")
-        command = os.environ.get("CAREER_OPS_INTERVIEW_RUNNER")
-        if not command:
-            command = f"{sys.executable} -B -m career_ops.interviews.model"
         payload = {
             "phase": phase,
             "kind": task["kind"],
@@ -260,25 +258,20 @@ class Runtime:
                                   else state.get("artifact") or self.store.draft(state["task_id"])),
             "previous_review": state.get("review"),
         }
+        stub = load_stub("CAREER_OPS_INTERVIEW_STUB")
         started = time.monotonic()
+        token = DEADLINE.set(started + min(300, MAX_ELAPSED_SECONDS - task["elapsed_seconds"]))
         try:
-            try:
-                result = subprocess.run(
-                    shlex.split(command), input=json.dumps(payload, ensure_ascii=False), text=True,
-                    capture_output=True, timeout=min(300, MAX_ELAPSED_SECONDS - task["elapsed_seconds"]),
-                    cwd=ROOT, check=False,
-                )
-            except subprocess.TimeoutExpired as error:
-                raise TimeoutError("Interview model call timed out") from error
+            value = stub(phase, payload) if stub else interview_model.call(payload)
+        except (TimeoutError, APITimeoutError) as error:
+            raise TimeoutError("Interview model call timed out") from error
+        except Exception as error:
+            raise RuntimeError(f"Interview model {phase} failed: {error}") from error
         finally:
+            DEADLINE.reset(token)
             self.store.add_usage(state["task_id"], time.monotonic() - started)
-        if result.returncode:
-            raise RuntimeError(result.stderr.strip() or f"Interview runner exited {result.returncode}")
-        if not result.stdout.strip():
-            raise RuntimeError(f"Interview runner returned no JSON: {result.stderr[-500:].strip() or 'empty stderr'}")
-        value = json.loads(result.stdout)
         if not isinstance(value, dict):
-            raise ValueError("Interview runner must return one JSON object")
+            raise ValueError("Interview model must return one JSON object")
         return value
 
     def generate(self, state: InterviewState) -> dict:

@@ -5,7 +5,6 @@ import argparse
 from importlib.util import find_spec
 import json
 import os
-from pathlib import Path
 import shutil
 import subprocess
 import sys
@@ -21,10 +20,10 @@ def checks() -> dict[str, bool]:
     resume = (profile or {}).get("cv", {}).get("reactive_resume", {})
     result = {
         "python": sys.version_info >= (3, 11),
-        "python_dependencies": all(find_spec(name) for name in ("langgraph", "langgraph.checkpoint.sqlite", "dotenv", "yaml")),
+        "python_dependencies": all(find_spec(name) for name in ("langgraph", "langgraph.checkpoint.sqlite", "langchain_openai", "dotenv", "yaml")),
         "node": bool(shutil.which("node")),
         "hermes": bool(shutil.which("hermes")),
-        "hermes_config": (Path.home() / ".hermes/config.yaml").is_file(),
+        "model_settings": all(os.environ.get(name) for name in ("CAREER_OPS_MODEL", "CAREER_OPS_LLM_BASE_URL", "CAREER_OPS_LLM_API_KEY", "TAVILY_API_KEY")),
         "profile": profile_path.is_file(),
         "cv": (INPUT_ROOT / "cv.md").is_file(),
         "reactive_resume": bool(resume.get("base_resume_id") and resume.get("api_base_url") and os.environ.get("REACTIVE_RESUME_API_KEY")),

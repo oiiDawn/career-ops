@@ -34,8 +34,8 @@ with tempfile.TemporaryDirectory(prefix="career-ops-cli-") as temporary:
     (inputs / "targeting.md").write_text("Verified targeting")
     (inputs.parent / "rules").mkdir(parents=True, exist_ok=True)
     (inputs.parent / "rules" / "scoring.md").write_text("Current evaluation rules")
-    runner = f"{PYTHON} {ROOT / 'tests' / 'fixtures' / 'workflow-model-runner.py'}"
-    model_env = {"CAREER_OPS_MODEL_RUNNER": runner, "CAREER_OPS_INPUT_ROOT": str(inputs)}
+    runner = str(ROOT / 'tests' / 'fixtures' / 'workflow-model-runner.py')
+    model_env = {"CAREER_OPS_MODEL_STUB": runner, "CAREER_OPS_INPUT_ROOT": str(inputs)}
 
     def report(opportunity: str, jd: str = "Build and review agent workflows.", status: str = "pass") -> Path:
         path = directory / f"{opportunity}.json"

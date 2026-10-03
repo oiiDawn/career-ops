@@ -7,13 +7,12 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
 
-from career_ops import model as model_adapter, model_runner
+from career_ops import model as model_adapter
+from career_ops.evaluation.scan_graph import run_scan
 
 
 with tempfile.TemporaryDirectory() as temp:
-    original_root = model_runner.DRAFT_ROOT
     original_call = model_adapter.call_agent
-    model_runner.DRAFT_ROOT = Path(temp)
     capabilities = [{"name": "Terraform", "core": True, "mandatory": True,
                      "match": "gap", "evidence": "JD requires Terraform"}]
     evidence = {
@@ -31,16 +30,15 @@ with tempfile.TemporaryDirectory() as temp:
               "role": "Engineer", "jd": "Build Terraform infrastructure", "captured_at": "2026-01-01",
               "capture_method": "official_job_page", "liveness_evidence": {"status": 200}}
     try:
-        result = model_runner.scan_evaluate({"inputs": {"source": source, "cv": "CV", "profile": "profile",
-                                                      "targeting": "targeting", "rules": "rules"}})
+        result = run_scan({"source": source, "cv": "CV", "profile": "profile",
+                           "targeting": "targeting", "rules": "rules"}, Path(temp))
         assert result["outcome"] == "jd_report"
         assert result["artifact"]["core_capabilities"] == capabilities
         incomplete = {**evidence, "core_capabilities": None}
         model_adapter.call_agent = lambda *_args: (incomplete, "session")
         changed_source = {**source, "jd": "Build Terraform infrastructure for a new team"}
-        waiting = model_runner.scan_evaluate({"inputs": {"source": changed_source, "cv": "CV", "profile": "profile",
-                                                       "targeting": "targeting", "rules": "rules"}})
+        waiting = run_scan({"source": changed_source, "cv": "CV", "profile": "profile",
+                            "targeting": "targeting", "rules": "rules"}, Path(temp))
         assert waiting["waiting_reason"] == "core_evidence_missing"
     finally:
         model_adapter.call_agent = original_call
-        model_runner.DRAFT_ROOT = original_root

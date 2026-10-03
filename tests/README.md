@@ -10,5 +10,5 @@ The runner executes `tests/business/**/*-test.py` and `tests/adapters/**/*.test.
 Pass quoted repository globs for smaller checks. Python checks cover validation,
 transaction idempotency, frozen inputs, and checkpoint recovery. Node checks
 cover provider formats, paging, HTTP/DNS restrictions, browser observation, and
-managed resume exports. Fixtures use isolated databases and process stubs;
+managed resume exports. Fixtures use isolated databases, in-process model stubs and process stubs;
 these checks do not establish live provider coverage or model quality.
