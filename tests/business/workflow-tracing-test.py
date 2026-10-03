@@ -41,6 +41,9 @@ with patch.dict(os.environ, {**SETTINGS, "LANGFUSE_HOST": ""}):
     assert traced({}, "score", "task-1") == {"run_name": "score"}
 with patch.dict(os.environ, {**SETTINGS, "LANGFUSE_TRACING_ENABLED": "false"}):
     assert "callbacks" not in traced({}, "score", "task-1")
+for remote in ("https://cloud.langfuse.com", "http://langfuse.example.com:3001"):
+    with patch.dict(os.environ, {**SETTINGS, "LANGFUSE_HOST": remote}):
+        assert "callbacks" not in traced({}, "score", "task-1"), remote
 
 with patch.dict(os.environ, SETTINGS):
     config = traced({"configurable": {"thread_id": "t"}}, "score", "task-1")

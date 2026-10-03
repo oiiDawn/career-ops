@@ -6,6 +6,7 @@ from functools import cache
 import logging
 import os
 import subprocess
+from urllib.parse import urlsplit
 
 from langchain_core.runnables.config import var_child_runnable_config
 
@@ -13,12 +14,21 @@ from career_ops.context import ROOT
 
 
 SETTINGS = ("LANGFUSE_HOST", "LANGFUSE_PUBLIC_KEY", "LANGFUSE_SECRET_KEY")
+LOCAL_HOSTS = {"localhost", "127.0.0.1", "::1"}
 
 
 def enabled() -> bool:
-    """Trace only to an explicitly configured host; the SDK would otherwise default to Langfuse Cloud."""
-    return (all(os.environ.get(name) for name in SETTINGS)
-            and os.environ.get("LANGFUSE_TRACING_ENABLED", "true").lower() != "false")
+    """Trace only to an explicit local host: traces carry full prompts and candidate data.
+
+    Without a host the SDK would default to Langfuse Cloud, so a missing or remote host disables tracing.
+    """
+    if (not all(os.environ.get(name) for name in SETTINGS)
+            or os.environ.get("LANGFUSE_TRACING_ENABLED", "true").lower() == "false"):
+        return False
+    if urlsplit(os.environ["LANGFUSE_HOST"]).hostname not in LOCAL_HOSTS:
+        logging.getLogger(__name__).warning("Langfuse tracing disabled: LANGFUSE_HOST must be a local host")
+        return False
+    return True
 
 
 @cache

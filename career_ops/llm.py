@@ -12,10 +12,12 @@ import time
 from typing import Callable
 
 from langchain_core.messages import BaseMessage, HumanMessage, SystemMessage
+from langchain_core.runnables import Runnable
 from langchain_core.tools import tool
 from langchain_openai import ChatOpenAI
 from langgraph.graph import START, MessagesState, StateGraph
 from langgraph.prebuilt import ToolNode, tools_condition
+from openai import APIConnectionError, InternalServerError, RateLimitError
 
 from career_ops.web_search import tavily
 
@@ -23,6 +25,8 @@ from career_ops.web_search import tavily
 CALL_TIMEOUT_SECONDS = 600
 # High reasoning effort can spend the endpoint default (8192) on reasoning alone; Hermes retried up to this cap.
 MAX_OUTPUT_TOKENS = 32768
+MODEL_ATTEMPTS = 3
+RETRYABLE = (APIConnectionError, InternalServerError, RateLimitError)  # APITimeoutError subclasses APIConnectionError
 RESEARCH_LIMITS = {"web_search": 5, "web_extract": 1}
 DEADLINE: ContextVar[float | None] = ContextVar("career_ops_model_deadline", default=None)
 
@@ -51,14 +55,24 @@ def chat_model() -> ChatOpenAI:
         reasoning_effort=os.environ.get("CAREER_OPS_REASONING_EFFORT", "high"),
         max_tokens=MAX_OUTPUT_TOKENS,
         timeout=remaining_seconds(),
-        max_retries=2,
+        max_retries=0,
     )
+
+
+def invoke(prepare: Callable[[ChatOpenAI], Runnable], messages: list[BaseMessage], name: str) -> BaseMessage:
+    """Retry transient endpoint failures, giving every attempt only the task time that is left."""
+    for attempt in range(MODEL_ATTEMPTS):
+        try:
+            return prepare(chat_model()).invoke(messages, {"run_name": name})
+        except RETRYABLE:
+            if attempt == MODEL_ATTEMPTS - 1:
+                raise
 
 
 def complete_json(system: str, prompt: str, name: str = "model") -> str:
     """Run one tool-free JSON-mode model call and return its raw text."""
-    model = chat_model().bind(response_format={"type": "json_object"})
-    return model.invoke([SystemMessage(system), HumanMessage(prompt)], {"run_name": name}).text
+    return invoke(lambda model: model.bind(response_format={"type": "json_object"}),
+                  [SystemMessage(system), HumanMessage(prompt)], name).text
 
 
 def research_tools(record: Callable[[], None], usage: dict | None) -> list:
@@ -115,11 +129,9 @@ def research(system: str, prompt: str, record: Callable[[], None], usage: dict |
              max_iterations: int = 12) -> tuple[str, list[BaseMessage]]:
     """Run the research tool loop as a LangGraph subgraph and return final text plus messages."""
     tools = research_tools(record, usage)
-    model = chat_model().bind_tools(tools)
 
     def agent(state: MessagesState) -> dict:
-        remaining_seconds()
-        return {"messages": [model.invoke(state["messages"], {"run_name": "research"})]}
+        return {"messages": [invoke(lambda model: model.bind_tools(tools), state["messages"], "research")]}
 
     graph = StateGraph(MessagesState)
     graph.add_node("agent", agent)
