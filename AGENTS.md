@@ -8,6 +8,9 @@ Local OII job-search operations. The workflow entrypoint is
 - Canonical operational store: `data/opportunities.db`.
 - Hermes schedules `scripts/career-ops-scan.sh` and `scripts/career-ops-score.sh`;
   business commands run through `.venv/bin/python -B -m career_ops`.
+- Model, Tavily and Langfuse settings live in the project `.env`; LLM calls run
+  inside LangGraph nodes (`career_ops/llm.py`) and are traced to the local
+  Langfuse when configured.
 - Retain source captures and Markdown reports as immutable evidence artifacts.
 - User-facing output may be Chinese or English; internal workflow is English.
 

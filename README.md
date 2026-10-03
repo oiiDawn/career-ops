@@ -1,7 +1,7 @@
 # Career Ops
 
 Personal, local-first job-search operations for OII: discover roles, preserve
-evidence, score fit with Hermes, prepare a Reactive Resume application, and
+evidence, score fit with the configured model, prepare a Reactive Resume application, and
 maintain interview context. It never submits an application or contacts an employer. Discord reports
 follow the user-authorized notification policy.
 
@@ -23,6 +23,26 @@ Reactive Resume payloads; Python owns business decisions and persisted facts.
 node scripts/check-syntax.mjs
 .venv/bin/python -B scripts/check.py
 ```
+
+## Observability
+
+LangGraph runs are traced to a self-hosted Langfuse when `LANGFUSE_HOST`,
+`LANGFUSE_PUBLIC_KEY`, and `LANGFUSE_SECRET_KEY` are set in `.env`; without
+them tracing stays off. Each task is one trace (graph → nodes → model calls and
+research tools), grouped by its task or run ID as the session. Traces contain
+full prompts, outputs and candidate data, so keep the host local.
+
+```bash
+git clone --depth 1 https://github.com/langfuse/langfuse.git ~/dev/langfuse
+```
+
+In `~/dev/langfuse`, add a `docker-compose.override.yml` that publishes
+`langfuse-web` on `127.0.0.1:3001` (and moves any other conflicting port), set
+random values for every `# CHANGEME` secret plus `NEXTAUTH_URL=http://localhost:3001`
+in its `.env`, then run `docker compose up -d`. Create a project in the UI (or
+via `LANGFUSE_INIT_*`) and copy its keys into this repository's `.env`.
+`system doctor` warns when a configured Langfuse is offline; workflows keep
+running and drop traces.
 
 ## Data boundaries
 

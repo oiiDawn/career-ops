@@ -77,6 +77,13 @@ score advances existing evaluation tasks and uses the previously authorized
 notification policy. Check `system doctor --json` and the offline suite before enabling
 changed wrappers. Neither doctor nor offline fixtures send candidate data.
 
+Model calls run inside the LangGraph nodes with settings from `.env`. When the
+Langfuse settings are present, every top-level graph run becomes one trace in the
+local Langfuse (`~/dev/langfuse`, http://localhost:3001) with full node inputs,
+outputs and model prompts; nested scan/score/apply graphs appear inside their
+task's trace. `scripts/check.py` disables tracing; an offline Langfuse never
+blocks a workflow.
+
 JD capture cache lives at `data/cache/scan-jds/` and is reused for at most 24 hours.
 Retained source evidence belongs to the business store and referenced artifacts.
 Unreferenced acceptance output, expired captures and old tracker-import batches
