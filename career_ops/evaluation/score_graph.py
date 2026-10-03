@@ -12,6 +12,7 @@ from langgraph.graph import END, START, StateGraph
 
 from career_ops import model as model_adapter
 from career_ops.evaluation.report import conflicting_sections, render_report
+from career_ops.tracing import traced
 
 
 class ScoreState(TypedDict, total=False):
@@ -272,7 +273,7 @@ def run_score(inputs: dict, draft_root: Path, root: Path) -> dict:
     graph.add_edge("research", "assessment")
     graph.add_edge("assessment", "render")
     graph.add_edge("render", END)
-    config = {"configurable": {"thread_id": key}}
+    config = traced({"configurable": {"thread_id": key}}, "score-graph", key)
     with SqliteSaver.from_conn_string(str(directory / "score-checkpoints.db")) as saver:
         compiled = graph.compile(checkpointer=saver)
         checkpoint = compiled.get_state(config)

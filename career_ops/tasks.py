@@ -28,6 +28,7 @@ from career_ops.task_state import WorkflowState
 from career_ops.db import BusinessStore
 from career_ops.llm import DEADLINE, load_stub
 from career_ops.model import USAGE
+from career_ops.tracing import traced
 
 
 def task_view(store: BusinessStore, task: sqlite3.Row) -> dict:
@@ -360,7 +361,7 @@ def _run_task(
             store.wait(task_id, "workflow_version_incompatible")
             return {"task_id": task_id, "status": "waiting", "reason": "workflow_version_incompatible"}
         runtime = Runtime(store, directory, crash_at)
-        config = {"configurable": {"thread_id": f"{task_id}:{task['attempt']}"}}
+        config = traced({"configurable": {"thread_id": f"{task_id}:{task['attempt']}"}}, task["module"], task_id)
         with SqliteSaver.from_conn_string(str(directory / "workflow-checkpoints.db")) as saver:
             graph = runtime.graph(saver)
             if start_state is None and task["status"] == "waiting" and (task["waiting_reason"] or "").startswith("failure:"):

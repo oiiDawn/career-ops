@@ -18,6 +18,7 @@ from langgraph.graph import END, START, StateGraph
 from career_ops.db import BusinessStore
 from career_ops.input_contracts import digest, score_inputs
 from career_ops.evaluation.decisions import worth_attention
+from career_ops.tracing import traced
 
 
 class DeliveryState(TypedDict):
@@ -161,7 +162,8 @@ def deliver(directory: Path, opportunity_id: str, sender: Callable[[dict], None]
         with SqliteSaver.from_conn_string(str(directory / "workflow-checkpoints.db")) as saver:
             result = graph.compile(checkpointer=saver).invoke(
                 {"opportunity_id": opportunity_id, "report_hash": report_hash, "status": "queued"},
-                {"configurable": {"thread_id": f"notification:{opportunity_id}:{report_hash}"}},
+                traced({"configurable": {"thread_id": f"notification:{opportunity_id}:{report_hash}"}},
+                       "notification", str(opportunity_id)),
             )
         return {"opportunity_id": opportunity_id, "report_hash": report_hash, "status": result["status"]}
     finally:

@@ -52,10 +52,10 @@ def chat_model() -> ChatOpenAI:
     )
 
 
-def complete_json(system: str, prompt: str) -> str:
+def complete_json(system: str, prompt: str, name: str = "model") -> str:
     """Run one tool-free JSON-mode model call and return its raw text."""
     model = chat_model().bind(response_format={"type": "json_object"})
-    return model.invoke([SystemMessage(system), HumanMessage(prompt)]).text
+    return model.invoke([SystemMessage(system), HumanMessage(prompt)], {"run_name": name}).text
 
 
 def research_tools(record: Callable[[], None], usage: dict | None) -> list:

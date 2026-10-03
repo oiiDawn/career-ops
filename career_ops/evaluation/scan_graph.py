@@ -12,6 +12,7 @@ from langgraph.graph import END, START, StateGraph
 
 from career_ops import model as model_adapter
 from career_ops.evaluation.prescreen import evaluate as evaluate_prescreen
+from career_ops.tracing import traced
 
 
 class ScanState(TypedDict, total=False):
@@ -103,7 +104,7 @@ def run_scan(inputs: dict, draft_root: Path) -> dict:
     graph.add_conditional_edges("prescreen", lambda state: "wait" if state.get("waiting_reason") else state["outcome"],
                                 {"wait": END, "exclude": END, "jd_report": "report"})
     graph.add_edge("report", END)
-    config = {"configurable": {"thread_id": key}}
+    config = traced({"configurable": {"thread_id": key}}, "scan-graph", key)
     with SqliteSaver.from_conn_string(str(directory / "scan-checkpoints.db")) as saver:
         compiled = graph.compile(checkpointer=saver)
         checkpoint = compiled.get_state(config)

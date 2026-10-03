@@ -222,7 +222,7 @@ def call_agent(phase, prompt, tools, usage=None):
             except GraphRecursionError as error:
                 raise RuntimeError(f'{phase} incomplete: agent stopped') from error
         else:
-            text = llm.complete_json(BASE, prompt)
+            text = llm.complete_json(BASE, prompt, phase)
         try:
             value = parse_object(text)
         except json.JSONDecodeError:

@@ -33,6 +33,7 @@ from career_ops.discovery.reverse_sources import SOURCES, dataset_fingerprint, l
 
 
 from career_ops.context import ROOT
+from career_ops.tracing import traced
 BATCH_SIZE = 50
 RESOLVER_FAILURE_LIMIT = 50
 SEEDS = {"yc", "a16z"}
@@ -630,13 +631,13 @@ def discover_global(directory: Path, config_path: Path, *, ats: list[str] | None
                 if not save(pending_current):
                     raise OSError("Could not checkpoint the next reverse graph attempt")
                 graph_config = {"configurable": {"thread_id": f"{run_id}:{graph_attempt}"}}
-                outcome = load_artifact(compiled.invoke({"phase": "start"}, graph_config)["result"])
+                outcome = load_artifact(compiled.invoke({"phase": "start"}, traced(graph_config, "reverse-discovery", run_id))["result"])
             elif prior.next:
-                outcome = load_artifact(compiled.invoke(None, graph_config)["result"])
+                outcome = load_artifact(compiled.invoke(None, traced(graph_config, "reverse-discovery", run_id))["result"])
             elif prior.values.get("result"):
                 outcome = load_artifact(prior.values["result"])
             else:
-                outcome = load_artifact(compiled.invoke({"phase": "start"}, graph_config)["result"])
+                outcome = load_artifact(compiled.invoke({"phase": "start"}, traced(graph_config, "reverse-discovery", run_id))["result"])
         if not outcome["stoppedByOutage"]:
             checkpoint_path.unlink(missing_ok=True)
         return outcome

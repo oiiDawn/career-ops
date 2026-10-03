@@ -27,6 +27,7 @@ from career_ops.interviews.store import InterviewStore, REVIEW_CHECKS, digest, r
 from career_ops.context import ROOT
 from career_ops.interviews import model as interview_model
 from career_ops.llm import DEADLINE, load_stub
+from career_ops.tracing import traced
 MAX_CORRECTIONS = 2
 MAX_MODEL_CALLS = 12
 MAX_ELAPSED_SECONDS = 1800
@@ -372,7 +373,7 @@ def _run_task(directory: Path, task_id: str, *, resume_checkpoint: bool = False,
             state["artifact"] = normalize_model_artifact(store.draft(task_id)["artifact"])
         with SqliteSaver.from_conn_string(str(directory / "workflow-checkpoints.db")) as saver:
             graph = Runtime(store, directory).graph(saver, review_existing=review_existing)
-            config = {"configurable": {"thread_id": f"interview:{task_id}:{task['attempt']}"}}
+            config = traced({"configurable": {"thread_id": f"interview:{task_id}:{task['attempt']}"}}, "interview", task_id)
             if resume_checkpoint and not saver.get_tuple(config):
                 raise ValueError("Interview checkpoint is missing; cannot resume failed model call")
             value = graph.invoke(None if resume_checkpoint else state, config)

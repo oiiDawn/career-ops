@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from career_ops.context import ROOT, INPUT_ROOT, source_path
+from career_ops.tracing import traced
 
 import argparse
 import difflib
@@ -275,7 +276,7 @@ def resume_preview(directory: Path, task_id: str) -> dict:
         if task["status"] != "running":
             return public_task(task)
         state: CVState = {"task_id": task_id, "root": task["root"], "proposals": json.loads(task["proposals"]), "preview": {}}
-        config = {"configurable": {"thread_id": task_id}}
+        config = traced({"configurable": {"thread_id": task_id}}, "cv", task_id)
         with SqliteSaver.from_conn_string(str(directory / "cv-checkpoints.db")) as saver:
             graph = Runtime(store).graph(saver)
             snapshot = graph.get_state(config)

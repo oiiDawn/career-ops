@@ -145,4 +145,4 @@ def call(payload: dict) -> dict:
     if payload.get("kind") not in SECTIONS:
         raise ValueError("Unknown interview kind")
     system, request = prompt(payload)
-    return parse_object(complete_json(system, request))
+    return parse_object(complete_json(system, request, f"interview-{payload['phase']}"))
