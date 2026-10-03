@@ -1,4 +1,5 @@
 """Run the retained offline Python business and Node adapter contracts."""
+import os
 from pathlib import Path
 import subprocess
 import sys
@@ -11,7 +12,8 @@ if not files:
 failed = []
 for path in files:
     command = [sys.executable, '-B'] if path.suffix == '.py' else ['node']
-    result = subprocess.run([*command, str(path)], cwd=ROOT, text=True, capture_output=True)
+    result = subprocess.run([*command, str(path)], cwd=ROOT, text=True, capture_output=True,
+                            env={**os.environ, 'LANGFUSE_TRACING_ENABLED': 'false'})
     print(f'{"PASS" if result.returncode == 0 else "FAIL"} {path.relative_to(ROOT)}', flush=True)
     if result.returncode:
         failed.append(path)

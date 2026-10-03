@@ -1,10 +1,11 @@
 """Verify resume reuses a rendered score instead of repeating web research."""
 
-import importlib.util
 import json
 from pathlib import Path
 import sys
 import tempfile
+from types import SimpleNamespace
+from unittest.mock import patch
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -14,9 +15,9 @@ from career_ops.applications import apply_graph
 from career_ops.evaluation import score_graph
 from career_ops.evaluation.score_graph import _normalize_assessment
 
-spec = importlib.util.spec_from_file_location("workflow_model_runner", ROOT / "career_ops" / "model_runner.py")
-runner = importlib.util.module_from_spec(spec)
-spec.loader.exec_module(runner)
+runner = SimpleNamespace(DRAFT_ROOT=None)
+runner.apply_evaluate = lambda payload: apply_graph.apply_evaluate(payload, runner.DRAFT_ROOT)
+runner.evaluate = lambda payload: score_graph.run_score(payload["inputs"], runner.DRAFT_ROOT, ROOT)
 
 flattened = {"name": "Jiaming Zhang", "email": "candidate@example.com", "summary": "Grounded"}
 normalized = apply_graph.normalize_resume_payload(flattened)
@@ -176,27 +177,12 @@ with tempfile.TemporaryDirectory(prefix="career-ops-runner-") as temporary:
         {"direction": {}, "compensation": {}, "company": {}, "sections": complete_sections},
     ))
 
-    class Agent:
-        request_overrides = None
-        _api_max_retries = 0
-
-        def run_conversation(self, prompt):
-            return {"completed": True, "final_response": json.dumps(next(responses)), "messages": []}
-
-        def close(self):
-            pass
-
     calls = []
-    original_create_agent = model_adapter.create_agent
-    model_adapter.create_agent = lambda **kwargs: calls.append(kwargs) or Agent()
-    try:
-        calls_dir = Path(temporary) / "new-draft-root"
-        repaired, _ = model_adapter.call_agent("repair", "prompt", [], calls_dir)
-    finally:
-        model_adapter.create_agent = original_create_agent
+    with patch.object(model_adapter.llm, "complete_json",
+                      lambda *_args: calls.append(True) or json.dumps(next(responses))):
+        repaired, _ = model_adapter.call_agent("repair", "prompt", [])
     assert repaired["sections"] == complete_sections
     assert len(calls) == 2
-    assert len((calls_dir / "calls.jsonl").read_text().splitlines()) == 2
 
 with tempfile.TemporaryDirectory(prefix="career-ops-section-completion-") as temporary:
     partial = {"dimensions": {}, "sections": {"overview": "Existing source-bound overview."}}
@@ -209,7 +195,7 @@ with tempfile.TemporaryDirectory(prefix="career-ops-section-completion-") as tem
                 else "Grounded evidence and next action." for name in missing}, "sections-session"
     model_adapter.call_agent = fill_sections
     try:
-        completed, count = score_graph._complete_sections(partial, {"jd": "Source JD"}, {}, {}, Path(temporary))
+        completed, count = score_graph._complete_sections(partial, {"jd": "Source JD"}, {}, {})
     finally:
         model_adapter.call_agent = original_call_agent
     assert count == 1 and completed["sections"]["overview"] == partial["sections"]["overview"]
@@ -218,12 +204,12 @@ with tempfile.TemporaryDirectory(prefix="career-ops-section-completion-") as tem
     assert seen[0][0] == "score_sections" and "Source JD" in seen[0][1]
     ready, count = score_graph._complete_sections(
         {"dimensions": {}, "sections": {**completed["sections"], "risks": ["Known risk."]}},
-        {"jd": "Source JD"}, {}, {}, Path(temporary),
+        {"jd": "Source JD"}, {}, {},
     )
     assert count == 0 and ready["sections"]["risks"] == "- Known risk."
     extra = {"dimensions": {}, "sections": {**ready["sections"],
              "Evaluation Checklist": "地点未披露；冻结来源没有页面快照。"}}
-    bounded, count = score_graph._complete_sections(extra, {"jd": "Source JD"}, {}, {}, Path(temporary))
+    bounded, count = score_graph._complete_sections(extra, {"jd": "Source JD"}, {}, {})
     assert count == 0 and bounded["sections"] == ready["sections"]
 
 with tempfile.TemporaryDirectory(prefix="career-ops-dimension-completion-") as temporary:
@@ -238,7 +224,7 @@ with tempfile.TemporaryDirectory(prefix="career-ops-dimension-completion-") as t
     model_adapter.call_agent = repair_dimension
     try:
         repaired, count = score_graph._complete_dimensions(
-            {"dimensions": original}, {"jd": "Official JD"}, {}, {}, Path(temporary)
+            {"dimensions": original}, {"jd": "Official JD"}, {}, {}
         )
     finally:
         model_adapter.call_agent = original_call_agent

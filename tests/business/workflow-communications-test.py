@@ -19,8 +19,8 @@ from career_ops.discovery.store import DiscoveryStore
 
 
 PYTHON = Path(sys.executable)
-MODEL_RUNNER = f"{PYTHON} {ROOT / 'tests/fixtures/workflow-model-runner.py'}"
-COMMUNICATION_RUNNER = f"{PYTHON} {ROOT / 'tests/fixtures/workflow-communications-runner.py'}"
+MODEL_RUNNER = str(ROOT / 'tests/fixtures/workflow-model-runner.py')
+COMMUNICATION_RUNNER = str(ROOT / 'tests/fixtures/workflow-communications-runner.py')
 
 
 def call(directory: Path, inputs: Path, module: str, *args: str, expected: int = 0, extra: dict | None = None) -> dict:
@@ -28,8 +28,8 @@ def call(directory: Path, inputs: Path, module: str, *args: str, expected: int =
                else [str(PYTHON), "-m", "career_ops", "apply", "communication"])
     result = subprocess.run(command + ["--directory", str(directory), *args], cwd=ROOT, text=True, capture_output=True,
                             env={**os.environ, "PYTHONPATH": str(ROOT), "CAREER_OPS_INPUT_ROOT": str(inputs),
-                                 "CAREER_OPS_MODEL_RUNNER": MODEL_RUNNER,
-                                 "CAREER_OPS_COMMUNICATIONS_RUNNER": COMMUNICATION_RUNNER, **(extra or {})})
+                                 "CAREER_OPS_MODEL_STUB": MODEL_RUNNER,
+                                 "CAREER_OPS_COMMUNICATIONS_STUB": COMMUNICATION_RUNNER, **(extra or {})})
     assert result.returncode == expected, (args, result.stdout, result.stderr)
     return json.loads(result.stdout) if result.stdout else {}
 

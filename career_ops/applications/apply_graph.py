@@ -11,6 +11,7 @@ from langgraph.checkpoint.sqlite import SqliteSaver
 from langgraph.graph import END, START, StateGraph
 
 from career_ops import model as model_adapter
+from career_ops.tracing import traced
 
 
 def normalize_resume_payload(resume: dict) -> dict:
@@ -120,7 +121,7 @@ def apply_evaluate(payload: dict, draft_root: Path) -> dict:
         prompt = _prompt(state["payload"])
         decision = model_adapter.call_agent(
             "apply_evaluate", prompt + json.dumps(state["payload"], ensure_ascii=False),
-            [], directory,
+            [],
         )[0]
         return {"prompt": prompt, "decision": decision, "tool_calls": 1}
 
@@ -145,7 +146,7 @@ def apply_evaluate(payload: dict, draft_root: Path) -> dict:
             + state["defect"]
             + "\n"
             + json.dumps({"inputs": state["payload"], "incomplete_package": state["decision"]}, ensure_ascii=False),
-            [], directory,
+            [],
         )[0]
         return {"decision": decision, "tool_calls": state["tool_calls"] + 1}
 
@@ -168,7 +169,7 @@ def apply_evaluate(payload: dict, draft_root: Path) -> dict:
                                 {"repair": "repair", "finish": "finish"})
     graph.add_edge("repair", "finish")
     graph.add_edge("finish", END)
-    config = {"configurable": {"thread_id": key}}
+    config = traced({"configurable": {"thread_id": key}}, "apply-graph", key)
     with SqliteSaver.from_conn_string(str(directory / "apply-checkpoints.db")) as saver:
         compiled = graph.compile(checkpointer=saver)
         checkpoint = compiled.get_state(config)

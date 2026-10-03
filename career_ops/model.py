@@ -1,31 +1,35 @@
-"""Provide the shared Hermes-model prompts and bounded model calls for workflows."""
+"""Provide the shared workflow-model prompts and bounded model calls for workflows."""
 
 from __future__ import annotations
 
 from contextlib import closing
+from contextvars import ContextVar
 import json
-import os
+from pathlib import Path
 import re
 import sqlite3
-import threading
-import time
 import uuid
-from pathlib import Path
 
-from career_ops.model_config import create_agent
+from langchain_core.messages import ToolMessage
+from langgraph.errors import GraphRecursionError
 
+from career_ops import llm
+
+
+USAGE: ContextVar[tuple[str, str, int] | None] = ContextVar("career_ops_usage", default=None)
 
 
 def record_call():
     """Persist a dispatched call before execution so process failure cannot erase usage."""
-    database = os.environ.get('CAREER_OPS_USAGE_DB')
-    if not database:
+    usage = USAGE.get()
+    if not usage:
         return
+    database, task_id, limit = usage
     with closing(sqlite3.connect(database, timeout=30)) as connection, connection:
         updated = connection.execute(
             "UPDATE tasks SET tool_calls=tool_calls+1,attempt_tool_calls=attempt_tool_calls+1 "
             "WHERE task_id=? AND status='running' AND attempt_tool_calls<?",
-            (os.environ['CAREER_OPS_USAGE_TASK_ID'], int(os.environ['CAREER_OPS_TOOL_LIMIT'])),
+            (task_id, limit),
         )
     if updated.rowcount != 1:
         raise TimeoutError('tool_budget_exhausted')
@@ -116,35 +120,12 @@ def parse_object(text):
     return value
 
 
-def limit_research(agent, usage=None):
-    """Enforce the research budget before native tool dispatch, including parallel calls."""
-    invoke = agent._invoke_tool
-    counts = {'web_search': 0, 'web_extract': 0}
-    lock = threading.Lock()
-    def bounded(name, arguments, *args, **kwargs):
-        with lock:
-            if counts.get(name, 0) >= {'web_search': 5, 'web_extract': 1}.get(name, 0):
-                return json.dumps({'error': 'Research budget reached. This call did NOT execute. Finish JSON using completed results; missing evidence remains unknown.'})
-            record_call()
-            counts[name] += 1
-            if usage is not None:
-                usage['tool_calls'] = usage.get('tool_calls', 0) + 1
-        arguments = dict(arguments)
-        if name == 'web_extract':
-            arguments['urls'] = arguments.get('urls', [])[:3]
-            arguments['char_limit'] = 4000
-        return invoke(name, arguments, *args, **kwargs)
-    agent._invoke_tool = bounded
-
-
 def freeze_research(value, messages):
     """Freeze only quotations grounded in actual successful page reads, never search snippets."""
     pages = {}
     for message in messages:
-        content = message.get('content', '')
-        if message.get('role') == 'tool' and isinstance(content, str) and 'source="web_extract"' in content:
-            result = json.JSONDecoder().raw_decode(content[content.index('{'):])[0]
-            for page in result.get('results', []):
+        if isinstance(message, ToolMessage) and message.name == 'web_extract':
+            for page in json.loads(message.content).get('results', []):
                 if not page.get('error'):
                     pages[page['url']] = page.get('content', '')
     sources = []
@@ -229,62 +210,50 @@ def attach_evidence(value, snapshot):
             'prescreen': screen, 'jd': snapshot['text']}
 
 
-def call_agent(phase, prompt, tools, directory, usage=None):
+def call_agent(phase, prompt, tools, usage=None):
     """Run the configured workflow model in a fresh role-specific context."""
-    started = time.monotonic()
     for attempt in range(2):
         session = f'score-{phase}-{uuid.uuid4().hex[:12]}'
-        agent = create_agent(system_prompt=BASE, tools=tools, session_id=session)
+        record_call()
+        messages = []
         if tools:
-            limit_research(agent, usage)
-        else:
-            agent.request_overrides = {**(agent.request_overrides or {}), 'response_format': {'type': 'json_object'}}
-        agent._api_max_retries = 2
-        try:
-            record_call()
-            result = agent.run_conversation(prompt)
-            metrics = {'phase': phase, 'seconds': round(time.monotonic() - started, 3),
-                       'prompt_chars': len(BASE) + len(prompt), 'api_calls': result.get('api_calls'), 'session': session}
-            metrics_path = directory / 'calls.jsonl'
-            metrics_path.parent.mkdir(parents=True, exist_ok=True)
-            with metrics_path.open('a') as stream:
-                stream.write(json.dumps(metrics) + '\n')
-            save(directory / f'{phase}-trace.json', result.get('messages', []))
-            if result.get('failed') or not result.get('completed', True):
-                raise RuntimeError(f'{phase} incomplete: {result.get("error") or "agent stopped"}')
             try:
-                value = parse_object(result.get('final_response', ''))
-            except json.JSONDecodeError:
-                if attempt == 0:
-                    continue
-                raise
-            if phase in ('assessment', 'repair') and not all(key in value for key in (
-                'direction', 'compensation', 'company', 'sections'
-            )):
-                if attempt == 0:
-                    continue
-                raise ValueError(f'{phase} response is incomplete')
-            if phase == 'scan_evidence' and not all(key in value for key in (
-                'company', 'role', 'complete_jd', 'liveness', 'liveness_reason',
-                'assessment_complete', 'location', 'employment', 'compensation',
-                'company_size', 'years', 'core_capabilities', 'credentials'
-            )):
-                if attempt == 0:
-                    continue
-                raise ValueError('scan_evidence response is incomplete')
-            if phase == 'research' and not all(key in value for key in (
-                'searched_at', 'queries', 'findings', 'compensation', 'company'
-            )):
-                if attempt == 0:
-                    continue
-                raise ValueError('research response is incomplete')
-        finally:
-            agent.close()
+                text, messages = llm.research(BASE, prompt, record_call, usage)
+            except GraphRecursionError as error:
+                raise RuntimeError(f'{phase} incomplete: agent stopped') from error
+        else:
+            text = llm.complete_json(BASE, prompt, phase)
+        try:
+            value = parse_object(text)
+        except json.JSONDecodeError:
+            if attempt == 0:
+                continue
+            raise
+        if phase in ('assessment', 'repair') and not all(key in value for key in (
+            'direction', 'compensation', 'company', 'sections'
+        )):
+            if attempt == 0:
+                continue
+            raise ValueError(f'{phase} response is incomplete')
+        if phase == 'scan_evidence' and not all(key in value for key in (
+            'company', 'role', 'complete_jd', 'liveness', 'liveness_reason',
+            'assessment_complete', 'location', 'employment', 'compensation',
+            'company_size', 'years', 'core_capabilities', 'credentials'
+        )):
+            if attempt == 0:
+                continue
+            raise ValueError('scan_evidence response is incomplete')
+        if phase == 'research' and not all(key in value for key in (
+            'searched_at', 'queries', 'findings', 'compensation', 'company'
+        )):
+            if attempt == 0:
+                continue
+            raise ValueError('research response is incomplete')
         break
     if value.get('blocked'):
         raise RuntimeError(value['blocked'])
     if phase == 'research':
-        value = freeze_research(value, result.get('messages', []))
+        value = freeze_research(value, messages)
     elif phase in ('assessment', 'repair'):
         value = {'dimensions': {k: value[k] for k in ('direction', 'compensation', 'company')},
                  'sections': value['sections'], 'advertised_comp': value.get('advertised_comp')}

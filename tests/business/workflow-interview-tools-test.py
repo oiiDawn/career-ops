@@ -6,7 +6,9 @@ import sqlite3
 import subprocess
 import sys
 import tempfile
+import os
 
+os.environ.setdefault("LANGFUSE_TRACING_ENABLED", "false")  # spawned CLI runs never trace
 
 ROOT = Path(__file__).resolve().parents[2]
 

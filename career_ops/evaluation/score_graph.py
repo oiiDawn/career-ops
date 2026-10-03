@@ -12,6 +12,7 @@ from langgraph.graph import END, START, StateGraph
 
 from career_ops import model as model_adapter
 from career_ops.evaluation.report import conflicting_sections, render_report
+from career_ops.tracing import traced
 
 
 class ScoreState(TypedDict, total=False):
@@ -41,7 +42,7 @@ def _normalize_assessment(assessment: dict) -> dict:
     return assessment
 
 
-def _complete_sections(assessment: dict, jd: dict, sources: dict, research: dict, directory: Path) -> tuple[dict, int]:
+def _complete_sections(assessment: dict, jd: dict, sources: dict, research: dict) -> tuple[dict, int]:
     required = ("overview", "capabilities", "compensation", "questions", "legitimacy", "risks", "checklist")
     def section_text(value: object) -> str | None:
         if isinstance(value, str) and value.strip():
@@ -67,14 +68,14 @@ def _complete_sections(assessment: dict, jd: dict, sources: dict, research: dict
                       "dimensions": assessment["dimensions"],
                       "existing_sections": [name for name, value in sections.items() if value]}, ensure_ascii=False)
     )
-    added = model_adapter.call_agent("score_sections", prompt, [], directory)[0]
+    added = model_adapter.call_agent("score_sections", prompt, [])[0]
     completed = {name: section_text(added.get(name)) for name in missing}
     if any(value is None for value in completed.values()):
         raise ValueError("Score section completion is incomplete")
     return {**assessment, "sections": {**sections, **completed}}, 1
 
 
-def _complete_dimensions(assessment: dict, jd: dict, sources: dict, research: dict, directory: Path) -> tuple[dict, int]:
+def _complete_dimensions(assessment: dict, jd: dict, sources: dict, research: dict) -> tuple[dict, int]:
     dimensions = dict(assessment["dimensions"])
     calls = 0
     for name in ("direction", "compensation", "company"):
@@ -93,7 +94,7 @@ def _complete_dimensions(assessment: dict, jd: dict, sources: dict, research: di
             + json.dumps({"previous": value, "jd_report": jd, "candidate_sources": sources,
                           "research": research}, ensure_ascii=False)
         )
-        repaired = model_adapter.call_agent("score_dimension", prompt, [], directory)[0]
+        repaired = model_adapter.call_agent("score_dimension", prompt, [])[0]
         if (set(repaired) != {"score", "rationale", "evidence"}
                 or not isinstance(repaired["rationale"], str) or not repaired["rationale"].strip()
                 or not isinstance(repaired["evidence"], list)
@@ -141,7 +142,7 @@ def run_score(inputs: dict, draft_root: Path, root: Path) -> dict:
         usage = {}
         result = model_adapter.normalize_research(model_adapter.call_agent(
             "research", model_adapter.RESEARCH + json.dumps(research_inputs, ensure_ascii=False),
-            ["web"], directory, usage=usage,
+            ["web"], usage=usage,
         )[0])
         model_adapter.save(research_path, result)
         model_adapter.save(checkpoint_path, {
@@ -166,7 +167,7 @@ def run_score(inputs: dict, draft_root: Path, root: Path) -> dict:
             calls = state["tool_calls"]
         else:
             prompt = model_adapter.ASSESS + json.dumps(assessment_inputs, ensure_ascii=False)
-            assessment = _normalize_assessment(model_adapter.call_agent("assessment", prompt, [], directory)[0])
+            assessment = _normalize_assessment(model_adapter.call_agent("assessment", prompt, [])[0])
             assessment.update(research)
             calls = state["tool_calls"] + 1
         packet = {
@@ -197,13 +198,13 @@ def run_score(inputs: dict, draft_root: Path, root: Path) -> dict:
                 name: body for name, body in assessment["sections"].items() if name not in invalid
             }}
         assessment, dimension_calls = _complete_dimensions(
-            assessment, state["inputs"]["jd_report"], state["packet"]["sources"], research, directory
+            assessment, state["inputs"]["jd_report"], state["packet"]["sources"], research
         )
         if dimension_calls:
             _write_json(assessment_path, assessment)
         previous_sections = assessment.get("sections")
         assessment, section_calls = _complete_sections(
-            assessment, state["inputs"]["jd_report"], state["packet"]["sources"], research, directory
+            assessment, state["inputs"]["jd_report"], state["packet"]["sources"], research
         )
         conflicts = conflicting_sections(assessment["sections"], state["evidence"])
         if conflicts:
@@ -211,7 +212,7 @@ def run_score(inputs: dict, draft_root: Path, root: Path) -> dict:
                 name: body for name, body in assessment["sections"].items() if name not in conflicts
             }
             assessment, correction_calls = _complete_sections(
-                assessment, state["inputs"]["jd_report"], state["packet"]["sources"], research, directory
+                assessment, state["inputs"]["jd_report"], state["packet"]["sources"], research
             )
             section_calls += correction_calls
         if section_calls or assessment["sections"] != previous_sections:
@@ -235,10 +236,10 @@ def run_score(inputs: dict, draft_root: Path, root: Path) -> dict:
                 + json.dumps({"assessment": assessment, "frozen_sources": frozen_sources,
                               "research": research["research"]}, ensure_ascii=False)
             )
-            assessment = _normalize_assessment(model_adapter.call_agent("repair", prompt, [], directory)[0])
+            assessment = _normalize_assessment(model_adapter.call_agent("repair", prompt, [])[0])
             assessment.update(research)
             assessment, repair_sections = _complete_sections(
-                assessment, state["inputs"]["jd_report"], state["packet"]["sources"], research, directory
+                assessment, state["inputs"]["jd_report"], state["packet"]["sources"], research
             )
             conflicts = conflicting_sections(assessment["sections"], state["evidence"])
             if conflicts:
@@ -246,7 +247,7 @@ def run_score(inputs: dict, draft_root: Path, root: Path) -> dict:
                     name: body for name, body in assessment["sections"].items() if name not in conflicts
                 }
                 assessment, corrected = _complete_sections(
-                    assessment, state["inputs"]["jd_report"], state["packet"]["sources"], research, directory
+                    assessment, state["inputs"]["jd_report"], state["packet"]["sources"], research
                 )
                 repair_sections += corrected
             _write_json(assessment_path, assessment)
@@ -272,7 +273,7 @@ def run_score(inputs: dict, draft_root: Path, root: Path) -> dict:
     graph.add_edge("research", "assessment")
     graph.add_edge("assessment", "render")
     graph.add_edge("render", END)
-    config = {"configurable": {"thread_id": key}}
+    config = traced({"configurable": {"thread_id": key}}, "score-graph", key)
     with SqliteSaver.from_conn_string(str(directory / "score-checkpoints.db")) as saver:
         compiled = graph.compile(checkpointer=saver)
         checkpoint = compiled.get_state(config)

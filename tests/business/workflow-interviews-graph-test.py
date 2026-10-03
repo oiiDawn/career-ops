@@ -3,7 +3,6 @@
 import os
 import json
 from pathlib import Path
-import subprocess
 import sys
 import tempfile
 from unittest.mock import patch
@@ -61,7 +60,7 @@ context = {
         "score": {"artifact": {"report": "| Python | Proven | CV |\n| FastAPI | Unverified | Ask recruiter |"}},
     },
 }
-runner = f"{sys.executable} {ROOT / 'tests' / 'fixtures' / 'workflow-interview-runner.py'}"
+runner = str(ROOT / 'tests' / 'fixtures' / 'workflow-interview-runner.py')
 misplaced = {"kind": "prepare", "sections": {
     "claims": [{"subject": "candidate", "text": "Built it", "source": "cv.md", "quote": "Built it"}],
     "requirements": [{"requirement": "Python", "classification": "evidenced", "preparation_response": "Explain Python work"}],
@@ -124,7 +123,7 @@ validate_artifact("practice", named_artifact, named_context)
 named_artifact["claims"][0]["text"] = "30+标注者处理7,000张去标识图像"
 validate_artifact("practice", named_artifact, named_context)
 with tempfile.TemporaryDirectory() as temporary, \
-     patch.dict(os.environ, {"CAREER_OPS_INTERVIEW_RUNNER": runner, "CAREER_OPS_INTERVIEW_MODEL_ENABLED": "1",
+     patch.dict(os.environ, {"CAREER_OPS_INTERVIEW_STUB": runner, "CAREER_OPS_INTERVIEW_MODEL_ENABLED": "1",
                              "INTERVIEW_TEST_MARKDOWN_QUOTE": "1"}), \
      patch("career_ops.interviews.workflow.current_context", return_value={
          **context, "candidate_sources": {**context["candidate_sources"],
@@ -151,7 +150,7 @@ with patch("career_ops.interviews.workflow.load_context", return_value=bound_con
     else:
         raise AssertionError("Interview accepted a different role's reviewed scan")
 
-with tempfile.TemporaryDirectory() as temporary, patch.dict(os.environ, {"CAREER_OPS_INTERVIEW_RUNNER": runner, "CAREER_OPS_INTERVIEW_MODEL_ENABLED": "1"}), \
+with tempfile.TemporaryDirectory() as temporary, patch.dict(os.environ, {"CAREER_OPS_INTERVIEW_STUB": runner, "CAREER_OPS_INTERVIEW_MODEL_ENABLED": "1"}), \
      patch("career_ops.interviews.workflow.current_context", return_value=context):
     directory = Path(temporary)
     prepared = start(directory, "7", "round-1", "prepare", {"interview_at": "2026-10-01T10:00:00+08:00"})
@@ -402,16 +401,17 @@ with tempfile.TemporaryDirectory() as temporary, patch.dict(os.environ, {"CAREER
     store.close()
     assert run_task(directory, crash_task["task_id"])["model_calls"] == crash_task["model_calls"]
 
-    with patch("career_ops.interviews.workflow.subprocess.run", return_value=subprocess.CompletedProcess([], 0, "", "")):
+    with patch.dict(os.environ, {"CAREER_OPS_INTERVIEW_STUB": ""}), \
+         patch("career_ops.interviews.model.complete_json", return_value=""):
         try:
             start(directory, "7", "round-empty-runner", "prepare", {})
         except RuntimeError as error:
-            assert "runner returned no JSON" in str(error)
+            assert "Interview model draft failed" in str(error)
         else:
-            raise AssertionError("Empty model-runner output was accepted")
+            raise AssertionError("Empty model output was accepted")
 
-    with patch.dict(os.environ, {"CAREER_OPS_INTERVIEW_RUNNER": "", "CAREER_OPS_INTERVIEW_MODEL_ENABLED": "0"}), \
-         patch.object(subprocess, "run", side_effect=AssertionError("external call attempted")):
+    with patch.dict(os.environ, {"CAREER_OPS_INTERVIEW_STUB": "", "CAREER_OPS_INTERVIEW_MODEL_ENABLED": "0"}), \
+         patch("career_ops.interviews.model.complete_json", side_effect=AssertionError("external call attempted")):
         try:
             start(directory, "7", "round-disabled", "prepare", {})
         except RuntimeError as error:

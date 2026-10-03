@@ -4,9 +4,13 @@ import json
 from pathlib import Path
 import sys
 import tempfile
+from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
-from career_ops import model as adapter
+from langchain_core.language_models.fake_chat_models import GenericFakeChatModel
+from langchain_core.messages import AIMessage, ToolMessage
+
+from career_ops import llm, model as adapter
 
 
 assert adapter.parse_object('Explanation\n```json\n{"ok":true}\n```') == {"ok": True}
@@ -24,12 +28,10 @@ research = {
         {"id": "f2", "url": "https://other.com", "status": "search_only", "quote": "snippet"},
     ],
 }
-messages = [{
-    "role": "tool",
-    "content": '<untrusted_tool_result source="web_extract">\n'
-        + json.dumps({"results": [{"url": "https://example.com", "content": "Exact\nsource"}]})
-        + "\n</untrusted_tool_result>",
-}]
+messages = [ToolMessage(
+    json.dumps({"results": [{"url": "https://example.com", "content": "Exact\nsource"}]}),
+    name="web_extract", tool_call_id="extract-1",
+)]
 frozen = adapter.freeze_research(research, messages)
 assert frozen["sources"] == [{"id": "web1", "text": "Exact\nsource"}]
 assert frozen["research"]["findings"][1]["source"] is None
@@ -63,30 +65,11 @@ assert invalid_query["research"]["dimensions"]["company"]["queries"] == [2]
 responses = iter(({key: value for key, value in research.items() if key != "findings"},
                   {**research, "findings": []}))
 attempts = []
-original_create_agent = adapter.create_agent
-
-
-class ResearchAgent:
-    def __init__(self):
-        self._invoke_tool = lambda *_args, **_kwargs: None
-        self.request_overrides = {}
-
-    def run_conversation(self, _prompt):
-        attempts.append(True)
-        return {"completed": True, "final_response": json.dumps(next(responses)), "messages": []}
-
-    def close(self):
-        pass
-
-
-try:
-    adapter.create_agent = lambda **_kwargs: ResearchAgent()
-    with tempfile.TemporaryDirectory() as temporary:
-        result, _ = adapter.call_agent("research", "research prompt", ["web"], Path(temporary))
-    assert len(attempts) == 2
-    assert result["research"]["findings"] == []
-finally:
-    adapter.create_agent = original_create_agent
+with patch.object(adapter.llm, "research",
+                  lambda *_args: attempts.append(True) or (json.dumps(next(responses)), [])):
+    result, _ = adapter.call_agent("research", "research prompt", ["web"])
+assert len(attempts) == 2
+assert result["research"]["findings"] == []
 
 scan_attempts = []
 scan_responses = iter(({"jobs": []}, {"complete_jd": False, **dict.fromkeys((
@@ -94,34 +77,43 @@ scan_responses = iter(({"jobs": []}, {"complete_jd": False, **dict.fromkeys((
     "location", "employment", "compensation", "company_size", "years",
     "core_capabilities", "credentials",
 ))}))
-
-class ScanAgent(ResearchAgent):
-    def run_conversation(self, _prompt):
-        scan_attempts.append(True)
-        return {"completed": True, "final_response": json.dumps(next(scan_responses)), "messages": []}
-
-try:
-    adapter.create_agent = lambda **_kwargs: ScanAgent()
-    with tempfile.TemporaryDirectory() as temporary:
-        result, _ = adapter.call_agent("scan_evidence", "scan prompt", [], Path(temporary))
-    assert len(scan_attempts) == 2
-    assert result["complete_jd"] is False
-finally:
-    adapter.create_agent = original_create_agent
-
-class ToolAgent:
-    def __init__(self):
-        self._invoke_tool = lambda *_args, **_kwargs: "ok"
-
+with patch.object(adapter.llm, "complete_json",
+                  lambda *_args: scan_attempts.append(True) or json.dumps(next(scan_responses))):
+    result, _ = adapter.call_agent("scan_evidence", "scan prompt", [])
+assert len(scan_attempts) == 2
+assert result["complete_jd"] is False
 
 usage = {}
-tool_agent = ToolAgent()
-adapter.limit_research(tool_agent, usage)
-for _ in range(5):
-    assert tool_agent._invoke_tool("web_search", {}) == "ok"
-assert tool_agent._invoke_tool("web_search", {}) != "ok"
-assert tool_agent._invoke_tool("web_extract", {"urls": ["a", "b", "c", "d"]}) == "ok"
-assert usage == {"tool_calls": 6}
+records = []
+tavily_calls = []
+search, extract = llm.research_tools(lambda: records.append(True), usage)
+with patch.object(llm, "tavily", lambda endpoint, payload: tavily_calls.append((endpoint, payload)) or {"results": []}):
+    for _ in range(5):
+        assert "error" not in json.loads(search.invoke({"query": "q"}))
+    assert "budget" in json.loads(search.invoke({"query": "q"}))["error"]
+    extract.invoke({"urls": ["a", "b", "c", "d"]})
+    assert "budget" in json.loads(extract.invoke({"urls": ["a"]}))["error"]
+assert usage == {"tool_calls": 6} and len(records) == 6
+assert tavily_calls[-1] == ("extract", {"urls": ["a", "b", "c"]})
+
+
+class ToolCallingFake(GenericFakeChatModel):
+    def bind_tools(self, tools, **_kwargs):
+        return self
+
+
+page = "Annual report: revenue grew 10 percent."
+final = {**research, "findings": [{"id": "f1", "url": "https://example.com", "status": "retrieved",
+                                   "quote": "revenue grew 10 percent"}]}
+fake = ToolCallingFake(messages=iter([
+    AIMessage("", tool_calls=[{"name": "web_extract", "args": {"urls": ["https://example.com"]}, "id": "call-1"}]),
+    AIMessage(json.dumps(final)),
+]))
+with patch.object(llm, "chat_model", lambda: fake), \
+        patch.object(llm, "tavily", lambda *_args: {"results": [{"url": "https://example.com", "raw_content": page}]}):
+    result, _ = adapter.call_agent("research", "research prompt", ["web"])
+assert result["sources"] == [{"id": "web1", "text": page}]
+assert result["research"]["findings"][0]["source"] == "web1"
 
 for years, expected in [(0, None), (None, None), (3, 3), (False, False)]:
     evidence = adapter.attach_evidence({

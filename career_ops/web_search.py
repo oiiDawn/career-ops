@@ -1,25 +1,38 @@
-"""Run the configured Hermes search tool without a model or workflow state changes."""
+"""Run Tavily web search without a model or workflow state changes."""
 
-import contextlib
 import json
-from pathlib import Path
+import os
 import sys
+from urllib.request import Request, urlopen
+
+
+def tavily(endpoint: str, payload: dict) -> dict:
+    """POST one Tavily API request; non-2xx responses raise with the response body."""
+    key = os.environ.get("TAVILY_API_KEY")
+    if not key:
+        raise RuntimeError("TAVILY_API_KEY is not configured")
+    request = Request(
+        f"{os.environ.get('TAVILY_BASE_URL', 'https://api.tavily.com')}/{endpoint}",
+        data=json.dumps(payload).encode(),
+        headers={"Authorization": f"Bearer {key}", "Content-Type": "application/json"},
+    )
+    with urlopen(request, timeout=60) as response:
+        return json.load(response)
 
 
 def main() -> None:
+    from career_ops import context  # noqa: F401 - loads the project .env
+
     request = json.load(sys.stdin)
     query = request.get("query")
     if not isinstance(query, str) or not query.strip():
         raise ValueError("Search query must be a non-empty string")
-    sys.path.insert(0, str(Path.home() / ".hermes" / "hermes-agent"))
-    with contextlib.redirect_stdout(sys.stderr):
-        from hermes_cli.env_loader import load_hermes_dotenv
-        load_hermes_dotenv()
-        from tools.web_tools import web_search_tool
-        result = json.loads(web_search_tool(query, limit=20))
-    if result.get("success") is not True or not isinstance(result.get("data", {}).get("web"), list):
-        raise RuntimeError(result.get("error") or "Search returned invalid results")
-    json.dump(result["data"]["web"], sys.stdout, ensure_ascii=False)
+    result = tavily("search", {"query": query, "max_results": 20})
+    if not isinstance(result.get("results"), list):
+        raise RuntimeError("Search returned invalid results")
+    json.dump([{"title": item.get("title", ""), "url": item.get("url", ""),
+                "description": item.get("content", ""), "position": index + 1}
+               for index, item in enumerate(result["results"])], sys.stdout, ensure_ascii=False)
 
 
 if __name__ == "__main__":

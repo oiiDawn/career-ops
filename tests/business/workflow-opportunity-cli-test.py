@@ -24,7 +24,7 @@ with tempfile.TemporaryDirectory() as temporary:
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text("Use sourced facts only.")
     env = {**os.environ, "CAREER_OPS_INPUT_ROOT": str(inputs),
-           "CAREER_OPS_MODEL_RUNNER": f"{sys.executable} {ROOT / 'tests/fixtures/workflow-model-runner.py'}",
+           "CAREER_OPS_MODEL_STUB": str(ROOT / 'tests/fixtures/workflow-model-runner.py'),
            "CAREER_OPS_RESUME_RENDERER": f"{sys.executable} {ROOT / 'tests/fixtures/workflow-resume-renderer.py'}"}
     jd = "Build reviewed AI agents as an employee in Shanghai.\n## Requirements\n- Python and Rust"
     url = "https://example.com/jobs/1"

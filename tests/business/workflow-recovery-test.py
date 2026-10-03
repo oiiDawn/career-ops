@@ -16,7 +16,7 @@ sys.path.insert(0, str(ROOT))
 from career_ops.db import BusinessStore
 from career_ops.input_contracts import digest
 from career_ops.tasks import resume_task, run_task
-from career_ops.model import record_call
+from career_ops.model import USAGE, record_call
 
 PYTHON = ROOT / ".venv" / "bin" / "python"
 
@@ -40,8 +40,8 @@ with tempfile.TemporaryDirectory(prefix="career-ops-recovery-") as temporary:
     (inputs / "targeting.md").write_text("Targeting")
     (inputs.parent / "rules").mkdir(parents=True, exist_ok=True)
     (inputs.parent / "rules" / "scoring.md").write_text("Rules")
-    runner = f"{PYTHON} {ROOT / 'tests' / 'fixtures' / 'workflow-model-runner.py'}"
-    model_env = {"CAREER_OPS_MODEL_RUNNER": runner, "CAREER_OPS_INPUT_ROOT": str(inputs)}
+    runner = str(ROOT / 'tests' / 'fixtures' / 'workflow-model-runner.py')
+    model_env = {"CAREER_OPS_MODEL_STUB": runner, "CAREER_OPS_INPUT_ROOT": str(inputs)}
 
     def report(opportunity: str) -> Path:
         path = directory / f"{opportunity}.json"
@@ -226,11 +226,8 @@ with tempfile.TemporaryDirectory(prefix="career-ops-recovery-") as temporary:
     budget_task = store.start("attempt-budget", "apply", "{}")
     capped_task = store.start("child-budget", "apply", "{}")
     store.add_usage(capped_task["task_id"], 0, 19)
-    with patch.dict(os.environ, {
-        "CAREER_OPS_USAGE_DB": str(store.path),
-        "CAREER_OPS_USAGE_TASK_ID": capped_task["task_id"],
-        "CAREER_OPS_TOOL_LIMIT": "20",
-    }):
+    token = USAGE.set((str(store.path), capped_task["task_id"], 20))
+    try:
         record_call()
         try:
             record_call()
@@ -238,6 +235,8 @@ with tempfile.TemporaryDirectory(prefix="career-ops-recovery-") as temporary:
             assert str(error) == "tool_budget_exhausted"
         else:
             raise AssertionError("Child call exceeded the task budget")
+    finally:
+        USAGE.reset(token)
     assert store.task(capped_task["task_id"])["attempt_tool_calls"] == 20
     store.add_usage(budget_task["task_id"], 899, 19)
     store.wait(budget_task["task_id"], "user_review")

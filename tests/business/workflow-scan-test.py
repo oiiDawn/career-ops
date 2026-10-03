@@ -14,7 +14,7 @@ from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parents[2]
 PYTHON = ROOT / ".venv" / "bin" / "python"
-RUNNER = f"{PYTHON} {ROOT / 'tests' / 'fixtures' / 'workflow-model-runner.py'}"
+RUNNER = str(ROOT / 'tests' / 'fixtures' / 'workflow-model-runner.py')
 sys.path.insert(0, str(ROOT))
 from career_ops.db import BusinessStore
 from career_ops.input_contracts import canonical_scan_input, score_inputs
@@ -47,7 +47,7 @@ def run(directory: Path, *args: str) -> dict:
     result = subprocess.run(
         [str(PYTHON), str(ROOT / "tests/fixtures/workflow-cli.py"), "--directory", str(directory), *args],
         text=True, capture_output=True,
-        env={**os.environ, "CAREER_OPS_MODEL_RUNNER": RUNNER},
+        env={**os.environ, "CAREER_OPS_MODEL_STUB": RUNNER},
     )
     assert result.returncode == 0, (args, result.stdout, result.stderr)
     return json.loads(result.stdout)
@@ -138,7 +138,7 @@ with tempfile.TemporaryDirectory(prefix="career-ops-scan-") as temporary:
     }))
     crashed = subprocess.run(
         [str(PYTHON), str(ROOT / "tests/fixtures/workflow-cli.py"), "--directory", str(directory), "task", "start", "scan", "job-3", str(crash_source), "--crash-at", "publish"],
-        text=True, capture_output=True, env={**os.environ, "CAREER_OPS_MODEL_RUNNER": RUNNER},
+        text=True, capture_output=True, env={**os.environ, "CAREER_OPS_MODEL_STUB": RUNNER},
     )
     assert crashed.returncode == 86
     crashed_task = next(task for task in run(directory, "task", "list") if task["opportunity_id"] == "job-3")
@@ -196,7 +196,7 @@ with tempfile.TemporaryDirectory(prefix="career-ops-cron-") as temporary:
     assert run(directory, "system", "advance")["task"]["status"] == "completed"
     score_crash = subprocess.run(
         [str(PYTHON), str(ROOT / "tests/fixtures/workflow-cli.py"), "--directory", str(directory), "task", "start", "score", "1", "scan:1", "--crash-at", "publish"],
-        text=True, capture_output=True, env={**os.environ, "CAREER_OPS_MODEL_RUNNER": RUNNER},
+        text=True, capture_output=True, env={**os.environ, "CAREER_OPS_MODEL_STUB": RUNNER},
     )
     assert score_crash.returncode == 86
     crashed_score = next(task for task in run(directory, "task", "list") if task["opportunity_id"] == "1" and task["module"] == "score")
@@ -241,9 +241,9 @@ with tempfile.TemporaryDirectory(prefix="career-ops-cron-wait-") as temporary:
         "text": "Build reviewed AI agent workflows in Shanghai as an employee.",
         "retrieved_at": datetime.now(timezone.utc).isoformat(),
     }
-    with patch("career_ops.tasks.capture_jd", return_value=None), patch.dict(os.environ, {"CAREER_OPS_MODEL_RUNNER": RUNNER}):
+    with patch("career_ops.tasks.capture_jd", return_value=None), patch.dict(os.environ, {"CAREER_OPS_MODEL_STUB": RUNNER}):
         assert cron_score(directory)["status"] == "waiting"
-    with patch("career_ops.tasks.capture_jd", return_value=refreshed), patch.dict(os.environ, {"CAREER_OPS_MODEL_RUNNER": RUNNER}):
+    with patch("career_ops.tasks.capture_jd", return_value=refreshed), patch.dict(os.environ, {"CAREER_OPS_MODEL_STUB": RUNNER}):
         recovered = cron_score(directory)
     assert recovered["opportunity_id"] == "1"
     assert recovered["task"]["task_id"] == blocked_task["task_id"]
@@ -259,7 +259,7 @@ with tempfile.TemporaryDirectory(prefix="career-ops-cron-fair-") as temporary:
       INSERT INTO opportunities VALUES (2,'https://example.com/jobs/two','Two','Engineer');
     """)
     database.close()
-    with patch("career_ops.tasks.capture_jd", return_value=None), patch.dict(os.environ, {"CAREER_OPS_MODEL_RUNNER": RUNNER}):
+    with patch("career_ops.tasks.capture_jd", return_value=None), patch.dict(os.environ, {"CAREER_OPS_MODEL_STUB": RUNNER}):
         assert cron_score(directory)["opportunity_id"] == "1"
         assert cron_score(directory)["opportunity_id"] == "2"
         assert cron_score(directory)["opportunity_id"] == "1"
@@ -270,7 +270,7 @@ with tempfile.TemporaryDirectory(prefix="career-ops-cron-fair-") as temporary:
         "text": "Build reviewed AI agent workflows in Shanghai as an employee.",
         "retrieved_at": datetime.now(timezone.utc).isoformat(),
     }
-    with patch("career_ops.tasks.capture_jd", return_value=refreshed), patch.dict(os.environ, {"CAREER_OPS_MODEL_RUNNER": RUNNER}):
+    with patch("career_ops.tasks.capture_jd", return_value=refreshed), patch.dict(os.environ, {"CAREER_OPS_MODEL_STUB": RUNNER}):
         assert scan_discovered(directory, "2")["task_id"] == waiting["task_id"]
 
 with tempfile.TemporaryDirectory(prefix="career-ops-cron-retry-") as temporary:

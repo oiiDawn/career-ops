@@ -8,6 +8,7 @@ import subprocess
 import sys
 import tempfile
 
+os.environ.setdefault("LANGFUSE_TRACING_ENABLED", "false")  # spawned CLI runs never trace
 
 ROOT = Path(__file__).resolve().parents[2]
 PYTHON = Path(sys.executable)
