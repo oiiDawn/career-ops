@@ -20,7 +20,9 @@ from langgraph.prebuilt import ToolNode, tools_condition
 from career_ops.web_search import tavily
 
 
-CALL_TIMEOUT_SECONDS = 300
+CALL_TIMEOUT_SECONDS = 600
+# High reasoning effort can spend the endpoint default (8192) on reasoning alone; Hermes retried up to this cap.
+MAX_OUTPUT_TOKENS = 32768
 RESEARCH_LIMITS = {"web_search": 5, "web_extract": 1}
 DEADLINE: ContextVar[float | None] = ContextVar("career_ops_model_deadline", default=None)
 
@@ -47,6 +49,7 @@ def chat_model() -> ChatOpenAI:
         base_url=os.environ["CAREER_OPS_LLM_BASE_URL"],
         api_key=os.environ["CAREER_OPS_LLM_API_KEY"],
         reasoning_effort=os.environ.get("CAREER_OPS_REASONING_EFFORT", "high"),
+        max_tokens=MAX_OUTPUT_TOKENS,
         timeout=remaining_seconds(),
         max_retries=2,
     )
@@ -116,7 +119,7 @@ def research(system: str, prompt: str, record: Callable[[], None], usage: dict |
 
     def agent(state: MessagesState) -> dict:
         remaining_seconds()
-        return {"messages": [model.invoke(state["messages"])]}
+        return {"messages": [model.invoke(state["messages"], {"run_name": "research"})]}
 
     graph = StateGraph(MessagesState)
     graph.add_node("agent", agent)

@@ -61,4 +61,8 @@ else:
 finally:
     llm.DEADLINE.reset(token)
 
+with patch.dict(os.environ, {"CAREER_OPS_MODEL": "m", "CAREER_OPS_LLM_BASE_URL": "http://127.0.0.1:9/v1",
+                             "CAREER_OPS_LLM_API_KEY": "k"}):
+    assert llm.chat_model().max_tokens == llm.MAX_OUTPUT_TOKENS  # endpoint default leaves no room after reasoning
+
 print("workflow model deadline: in-process time and tool budgets passed")
