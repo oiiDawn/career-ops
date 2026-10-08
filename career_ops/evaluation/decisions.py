@@ -6,7 +6,7 @@ import math
 from datetime import date
 
 
-ORDER = {"evidence_review": 0, "focus": 1, "deprioritize": 2, "discard": 3}
+ORDER = {"focus": 0, "deprioritize": 1, "discard": 2}
 
 
 def valid_scores(score: dict) -> bool:
@@ -19,7 +19,7 @@ def worth_attention(score: dict) -> bool:
     if not valid_scores(score):
         raise ValueError("invalid dimension scores")
     if "culture" in score:
-        return False
+        return all(value is not None and value >= 4 for value in score.values())
     known = [value for value in score.values() if value is not None]
     return len(known) >= 2 and all(value >= 4 for value in known)
 
@@ -31,8 +31,6 @@ def classify(score: dict, prescreen: dict) -> str:
         raise ValueError("complete prescreen decision required")
     if prescreen["status"] == "fail":
         return "discard"
-    if "culture" in score:
-        return "evidence_review"
     return "focus" if attention else "deprioritize"
 
 

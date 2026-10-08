@@ -37,7 +37,11 @@ print("workflow decisions: action policy and ordering passed")
 
 v4 = {"direction": 4.96, "company": 4.02, "culture": 3.40, "compensation": None}
 assert valid_scores(v4) and not worth_attention(v4)
-assert classify(v4, {"status": "pass"}) == "evidence_review"
-assert classify({k: 5.0 for k in v4}, {"status": "pass"}) == "evidence_review"
+assert classify(v4, {"status": "pass"}) == "deprioritize"
+assert classify({k: 5.0 for k in v4}, {"status": "pass"}) == "focus"
 assert classify(v4, {"status": "fail"}) == "discard"
 assert not valid_scores({**v4, "culture": float("nan")})
+
+assert worth_attention({k: 4.0 for k in v4})
+assert not worth_attention({**{k: 4.0 for k in v4}, "culture": 3.99})
+assert not worth_attention({**{k: 4.0 for k in v4}, "company": None})

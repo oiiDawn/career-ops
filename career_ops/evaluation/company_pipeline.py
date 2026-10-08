@@ -18,6 +18,7 @@ ROOT = Path(__file__).resolve().parents[2]
 from career_ops.company_keys import normalize_company
 
 from career_ops.evaluation import jev
+from career_ops.evaluation.decisions import classify
 SHARED = ('company', 'culture', 'compensation')
 SUMMARY_REASONING_EFFORT = 'low'
 
@@ -91,7 +92,7 @@ def rating(response: dict, name: str) -> dict:
     return {'score': answer['score'] + 1, 'confidence': answer['confidence'],
             'probabilities': answer['probabilities'],
             'evidence_sufficiency': response['answers'][name + '_evidence']['noul'],
-            'evidence_status': 'threshold_pending'}
+            'evidence_status': 'assessed'}
 
 
 def company_request(company: dict, rubric: str) -> dict:
@@ -302,7 +303,8 @@ def evaluate(bundle: dict, rubric: str, store: Path, output: Path, key: str | No
                                     'scope': job['compensation_quote']['scope']}
         rows.append({'id': str(job['id']), 'company_id': job['company_id'], 'dimensions': dimensions,
                      'company_profiles': refs, 'direction_request_sha256': fingerprint,
-                     'recommendation': 'threshold_pending'})
+                     'recommendation': classify({d: dimensions.get(d, {}).get('score') for d in jev.DIMENSIONS},
+                                                {'status': 'uncertain'})})
     summary = {'production_writes': False, 'companies': versions, 'jobs': rows, 'calls': ledger,
                'new_api_calls': sum(not c['cache_hit'] for c in ledger),
                'cached_api_calls': sum(c['cache_hit'] for c in ledger),

@@ -15,6 +15,7 @@ from urllib.request import Request, urlopen
 
 from dotenv import dotenv_values
 from career_ops.model import record_call
+from career_ops.evaluation.decisions import classify
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -137,7 +138,7 @@ def dimensions(response: dict) -> dict:
     answers = response["answers"]
     return {name: {"score": answers[name]["score"] + 1, "confidence": answers[name]["confidence"],
                    "evidence_sufficiency": answers[name + "_evidence"]["noul"],
-                   "evidence_status": "threshold_pending", "probabilities": answers[name]["probabilities"]}
+                   "evidence_status": "assessed", "probabilities": answers[name]["probabilities"]}
             for name in DIMENSIONS}
 
 
@@ -158,7 +159,7 @@ def main() -> None:
     manifest = {"scoring_model": "attractiveness-v4-experiment", "jev_model": MODEL,
                 "rubric_path": str(RUBRIC.relative_to(ROOT)), "rubric_sha256": hashlib.sha256(rubric.encode()).hexdigest(),
                 "cases_sha256": hashlib.sha256(args.input.read_bytes()).hexdigest(),
-                "recommendation": "threshold_pending", "production_writes": False}
+                "recommendation_policy": "four_dimension_scores", "production_writes": False}
     manifest_path = args.output / "manifest.json"
     if manifest_path.exists() and json.loads(manifest_path.read_text()) != manifest:
         raise ValueError("Refuse changed experiment manifest; use a new output directory")
@@ -179,9 +180,11 @@ def main() -> None:
         result = call(str(case["id"]), request, args.output, key)
         row = {"id": case["id"], "sample_type": case["sample_type"], "status": result["status"],
                "elapsed_seconds": result["elapsed_seconds"], "attempts": result["attempts"],
-               "recommendation": "threshold_pending"}
+               "recommendation": None}
         if result["status"] == "scored":
             row["dimensions"] = dimensions(result["response"])
+            row["recommendation"] = classify({d: value["score"] for d, value in row["dimensions"].items()},
+                                             {"status": "uncertain"})
         results.append(row)
         save(args.output / "results.json", results)
         print(json.dumps({"completed": len(results), "total": len(cases), "id": case["id"], "status": row["status"]}), flush=True)

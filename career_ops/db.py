@@ -490,8 +490,9 @@ class BusinessStore:
             if artifact.get("scoring_model") == "attractiveness-v4":
                 if dimension_scores(artifact.get("dimensions")) != score:
                     raise ValueError("Raw dimensions disagree with saved scores")
-                if artifact.get("recommendation") != "evidence_review":
-                    raise ValueError("Four-dimension recommendation requires evidence review")
+                prescreen = json.loads(task["input_payload"])["jd_report"].get("prescreen", {"status": "uncertain"})
+                if artifact.get("recommendation") != classify_decision(score, prescreen):
+                    raise ValueError("Recommendation disagrees with dimension scores and prescreen")
         if state["outcome"] == "exclude" and (
             artifact.get("type") != "exclusion" or not artifact.get("reason") or not artifact.get("evidence")
         ):

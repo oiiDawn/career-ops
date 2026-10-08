@@ -21,7 +21,7 @@ with tempfile.TemporaryDirectory(prefix="career-ops-report-") as temporary:
     evidence = {"company": "Example", "role": "Engineer", "complete_jd": True, "liveness": "active",
                 "jd": "Build and maintain software products."}
     raw = {"score": 3.3700000000000006, "confidence": .93, "evidence_sufficiency": .12,
-           "evidence_status": "threshold_pending", "probabilities": {"0": .1, "1": .1, "2": .43, "3": .07, "4": .3}}
+           "evidence_status": "assessed", "probabilities": {"0": .1, "1": .1, "2": .43, "3": .07, "4": .3}}
     reference = {"company_id": "example", "profile_id": "culture-cn", "request_sha256": "batch",
                  "scope": {"region": "China"}, "valid_until": "2026-10-15"}
     assessment = {
@@ -37,7 +37,7 @@ with tempfile.TemporaryDirectory(prefix="career-ops-report-") as temporary:
     assert "| direction | 3.37 |" in rendered["report"]
     assert "| direction | 3.3700000000000006 |" not in rendered["report"]
     machine = yaml.safe_load(rendered["report"].split("```yaml\n")[1].split("```")[0])
-    assert machine["scoring_model"] == "attractiveness-v4" and machine["recommendation"] == "evidence_review"
+    assert machine["scoring_model"] == "attractiveness-v4" and machine["recommendation"] == "deprioritize"
     assert machine["dimensions"]["culture"] == raw
     assert machine["dimensions"]["company"]["score"] is None and machine["dimensions"]["company"]["status"] == "pending"
     assert machine["company_profiles"] == assessment["company_profiles"]
@@ -80,7 +80,7 @@ with tempfile.TemporaryDirectory(prefix="career-ops-report-") as temporary:
               "valid_until": "2026-10-15", "scoring_request_sha256": "batch", **raw}
     artifact = {"type": "score", "report": rendered["report"], "report_sha256": rendered["report_sha256"],
                 "score": rendered["scores"], "scoring_model": "attractiveness-v4", "dimensions": machine["dimensions"],
-                "recommendation": "evidence_review", "company_ratings": [rating], "company_profiles": {"culture": reference, "company": {"status": "pending"}}}
+                "recommendation": "deprioritize", "company_ratings": [rating], "company_profiles": {"culture": reference, "company": {"status": "pending"}}}
     store = BusinessStore(root / "business.db")
     pending = store.start("report-pending", "score", "not yet published")
     store.retain_company_ratings(store.db, [rating])
@@ -92,13 +92,13 @@ with tempfile.TemporaryDirectory(prefix="career-ops-report-") as temporary:
     independent_reader.close()
     store.retain_company_ratings(store.db, [{**rating, "score": 5, "valid_until": "2099-10-15"}])
     assert json.loads(store.db.execute("SELECT payload_json FROM company_ratings").fetchone()[0]) == rating
-    with patch("career_ops.db.score_inputs", return_value=json.dumps({"jd_report": {}})):
+    with patch("career_ops.db.score_inputs", return_value=json.dumps({"jd_report": {"prescreen": {"status": "uncertain"}}})):
         for opportunity in ("job1", "job2"):
-            task = store.start(opportunity, "score", json.dumps({"jd_report": {}}))
+            task = store.start(opportunity, "score", json.dumps({"jd_report": {"prescreen": {"status": "uncertain"}}}))
             state = {"task_id": task["task_id"], "input_hash": store.task(task["task_id"])["input_hash"], "outcome": "score",
                      "material_hash": rendered["report_sha256"], "draft": json.dumps(artifact)}
             store.publish(state)
-        rejected = store.start("bad-rating", "score", json.dumps({"jd_report": {}}))
+        rejected = store.start("bad-rating", "score", json.dumps({"jd_report": {"prescreen": {"status": "uncertain"}}}))
         mismatched = {**artifact, "score": {**artifact["score"], "culture": 4.37}}
         state = {"task_id": rejected["task_id"], "input_hash": store.task(rejected["task_id"])["input_hash"],
                  "outcome": "score", "material_hash": rendered["report_sha256"], "draft": json.dumps(mismatched)}
@@ -115,6 +115,19 @@ with tempfile.TemporaryDirectory(prefix="career-ops-report-") as temporary:
         assert store.db.execute("SELECT count(*) FROM job_company_profiles").fetchone()[0] == 4
         assert store.db.execute("SELECT count(*) FROM job_company_profiles WHERE profile_id IS NULL").fetchone()[0] == 2
         assert store.score_views()[0]["dimensions"] == machine["dimensions"]
+        focused = render_report(packet, evidence, {**assessment, "dimensions": {
+            name: {**raw, "score": 4.2, "confidence": .1, "evidence_sufficiency": 0}
+            for name in ("direction", "company", "culture", "compensation")}})
+        assert focused["recommendation"] == "focus"
+        task = store.start("low-evidence-focus", "score", json.dumps({"jd_report": {"prescreen": {"status": "uncertain"}}}))
+        focused_dimensions = yaml.safe_load(focused["report"].split("```yaml\n")[1].split("```")[0])["dimensions"]
+        store.publish({"task_id": task["task_id"], "input_hash": store.task(task["task_id"])["input_hash"],
+            "outcome": "score", "material_hash": focused["report_sha256"], "draft": json.dumps({
+                "type": "score", "report": focused["report"], "report_sha256": focused["report_sha256"],
+                "score": focused["scores"], "scoring_model": "attractiveness-v4",
+                "dimensions": focused_dimensions, "recommendation": "focus"})})
+        assert next(row for row in store.decision_views()["decisions"]
+                    if row["opportunity_id"] == "low-evidence-focus")["action"] == "focus"
     store.close()
 
 print("workflow report: raw four-dimension rendering and shared SQLite references passed")

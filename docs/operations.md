@@ -111,7 +111,7 @@ before calling. `--check` freezes requests without network access. The live run
 uses the existing `.env` `TYPESAFE_API_KEY` and Jev 1.13.0 API protocol, keeps
 raw responses and failed attempts, and resumes only identical inputs. Results
 preserve decimal scores, original confidence and independent sufficiency;
-recommendation remains `threshold_pending`. This does not change production
+recommendation uses the four dimension scores. This does not change production
 evaluation, notifications, the business store or scheduling.
 
 Company reuse is tested through a separate isolated entrypoint:
@@ -125,7 +125,9 @@ Formal source/response archives live in `data/company-profiles`; SQLite persists
 per-result job references in the publication transaction. Archives expire by Sunday (at most seven days),
 and that same window is part of input validity. Existing results remain historical.
 Reports and Dashboard preserve four raw fractional scores, confidence and independent sufficiency.
-Until a sufficiency threshold is reviewed, formal decisions remain `evidence_review` and do not trigger notifications.
+Initial recommendations use scores only: all four dimensions must have scores of at least 4 for `focus`.
+Lower or missing scores are `deprioritize`; confirmed hard failures remain `discard`. Confidence and
+evidence sufficiency remain visible but do not block recommendations or trigger extra model review.
 Score research has no shared 20-call ceiling; each agent retains its own 200K tokens and 20 Tavily credits.
 Large inputs are batched and summarized by their own dimension agent, then merged; low reasoning and an
 configured model output ceiling (currently 32768) include reasoning tokens. All batches, merges and at most one JSON/length repair share

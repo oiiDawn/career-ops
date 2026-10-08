@@ -2,7 +2,7 @@
 
 这是 OII-397 已确认标准的正式评分口径。`career_ops/evaluation/score_graph.py`
 通过三维公司 agent 与 Jev 评分入口执行本文锚点；报告、数据库与 Dashboard 保留四维原始结果。
-历史评分不改写。独立充分性阈值仍待确认，正式结果进入 `evidence_review`，不自动推荐或通知。
+历史评分不改写。初期推荐仅按四维分数：四维均有数值且各自 ≥4 才进入 focus，否则 deprioritize；明确硬性不符合仍 discard。confidence 与独立充分性继续展示，不设推荐门槛，不因低充分性阻断或自动复核。
 
 标准依据为 [OII-397](https://linear.app/oii-workspace/issue/OII-397) 及用户后续确认。
 

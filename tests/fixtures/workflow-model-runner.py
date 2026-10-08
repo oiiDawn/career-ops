@@ -76,7 +76,7 @@ def run(phase, payload):
                 "tool_calls": 0,
             }
         known = lambda value: {"score": value, "confidence": .93, "evidence_sufficiency": .12,
-                               "evidence_status": "threshold_pending", "probabilities": {"0": 0, "1": 0, "2": 0, "3": 5-value, "4": value-4}}
+                               "evidence_status": "assessed", "probabilities": {"0": 0, "1": 0, "2": 0, "3": 5-value, "4": value-4}}
         dimensions = {"direction": known(4.37), "compensation": known(4.12),
                       "company": {"score": None, "status": "pending", "reason": "summary_failed"},
                       "culture": {"score": None, "status": "pending", "reason": "no_matching_valid_profile"}}
@@ -87,7 +87,7 @@ def run(phase, payload):
             "score": {name: value["score"] for name, value in dimensions.items()},
             "scoring_model": "attractiveness-v4", "dimensions": dimensions,
             "company_profiles": {}, "company_research": {"stages": []}, "company_ratings": [],
-            "recommendation": "evidence_review",
+            "recommendation": "deprioritize",
             "report": "# Verified score report",
             "report_sha256": hashlib.sha256(b"# Verified score report").hexdigest(),
         }

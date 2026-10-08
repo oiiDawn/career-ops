@@ -84,7 +84,7 @@ with tempfile.TemporaryDirectory() as temp:
             model.USAGE.reset(usage)
             store.close()
         assert set(first['artifact']['score']) == {'direction','company','culture','compensation'}
-        assert first['artifact']['score']['culture']==3.37 and first['artifact']['recommendation']=='evidence_review'
+        assert first['artifact']['score']['culture']==3.37 and first['artifact']['recommendation']=='deprioritize'
         assert len(jev_calls)==4 and len(research_calls)==9
         before=(len(jev_calls),len(research_calls),len(model_calls))
         assert g.run_score(values,root/'workflow-drafts',root)==first

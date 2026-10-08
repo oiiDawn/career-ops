@@ -11,6 +11,7 @@ from pathlib import Path
 import yaml
 
 from career_ops.insights.salary import parse_amount
+from career_ops.evaluation.decisions import classify
 
 
 HEADINGS = (
@@ -119,7 +120,7 @@ def render_report(packet: dict, evidence: dict, assessment: dict) -> dict:
         "captured_at": evidence.get("captured_at"), "advertised_comp": advertised,
         "sources": [{"id": name, "path": str(path.relative_to(root)), "sha256": digest(path.read_bytes())} for name, path in files.items()],
         "dimensions": dimensions, "company_profiles": assessment.get("company_profiles", {}),
-        "company_research": research, "recommendation": "evidence_review",
+        "company_research": research, "recommendation": classify(score, evidence.get("prescreen", {"status": "uncertain"})),
     }
     table = "| 维度 | 分数 | Confidence | 充分性 | 状态 |\n|---|---|---|---|---|\n" + "\n".join(
         f"| {name} | {format(score[name], '.2f') if score[name] is not None else 'Unknown'} | "
@@ -127,7 +128,7 @@ def render_report(packet: dict, evidence: dict, assessment: dict) -> dict:
         f"{dimensions[name].get('status', dimensions[name].get('evidence_status', 'pending'))} |"
         for name in DIMENSIONS
     )
-    research_status = "公司档案、摘要与原始来源记录见 Machine Summary；充分性阈值待确认，需证据审阅"
+    research_status = "公司档案、摘要与原始来源记录见 Machine Summary；初期推荐仅按四维评分，置信度与充分性供参考"
     bodies = {
         "A. 岗位概览": sections["overview"], "B. 能力竞争力": sections["capabilities"],
         "C. 入职吸引力": f"**入职吸引力分项：**\n\n{table}",
@@ -140,4 +141,4 @@ def render_report(packet: dict, evidence: dict, assessment: dict) -> dict:
         raise ValueError("Report section missing or contains extra level-two headings")
     report = "\n\n".join(f"## {heading}\n\n{bodies[heading]}" for heading in HEADINGS) + "\n"
     (directory / "report.md").write_text(report)
-    return {"report": report, "report_sha256": digest(report), "scores": score}
+    return {"report": report, "report_sha256": digest(report), "scores": score, "recommendation": summary["recommendation"]}
