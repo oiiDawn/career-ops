@@ -24,8 +24,10 @@
 隔离入口为 `scripts/experiments/company-score.py`，公司研究入口为
 `scripts/experiments/adaptive-research.py --company-input ...`；正式流程尚未切换。
 
-完整隔离入口接收公开公司实体、适用范围、来源线索及显式有效期，程序依次执行公司采集、
-独立 LLM JSON 摘要、结构校验、Jev 评分和持久保存，不要求人工先填事实或 profiles。
+完整隔离入口接收公开公司实体、适用范围、来源线索及显式有效期，company/culture/compensation 三个独立 agent 并行完成各自采集及
+各自 LLM JSON 摘要、结构校验，摘要完成即各自调用一个 Jev 评分请求并持久保存，不要求人工先填事实或 profiles。
+每个 agent 独立 200K token（采集 150K、所有摘要共预留 50K）、20 保守 credits，多个薪酬范围共用一个
+compensation agent；没有公司共享总 token 限额。主流程只合并程序 profiles，无跨维度 LLM 摘要。
 研究与摘要仅使用公开资料，不发个人薪资标准、CV 或岗位 JD；私人评分标准仅发给已授权的 Jev。
 摘要保留日期、来源 URL 或 ID、金额拆分、适用范围、制度承诺与执行的区分、冲突及缺口。
 程序检查 JSON 和声明的公司/profile 范围，不以正文逐字一致、offset 或 hash 完整性作验收门槛；

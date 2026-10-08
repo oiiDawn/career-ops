@@ -250,10 +250,10 @@ class Research:
             return json.dumps({'source': source, 'start': start, 'end': end, 'text': body[start:end]}, ensure_ascii=False)
         return [web_search, web_extract, read_sections]
 
-    def run(self, prompt):
+    def run(self, prompt, system=SYSTEM):
         tools = self.tools()
         by_name = {t.name: t for t in tools}
-        self.messages = [SystemMessage(SYSTEM), HumanMessage(prompt)]
+        self.messages = [SystemMessage(system), HumanMessage(prompt)]
 
         def node(state):
             token = llm.DEADLINE.set(self.started + self.dispatch_seconds)

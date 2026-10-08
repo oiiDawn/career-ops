@@ -127,8 +127,9 @@ The input has `companies` and `jobs`. Each company declares `company_id`, `name`
 jobs declare their public posting and exact company/scope references. No prepared
 profiles or manual factual summaries are required. `--check` validates this public
 input without running research or scoring. A live run collects missing company
-scopes through the existing adaptive researcher, then uses a separate JSON-mode
-LLM node to organize retained public source material. Summary-stage reasoning
+scopes through three parallel independent dimension agents. Each agent collects
+only its own company, culture or compensation topics and produces its own JSON-mode
+LLM summary; the main process merges their profiles without another LLM summary. Summary-stage reasoning
 is fixed to `low` (collection keeps its configured effort). Usable JSON, declared
 company/profile scope and factual-field structure are checked before programs build
 Jev profiles. Summaries retain source URLs or IDs for review alongside frozen original
@@ -136,10 +137,15 @@ responses and bodies; text equality, offsets and hash integrity are not acceptan
 Invalid summaries remain pending. A later CLI attempt can retry summary generation from
 retained material, with one bounded summary stage per scope group and no fallback scoring.
 
-Company research and summaries share a 150K token resource allowance: collection
-uses at most 100K, with 50K reserved for summaries; collection dispatch stops at
-570 seconds, preserving time for summaries within the overall 900-second CLI hard
-deadline. The tokenizer estimate is conservative, not an exact provider guarantee.
+Each dimension agent has its own 200K token allowance: research uses at most 150K,
+reserving at least 50K for its summaries. Any unused collection allowance remains
+available to that same agent's summaries, including multiple compensation regions. No shared
+company token cap is imposed; 600K is the sum of three independent allowances.
+Each agent keeps its own tool cache, ledger and clock, with 20 conservative Tavily
+credits, a 570-second collection dispatch limit and a 900-second model deadline.
+The CLI also has a 900-second overall hard deadline, which is tighter for multiple
+companies processed sequentially. Token estimates are proxies, not exact provider guarantees.
+Source headers accompany retained sections so publication dates are available to summaries.
 Full provider-returned bodies, raw messages, summary responses and usage remain in
 the isolated store. Valid exact scopes reuse archived summaries and ratings, including
 for new jobs. New scopes collect only missing ranges; expiry or `--refresh` triggers
@@ -147,7 +153,10 @@ collection. Scoring rubric changes reevaluate Jev only; summary-rule changes reu
 frozen sources for a new LLM summary. Old archives and failed summaries remain visible.
 No effective per-scope validity can be silently extended by changing an input date.
 
-Company Jev requests contain no JD; job requests evaluate direction, plus compensation
+Each dimension invokes its own Jev request as soon as its summary is ready; multiple
+compensation scopes stay in one request with separate score/Noul questions. One failed
+dimension does not delay scoring the others. Cache and raw failures are independent,
+and final aggregation does not retry failed company requests. Company requests contain no JD; job requests evaluate direction, plus compensation
 only for an explicit job quotation. Every rating retains its original request/response
 and summary provenance. Unknown scopes remain pending. Each output directory is new.
 `--company-input` is a standalone public collection check accepting identity, scopes and seed URLs;
