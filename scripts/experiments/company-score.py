@@ -44,7 +44,7 @@ def rating(response: dict, name: str) -> dict:
 def company_request(company: dict, rubric: str) -> dict:
     """Evaluate each scoped company profile once; job content is absent from this request."""
     templates = jev.request_for({}, rubric)['questions']
-    profiles, questions = {}, {}
+    profiles, questions, sources = {}, {}, {}
     for profile in company['profiles']:
         dimension = profile['dimension']
         if dimension not in SHARED:
@@ -53,17 +53,27 @@ def company_request(company: dict, rubric: str) -> dict:
         if name in profiles:
             raise ValueError('Duplicate company profile scope')
         profiles[name] = deepcopy(profile)
+        evidence_sources = profiles[name]['evidence'].pop('sources', [])
+        if not isinstance(evidence_sources, list) or any(not isinstance(s, dict) for s in evidence_sources):
+            raise ValueError('Profile sources must be public source records')
+        refs = []
+        for source in evidence_sources:
+            source_id = jev.digest(source)
+            sources[source_id] = source
+            refs.append(source_id)
+        profiles[name]['evidence']['source_refs'] = refs
         for suffix in ('', '_evidence'):
             question = deepcopy(templates[dimension + suffix])
             question['instructions'] += (
                 f' Evaluate only state.evidence.profiles["{name}"] and its declared scope for '
                 'state.evidence.company. This is a reusable company baseline, not a job or offer guarantee. '
+                'Read only its evidence.source_refs in state.evidence.sources. '
                 'Do not borrow evidence from another profile, region or level. Unknown applicability remains unknown.'
             )
             questions[name + suffix] = question
     return {'model': jev.MODEL, 'state': {'standards': rubric, 'evidence': {
             'company': {k: company[k] for k in ('company_id', 'name', 'identity_url')},
-            'profiles': profiles}}, 'questions': questions}
+            'profiles': profiles, 'sources': sources}}, 'questions': questions}
 
 
 def job_request(job: dict, rubric: str) -> dict:

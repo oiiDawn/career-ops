@@ -47,6 +47,11 @@ def reply(name, request, output, key):
 
 c.jev.call = reply
 rubric = c.jev.RUBRIC.read_text()
+repeated = deepcopy(company)
+repeated['profiles'][1]['evidence']['sources'] = repeated['profiles'][0]['evidence']['sources']
+request = c.company_request(repeated, rubric)
+assert len(request['state']['evidence']['sources']) == 2
+assert len({tuple(p['evidence']['source_refs']) for p in request['state']['evidence']['profiles'].values()}) == 2
 with tempfile.TemporaryDirectory() as temp:
     root = Path(temp)
     def run(name, value=bundle, today=date(2026,10,8)):

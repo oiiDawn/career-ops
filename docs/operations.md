@@ -113,3 +113,21 @@ raw responses and failed attempts, and resumes only identical inputs. Results
 preserve decimal scores, original confidence and independent sufficiency;
 recommendation remains `threshold_pending`. This does not change production
 evaluation, notifications, the business store or scheduling.
+
+Company reuse is tested through a separate isolated entrypoint:
+
+```bash
+.venv/bin/python -B scripts/experiments/company-score.py --input COMPANY_JOB_BUNDLE.json --store data/experiments/company-profiles --output NEW_RUN_DIR --check
+.venv/bin/python -B scripts/experiments/company-score.py --input COMPANY_JOB_BUNDLE.json --store data/experiments/company-profiles --output NEW_RUN_DIR
+.venv/bin/python -B scripts/experiments/adaptive-research.py --company-input PUBLIC_COMPANY_SCOPES.json --output NEW_COMPANY_RESEARCH_DIR
+```
+
+Bundles declare verified company identities, dated company/culture/compensation
+profiles with exact applicability scopes, and jobs that explicitly reference
+those identities/scopes. Company requests contain no JD; job requests evaluate
+direction, plus compensation only for an explicit job quotation. Missing or
+expired scopes remain pending. Identical requests reuse the persistent isolated
+store; changed evidence, scopes or rubric produce new versions. Each run directory
+is immutable. `--company-input` accepts public identity, scopes and seed URLs;
+it researches one company across the requested scopes without a job or candidate
+payload. The validity dates are experiment inputs, not a production refresh policy.
