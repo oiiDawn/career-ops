@@ -25,7 +25,7 @@
 `scripts/experiments/adaptive-research.py --company-input ...`；正式流程尚未切换。
 
 完整隔离入口接收公开公司实体、适用范围、来源线索及显式有效期，程序依次执行公司采集、
-独立 LLM JSON 摘要、引用校验、Jev 评分和持久保存，不要求人工先填事实或 profiles。
+独立 LLM JSON 摘要、结构校验、Jev 评分和持久保存，不要求人工先填事实或 profiles。
 研究与摘要仅使用公开资料，不发个人薪资标准、CV 或岗位 JD；私人评分标准仅发给已授权的 Jev。
 摘要保留日期、来源 URL 或 ID、金额拆分、适用范围、制度承诺与执行的区分、冲突及缺口。
 程序检查 JSON 和声明的公司/profile 范围，不以正文逐字一致、offset 或 hash 完整性作验收门槛；
