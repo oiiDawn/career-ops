@@ -32,7 +32,7 @@ ignored 实验目录 `data/experiments/company-budget-2026-10-08/` 保存 `input
 
 扩容摘要 input16,939/output20,445，其中 reasoning16,976、cache_read0；208.24s。公共完整链443.32s，摘要合法4 profiles（facts7/3/3/3）。研究不是 output reasoning 耗尽：研究输出只有6484，4321 reasoning；增长主要来自反复携带历史。8轮输入为1728→12521→14662→16752→22224→25878→29319→32872。累计输入含重复 history，无法据此精确划分每段冗余；cache_read不能按全价重复输入计算。未缓存输入由31,783增至90,420（2.84倍），不等于实际账单。美元费用未知。
 
-达到 token stop 时尚有 nominal 37,560 tokens 余量，但请求前输入估计及最低输出预约无法支付下一轮。token估计沿用cl100k_base+20%，是代理估计，不是精确provider tokenizer或绝对hardtoken保障。900s墙钟和credits界限未触发；credits扩容并非此次限制原因。9个body超过4000字符，最大45,523；正文数/总字符包含菜单或空表，不等于业务有效证据量。
+达到 token stop 时尚有 nominal 37,560 tokens 余量，但请求前输入估计及最低输出预约无法支付下一轮。token估计沿用cl100k_base+20%，是代理估计，不是精确provider tokenizer或绝对hardtoken保障。900s墙钟及40 credits上限未触发，最终stop由token触发；实际已用24保守credits，超过旧20。如果只升token而保持20credits，仍可能更早停止；两个预算同时变化，无法隔离各自贡献。9个body超过4000字符，最大45,523；正文数/总字符包含菜单或空表，不等于业务有效证据量。
 
 ## 自主路径与适用证据
 
