@@ -1,0 +1,54 @@
+"""Check isolated research preserves full bodies and enforces resources before provider dispatch."""
+import importlib.util
+import json
+from pathlib import Path
+import tempfile
+
+root = Path(__file__).resolve().parents[2]
+spec = importlib.util.spec_from_file_location('adaptive', root / 'scripts/experiments/adaptive-research.py')
+a = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(a)
+with tempfile.TemporaryDirectory() as temp:
+    r = a.Research(Path(temp) / 'run')
+    body = 'Menu\n\n' + 'x' * 4500 + '\n\n## Paid leave\nAnnual leave 20 days\n\n' + 'z' * 22000
+    sid, frozen = r.freeze({'url': 'https://example.test/benefits', 'raw_content': body})
+    assert frozen == body and (r.output / 'bodies' / (sid + '.txt')).read_text() == body
+    section = r.sections(sid, ['annual leave'])
+    assert any(s['start'] > 4000 and '20 days' in s['text'] for s in section['sections'])
+    assert r.sources[sid]['sha256'] == a.sha(body)
+    tools = {t.name: t for t in r.tools()}
+    start = body.index('## Paid leave')
+    read = json.loads(tools['read_sections'].invoke({'source_id': sid, 'start': start, 'end': start+35}))
+    assert read['text'] == body[start:start+35]
+    calls = []
+    a.tavily = lambda endpoint,payload: calls.append((endpoint,payload)) or {'results': [], 'usage': {'credits': 1}}
+    for i in range(7):
+        tools['web_search'].invoke({'query': 'company fact ' + str(i)})
+    for i in range(2):
+        tools['web_extract'].invoke({'urls': ['https://example.test/' + str(i)], 'terms': ['leave']})
+    assert len(calls) == 9 and r.credits == 9
+    tools['web_search'].invoke({'query': 'COMPANY  fact 0'})
+    tools['web_extract'].invoke({'urls': ['https://example.test/0'], 'terms': ['leave']})
+    assert len(calls) == 9 and r.credits == 9
+    a.tavily = lambda endpoint,payload: calls.append((endpoint,payload)) or {'failed_results': [{'url':u,'error':'403'} for u in payload['urls']]}
+    for _ in range(2):
+        tools['web_extract'].invoke({'urls': ['https://blocked.test'], 'terms': ['leave']})
+    assert len(calls) == 10 and r.credits == 10
+    r.credits = a.CREDIT_BUDGET - 1
+    response = json.loads(tools['web_extract'].invoke({'urls': ['https://a.test', 'https://b.test'], 'terms': []}))
+    assert not response['dispatched'] and len(calls) == 10
+    r.started -= a.DISPATCH_SECONDS
+    try:
+        r.provider('search', {'query':'x'}, 1)
+    except a.BudgetStop:
+        pass
+    else:
+        raise AssertionError('expired deadline dispatched')
+    assert len(calls) == 10
+    (r.output / 'answer.txt').write_text(json.dumps({'facts': [None, {'dimension':'wrong','claim':'x'},
+       {'dimension':'culture','claim':'20 days','source_id':sid,'start':start,'end':start+35}]}))
+    evidence = r.facts()
+    assert len(evidence['facts']) == 1 and len(evidence['rejected_unanchored_facts']) == 2
+    (r.output / 'answer.txt').write_text('[]')
+    assert r.facts()['facts'] == []
+print('adaptive research checks passed')
