@@ -122,13 +122,35 @@ Company reuse is tested through a separate isolated entrypoint:
 .venv/bin/python -B scripts/experiments/adaptive-research.py --company-input PUBLIC_COMPANY_SCOPES.json --output NEW_COMPANY_RESEARCH_DIR
 ```
 
-Bundles declare verified company identities, dated company/culture/compensation
-profiles with exact applicability scopes, and jobs that explicitly reference
-those identities/scopes. Company requests contain no JD; job requests evaluate
-direction, plus compensation only for an explicit job quotation. Missing or
-expired scopes remain pending. Identical requests reuse the persistent isolated
-store; changed evidence, scopes or rubric produce new versions. Each run directory
-is immutable. `--company-input` accepts public identity, scopes and seed URLs;
+The input has `companies` and `jobs`. Each company declares `company_id`, `name`,
+`identity_url`, `scopes` (dimension/scope pairs), `seed_urls` and `valid_until`;
+jobs declare their public posting and exact company/scope references. No prepared
+profiles or manual factual summaries are required. `--check` validates this public
+input without running research or scoring. A live run collects missing company
+scopes through the existing adaptive researcher, then uses a separate JSON-mode
+LLM node to organize retained public source material. Summary-stage reasoning
+is fixed to `low` (collection keeps its configured effort). Usable JSON, declared
+company/profile scope and factual-field structure are checked before programs build
+Jev profiles. Summaries retain source URLs or IDs for review alongside frozen original
+responses and bodies; text equality, offsets and hash integrity are not acceptance gates.
+Invalid summaries remain pending. A later CLI attempt can retry summary generation from
+retained material, with one bounded summary stage per scope group and no fallback scoring.
+
+Company research and summaries share a 150K token resource allowance: collection
+uses at most 100K, with 50K reserved for summaries; collection dispatch stops at
+570 seconds, preserving time for summaries within the overall 900-second CLI hard
+deadline. The tokenizer estimate is conservative, not an exact provider guarantee.
+Full provider-returned bodies, raw messages, summary responses and usage remain in
+the isolated store. Valid exact scopes reuse archived summaries and ratings, including
+for new jobs. New scopes collect only missing ranges; expiry or `--refresh` triggers
+collection. Scoring rubric changes reevaluate Jev only; summary-rule changes reuse
+frozen sources for a new LLM summary. Old archives and failed summaries remain visible.
+No effective per-scope validity can be silently extended by changing an input date.
+
+Company Jev requests contain no JD; job requests evaluate direction, plus compensation
+only for an explicit job quotation. Every rating retains its original request/response
+and summary provenance. Unknown scopes remain pending. Each output directory is new.
+`--company-input` is a standalone public collection check accepting identity, scopes and seed URLs;
 it researches one company across the requested scopes without a job or candidate
 payload or personal salary thresholds. Only the public research checklist is sent
 to research providers; the scoring rubric remains in the authorized Jev scoring

@@ -80,11 +80,13 @@ class BudgetStop(RuntimeError):
 
 class Research:
     """Keep one research unit's calls, full provider bodies and conservative resource accounting."""
-    def __init__(self, output: Path):
+    def __init__(self, output: Path, token_budget=TOKEN_BUDGET, dispatch_seconds=DISPATCH_SECONDS, started=None):
         self.output = output
         output.mkdir(parents=True, exist_ok=False)
         (output / 'bodies').mkdir()
-        self.started = time.monotonic()
+        self.started = time.monotonic() if started is None else started
+        self.token_budget = token_budget
+        self.dispatch_seconds = dispatch_seconds
         self.tokens = 0
         self.credits = 0
         self.reported_credits = 0
@@ -98,15 +100,15 @@ class Research:
 
     def checkpoint(self):
         save(self.output / 'ledger.json', {'elapsed_seconds': time.monotonic() - self.started,
-             'token_budget': TOKEN_BUDGET, 'tokens_accounted': self.tokens,
+             'token_budget': self.token_budget, 'tokens_accounted': self.tokens,
              'token_reservation_encoder': 'cl100k_base with 20% margin; proxy not exact provider tokenizer',
              'credit_budget': CREDIT_BUDGET, 'credits_reserved_conservative': self.credits,
              'credits_reported': self.reported_credits, 'dollar_cost': None,
-             'time_budget_seconds': context.ATTEMPT_SECONDS, 'dispatch_deadline_seconds': DISPATCH_SECONDS,
+             'time_budget_seconds': context.ATTEMPT_SECONDS, 'dispatch_deadline_seconds': self.dispatch_seconds,
              'calls': self.calls, 'sources': list(self.sources.values()), 'stop': self.stop})
 
     def time_check(self, allowance=0):
-        if time.monotonic() - self.started + allowance >= DISPATCH_SECONDS:
+        if time.monotonic() - self.started + allowance >= self.dispatch_seconds:
             self.stop = 'time_budget_exhausted'
             self.checkpoint()
             raise BudgetStop(self.stop)
@@ -254,7 +256,7 @@ class Research:
         self.messages = [SystemMessage(SYSTEM), HumanMessage(prompt)]
 
         def node(state):
-            token = llm.DEADLINE.set(self.started + DISPATCH_SECONDS)
+            token = llm.DEADLINE.set(self.started + self.dispatch_seconds)
             try:
                 while True:
                     self.time_check()
@@ -265,7 +267,7 @@ class Research:
                         encoded += json.dumps([{'name':t.name, 'description':t.description,
                                   'schema':t.args_schema.model_json_schema()} for t in tools], ensure_ascii=False)
                         input_reservation = math.ceil(len(self.encoder.encode(encoded, disallowed_special=())) * 1.2)
-                        output_allowance = min(llm.MAX_OUTPUT_TOKENS, TOKEN_BUDGET - self.tokens - input_reservation)
+                        output_allowance = min(llm.MAX_OUTPUT_TOKENS, self.token_budget - self.tokens - input_reservation)
                         if output_allowance < 2048:
                             self.stop = 'token_budget_exhausted'
                             self.checkpoint()
