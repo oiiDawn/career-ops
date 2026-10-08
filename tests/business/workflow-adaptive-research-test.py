@@ -49,6 +49,14 @@ with tempfile.TemporaryDirectory() as temp:
        {'dimension':'culture','claim':'20 days','source_id':sid,'start':start,'end':start+35}]}))
     evidence = r.facts()
     assert len(evidence['facts']) == 1 and len(evidence['rejected_unanchored_facts']) == 2
+    r.messages = [a.ToolMessage(content=json.dumps(read),tool_call_id='read-test')]
+    handed = r.retrieved_evidence()
+    assert handed['retrieved_sources'][0]['sections'][0]['text'] == body[start:start+35]
+    assert handed['research_status'] == 'partial'
     (r.output / 'answer.txt').write_text('[]')
     assert r.facts()['facts'] == []
+    r.stop = 'model_finished'
+    assert r.retrieved_evidence()['research_status'] == 'partial'
+    (r.output / 'answer.txt').write_text('{"facts":[],"gaps":"unknown"}')
+    assert r.retrieved_evidence()['research_status'] == 'completed'
 print('adaptive research checks passed')

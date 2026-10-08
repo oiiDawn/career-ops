@@ -259,7 +259,19 @@ class Research:
                         bound = model.bind_tools(tools, tool_choice='none') if self.stop else model.bind_tools(tools)
                         return bound.bind(max_tokens=output_allowance)
                     started = time.monotonic()
-                    answer = llm.invoke(prepare, self.messages, 'isolated-adaptive-research')
+                    try:
+                        answer = llm.invoke(prepare, self.messages, 'isolated-adaptive-research')
+                    except Exception as error:
+                        completion = getattr(error, 'completion', None)
+                        if completion is not None and reservations:
+                            event = reservations[-1]
+                            raw = completion.model_dump()
+                            save(self.output / f'model-failure-{event["index"]}.json', raw)
+                            usage = raw.get('usage') or {}
+                            event.update(status='failed_response', error_type=type(error).__name__, usage=usage)
+                            if isinstance(usage.get('total_tokens'), int):
+                                self.tokens += usage['total_tokens'] - event['tokens_reserved']
+                        raise
                     usage = answer.usage_metadata or {}
                     event = reservations[-1]
                     event.update(status='returned', seconds=time.monotonic()-started, usage=usage)
@@ -273,7 +285,8 @@ class Research:
                     self.checkpoint()
                     if not answer.tool_calls:
                         (self.output / 'answer.txt').write_text(answer.text)
-                        self.stop = self.stop or 'model_finished'
+                        self.stop = self.stop or ('partial_output_length_exhausted'
+                            if answer.response_metadata.get('finish_reason') == 'length' else 'model_finished')
                         return {}
                     for call in answer.tool_calls:
                         result = by_name[call['name']].invoke(call['args'])
@@ -294,6 +307,48 @@ class Research:
             self.stop = self.stop or ('failed_' + type(error).__name__)
             save(self.output / 'failure.json', {'error_type': type(error).__name__, 'stop': self.stop})
         self.checkpoint()
+
+    def retrieved_evidence(self):
+        """Hand off actual tool-returned/read ranges; model claims are optional and separately reviewable."""
+        ranges = {sid: set() for sid in self.sources}
+        for message in self.messages:
+            if not isinstance(message, ToolMessage):
+                continue
+            try:
+                result = json.loads(message.content)
+            except (ValueError, TypeError):
+                continue
+            if not isinstance(result, dict):
+                continue
+            records = result.get('results', [])
+            if 'source' in result:
+                records = [result]
+            for item in records:
+                if not isinstance(item, dict):
+                    continue
+                sid = item.get('source', {}).get('source_id')
+                if sid not in ranges:
+                    continue
+                body = (self.output / self.sources[sid]['body_file']).read_text()
+                for section in item.get('sections', [item]):
+                    start, end = section.get('start'), section.get('end')
+                    if (type(start) is int and type(end) is int and 0 <= start < end <= len(body)
+                            and section.get('text') == body[start:end]):
+                        ranges[sid].add((start, end))
+        sources = []
+        for sid, pairs in ranges.items():
+            source = self.sources[sid]
+            body = (self.output / source['body_file']).read_text()
+            # A containing actual read already carries nested repeated passages.
+            unique = [(s,e) for s,e in sorted(pairs) if not any(
+                      a <= s and e <= b and (a,b) != (s,e) for a,b in pairs)]
+            sources.append({**source, 'full_body_local_path': str((self.output / source['body_file']).resolve()),
+                            'sections': [{'start':s, 'end':e, 'text':body[s:e]} for s,e in unique]})
+        answer = self.facts()
+        return {**answer, 'research_status': 'completed' if self.stop == 'model_finished'
+                and answer.get('final_answer_valid') else 'partial',
+                'execution_stop': self.stop, 'retrieved_sources': sources,
+                'claim_semantics_verified': False}
 
     def facts(self):
         """Accept only claims with an actual retrieved source and a valid exact-body range."""
@@ -325,7 +380,7 @@ class Research:
                                  'text': body[start:end]})
             else:
                 rejected.append(fact)
-        return {**answer, 'facts': accepted, 'rejected_unanchored_facts': rejected}
+        return {**answer, 'facts': accepted, 'rejected_unanchored_facts': rejected, 'final_answer_valid': True}
 
 
 def main():
@@ -359,12 +414,15 @@ def main():
     signal.alarm(context.ATTEMPT_SECONDS)
     research.run(prompt)
     signal.alarm(0)
-    evidence = research.facts()
+    evidence = research.retrieved_evidence()
     save(args.output / 'evidence.json', evidence)
     enriched = deepcopy(case)
     enriched['id'] = args.job + '-adaptive'
     enriched['variant'] = 'adaptive_public_research'
-    enriched['evidence']['additional_research'] = evidence
+    enriched['evidence']['additional_research'] = deepcopy(evidence)
+    for source in enriched['evidence']['additional_research']['retrieved_sources']:
+        for local in ('full_body_local_path', 'body_file'):
+            source.pop(local, None)
     save(args.output / 'paired-cases.json', [case, enriched])
     print(json.dumps({'job': args.job, 'stop': research.stop, 'sources': len(research.sources),
                       'anchored_facts': len(evidence['facts']), 'seconds': time.monotonic()-research.started}), flush=True)
