@@ -68,7 +68,7 @@ credentials is [{name,mandatory:boolean,status:"present|absent|unknown",evidence
 Credentials contain degrees, certifications and licenses only. Put every experience-duration requirement in years, never again in credentials.
 Years required=0 only if the JD states no minimum. Missing verified years must stay null, not guessed.
 Absence of proof for the full requested tenure does NOT mean zero years. Count supported relevant periods; otherwise return null.
-Prescreen: a >=3-year proven shortfall or >=2 genuinely missing core mandatory capabilities fails; adjacent/unverified does not.
+Prescreen: a proven shortfall of more than 1 year or >=2 genuinely missing core mandatory capabilities fails; adjacent/unverified does not.
 Apply actual location/employment/size/payroll/compensation requirements from profile and targeting; salary absent is unknown.
 Quote the exact source evidence for liveness; closed signals take precedence over generic Apply text.
 This is a compact gate check, not the report: keep each reason/evidence under 100 Chinese characters.

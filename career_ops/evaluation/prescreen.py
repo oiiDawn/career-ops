@@ -39,7 +39,7 @@ def evaluate(value: dict) -> dict:
         unknowns.append(reason("years_unverified", "years", "Relevant tenure requires confirmation", years.get("evidence")))
     else:
         gap = years["required"] - years["verified"]
-        if gap >= 3:
+        if gap > 1:
             failures.append(reason("years_gap_terminal", "years", f"Verified experience is {gap:g} years below the stated minimum", years.get("evidence")))
         elif gap > 0:
             unknowns.append(reason("years_gap_borderline", "years", f"Verified experience is {gap:g} years below the stated minimum", years.get("evidence")))
