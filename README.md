@@ -53,7 +53,8 @@ profile material.
 
 See [operations](docs/operations.md) for command domains and data boundaries.
 The OII-333 migration acceptance evidence formerly under `docs/history/` is kept
-at the `docs-history-archive` tag (`git checkout docs-history-archive -- docs/history`).
+at the `docs-history-archive` tag. Shallow or `--no-tags` clones must fetch it first:
+`git fetch --depth 1 origin tag docs-history-archive && git checkout docs-history-archive -- docs/history`.
 
 ## License and attribution
 
