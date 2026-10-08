@@ -219,7 +219,7 @@ function dims(scores, dimensions = {}) {
   if (!scores) return '<span class="sub">—</span>';
   return `<span class="dims">${["direction", "company", "culture", "compensation"].map(k => {
     const v = scores[k];
-    return `<span class="dim ${v ? "s" + Math.floor(v) : ""}" title="${esc(k + ": " + JSON.stringify(dimensions[k] || {}))}">${v ?? "pending"}</span>`;
+    return `<span class="dim ${v ? "s" + Math.floor(v) : ""}" title="${esc(k + ": " + JSON.stringify(dimensions[k] || {}))}">${v == null ? "pending" : v.toFixed(2)}</span>`;
   }).join("")}</span>`;
 }
 

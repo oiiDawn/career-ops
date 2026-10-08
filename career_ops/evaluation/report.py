@@ -122,7 +122,7 @@ def render_report(packet: dict, evidence: dict, assessment: dict) -> dict:
         "company_research": research, "recommendation": "evidence_review",
     }
     table = "| 维度 | 分数 | Confidence | 充分性 | 状态 |\n|---|---|---|---|---|\n" + "\n".join(
-        f"| {name} | {score[name] if score[name] is not None else 'Unknown'} | "
+        f"| {name} | {format(score[name], '.2f') if score[name] is not None else 'Unknown'} | "
         f"{dimensions[name].get('confidence', '—')} | {dimensions[name].get('evidence_sufficiency', '—')} | "
         f"{dimensions[name].get('status', dimensions[name].get('evidence_status', 'pending'))} |"
         for name in DIMENSIONS

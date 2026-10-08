@@ -34,6 +34,8 @@ with tempfile.TemporaryDirectory(prefix="career-ops-report-") as temporary:
     }
     rendered = render_report(packet, evidence, assessment)
     assert rendered["scores"]["culture"] == raw["score"]
+    assert "| direction | 3.37 |" in rendered["report"]
+    assert "| direction | 3.3700000000000006 |" not in rendered["report"]
     machine = yaml.safe_load(rendered["report"].split("```yaml\n")[1].split("```")[0])
     assert machine["scoring_model"] == "attractiveness-v4" and machine["recommendation"] == "evidence_review"
     assert machine["dimensions"]["culture"] == raw
