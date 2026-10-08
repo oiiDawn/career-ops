@@ -5,9 +5,9 @@ from pathlib import Path
 import tempfile
 
 root = Path(__file__).resolve().parents[2]
-spec = importlib.util.spec_from_file_location('adaptive', root / 'scripts/experiments/adaptive-research.py')
-a = importlib.util.module_from_spec(spec)
-spec.loader.exec_module(a)
+import sys
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+from career_ops.evaluation import adaptive_research as a
 public_company = {'company_id':'sample', 'name':'Sample', 'identity_url':'https://example.test',
                   'scopes':[{'dimension':'compensation', 'scope':{'region':'China','level':'SDE2'}}],
                   'seed_urls':['https://example.test/pay']}
@@ -58,18 +58,12 @@ with tempfile.TemporaryDirectory() as temp:
     else:
         raise AssertionError('expired deadline dispatched')
     assert len(calls) == 10
-    (r.output / 'answer.txt').write_text(json.dumps({'facts': [None, {'dimension':'wrong','claim':'x'},
-       {'dimension':'culture','claim':'20 days','source_id':sid,'start':start,'end':start+35}]}))
-    evidence = r.facts()
-    assert len(evidence['facts']) == 1 and len(evidence['rejected_unanchored_facts']) == 2
-    r.messages = [a.ToolMessage(content=json.dumps(read),tool_call_id='read-test')]
+    r.messages = [a.ToolMessage(content=json.dumps(read), tool_call_id='read-test')]
     handed = r.retrieved_evidence()
     assert handed['retrieved_sources'][0]['sections'][0]['text'] == body[start:start+35]
     assert handed['research_status'] == 'partial'
-    (r.output / 'answer.txt').write_text('[]')
-    assert r.facts()['facts'] == []
     r.stop = 'model_finished'
-    assert r.retrieved_evidence()['research_status'] == 'partial'
-    (r.output / 'answer.txt').write_text('{"facts":[],"gaps":"unknown"}')
+    (r.output / 'answer.txt').write_text('{"sources":[],"gaps":["unknown"]}')
+    assert r.retrieved_evidence()['overview']['gaps'] == ['unknown']
     assert r.retrieved_evidence()['research_status'] == 'completed'
 print('adaptive research checks passed')

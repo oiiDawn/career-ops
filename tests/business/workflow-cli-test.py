@@ -30,12 +30,14 @@ with tempfile.TemporaryDirectory(prefix="career-ops-cli-") as temporary:
     (inputs / "modes").mkdir()
     (inputs / "cv.md").write_text("Verified candidate facts v1")
     (inputs / "profile.yml").write_text(
-        "language:\n  output: zh-CN\nattractiveness:\n  model: attractiveness-v3\n"
+        "language:\n  output: zh-CN\nattractiveness:\n  model: attractiveness-v4\n"
     )
     (inputs / "targeting.md").write_text("Verified targeting")
     (inputs.parent / "rules").mkdir(parents=True, exist_ok=True)
     (inputs.parent / "rules" / "scoring.md").write_text("Current evaluation rules")
     runner = str(ROOT / 'tests' / 'fixtures' / 'workflow-model-runner.py')
+    (inputs.parent / "rules/evaluation").mkdir(exist_ok=True)
+    (inputs.parent / "rules/evaluation/four-dimension.md").write_text((ROOT / "rules/evaluation/four-dimension.md").read_text())
     model_env = {"CAREER_OPS_MODEL_STUB": runner, "CAREER_OPS_INPUT_ROOT": str(inputs)}
 
     def report(opportunity: str, jd: str = "Build and review agent workflows.", status: str = "pass") -> Path:
@@ -127,9 +129,9 @@ with tempfile.TemporaryDirectory(prefix="career-ops-cli-") as temporary:
 
     scores = run(directory, "list", "--view", "scores", env=model_env)
     assert {item["opportunity_id"] for item in scores if item["valid"]} == {"job-1", "job-2", "job-real", "job-uncertain"}
-    assert all(set(item) == {"opportunity_id", "scores", "valid", "stale_reason"} for item in scores)
+    assert all(set(item) == {"opportunity_id", "scores", "valid", "stale_reason", "scoring_model", "dimensions", "company_profiles", "company_research"} for item in scores)
     decisions = run(directory, "list", "--view", "decisions", env=model_env)
-    assert {item["opportunity_id"] for item in decisions["decisions"] if item["action"] == "focus"} == {
+    assert {item["opportunity_id"] for item in decisions["decisions"] if item["action"] == "evidence_review"} == {
         "job-1", "job-2", "job-real", "job-uncertain"
     }
     assert decisions["stale"] == []

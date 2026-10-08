@@ -121,7 +121,8 @@ class Runtime:
         """Run one model-backed module graph in process while enforcing the module budget."""
         task = self.store.task(state["task_id"])
         calls_before = task["attempt_tool_calls"]
-        if calls_before >= ATTEMPT_CALLS:
+        call_limit = None if phase == "evaluate" else ATTEMPT_CALLS
+        if call_limit is not None and calls_before >= call_limit:
             raise TimeoutError("tool_budget_exhausted")
         remaining = ATTEMPT_SECONDS - task["attempt_elapsed_seconds"] - (time.monotonic() - self.started_at)
         if remaining <= 0:
@@ -135,7 +136,7 @@ class Runtime:
             "evaluate": lambda: run_score(payload["inputs"], draft_root, ROOT),
         }
         deadline_token = DEADLINE.set(deadline)
-        usage_token = USAGE.set((str(self.store.path), state["task_id"], ATTEMPT_CALLS))
+        usage_token = USAGE.set((str(self.store.path), state["task_id"], call_limit))
         try:
             value = stub(phase, payload) if stub else phases[phase]()
         except Exception as error:
@@ -143,7 +144,7 @@ class Runtime:
             self.started_at = time.monotonic()
             if time.monotonic() >= deadline:
                 raise TimeoutError("time_budget_exhausted") from error
-            if task["attempt_tool_calls"] >= ATTEMPT_CALLS:
+            if call_limit is not None and task["attempt_tool_calls"] >= call_limit:
                 raise TimeoutError("tool_budget_exhausted") from error
             raise
         finally:
@@ -163,7 +164,7 @@ class Runtime:
         calls = reported_calls if stub and not durable_calls else 0
         task = self.store.add_usage(state["task_id"], time.monotonic() - self.started_at, calls)
         self.started_at = time.monotonic()
-        if task["attempt_tool_calls"] >= ATTEMPT_CALLS:
+        if call_limit is not None and task["attempt_tool_calls"] >= call_limit:
             raise TimeoutError("tool_budget_exhausted")
         value["tool_calls"] = task["tool_calls"]
         return value

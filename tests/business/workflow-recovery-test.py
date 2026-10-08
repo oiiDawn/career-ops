@@ -41,6 +41,8 @@ with tempfile.TemporaryDirectory(prefix="career-ops-recovery-") as temporary:
     (inputs.parent / "rules").mkdir(parents=True, exist_ok=True)
     (inputs.parent / "rules" / "scoring.md").write_text("Rules")
     runner = str(ROOT / 'tests' / 'fixtures' / 'workflow-model-runner.py')
+    (inputs.parent / "rules/evaluation").mkdir(exist_ok=True)
+    (inputs.parent / "rules/evaluation/four-dimension.md").write_text((ROOT / "rules/evaluation/four-dimension.md").read_text())
     model_env = {"CAREER_OPS_MODEL_STUB": runner, "CAREER_OPS_INPUT_ROOT": str(inputs)}
 
     def report(opportunity: str) -> Path:

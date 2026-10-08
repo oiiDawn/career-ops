@@ -65,10 +65,6 @@ def _score_current(score_result: dict | None, scan: dict | None) -> bool | None:
         return False
 
 
-def _summary_score(score: dict | None) -> float | None:
-    known = [value for value in (score or {}).values() if isinstance(value, int)]
-    return round(sum(known) / len(known), 2) if known else None
-
 
 def _action(score: dict | None, scan: dict | None) -> str | None:
     prescreen = (scan or {}).get("artifact", {}).get("prescreen")
@@ -101,6 +97,7 @@ def list_jobs(db: sqlite3.Connection) -> list[dict]:
         scan_artifact = (scan or {}).get("artifact", {})
         score = (score_result or {}).get("artifact", {}).get("score")
         evaluation = evaluations.get(key, {})
+        artifact = (score_result or {}).get("artifact", {})
         application = lifecycle.get(key)
         jobs.append({
             "id": row["id"], "url": row["url"], "company": row["company"], "role": row["role"],
@@ -113,8 +110,11 @@ def list_jobs(db: sqlite3.Connection) -> list[dict]:
             "prescreen": (scan_artifact.get("prescreen") or {}).get("status"),
             "eligibility": eligibility.get(key),
             "scores": score if isinstance(score, dict) else None,
-            "score": _summary_score(score) if valid_scores(score) else evaluation.get("upper_score"),
-            "action": _action(score, scan),
+            "scoring_model": artifact.get("scoring_model", "attractiveness-v3") if score else None,
+            "dimensions": artifact.get("dimensions", {}),
+            "company_profiles": artifact.get("company_profiles", {}),
+            "company_research": artifact.get("company_research", {}),
+            "action": _action(score, scan) if _score_current(score_result, scan) else None,
             "score_current": _score_current(score_result, scan),
             "scored_at": evaluation.get("created_at"),
             "application_status": application["status"] if application else None,

@@ -7,9 +7,9 @@ from pathlib import Path
 import tempfile
 
 ROOT = Path(__file__).resolve().parents[2]
-spec = importlib.util.spec_from_file_location('company_score', ROOT / 'scripts/experiments/company-score.py')
-c = importlib.util.module_from_spec(spec)
-spec.loader.exec_module(c)
+import sys
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+from career_ops.evaluation import company_pipeline as c
 scope = {'company': {'region': 'global'}, 'culture': {'region': 'China'},
          'compensation': {'region': 'Shanghai', 'level': 'SDE2', 'role_family': 'software_engineering',
                           'currency': 'CNY', 'basis': 'annual_total'}}

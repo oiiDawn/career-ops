@@ -6,7 +6,7 @@ from __future__ import annotations
 import hashlib
 import json
 from pathlib import Path
-from career_ops.context import RULES_ROOT, INPUT_ROOT, SCAN_POLICY_VERSION, SCORE_POLICY_VERSION
+from career_ops.context import RULES_ROOT, INPUT_ROOT, SCAN_POLICY_VERSION, SCORE_POLICY_VERSION, company_valid_until
 
 
 def digest(value: str) -> str:
@@ -29,6 +29,8 @@ def score_inputs(report: dict) -> str:
         raise ValueError("JD report prescreen status is invalid")
     inputs = {
         "score_policy_version": SCORE_POLICY_VERSION,
+        "rubric": (RULES_ROOT / "evaluation/four-dimension.md").read_text(),
+        "company_valid_until": company_valid_until(),
         "jd_report": report,
         "cv": (INPUT_ROOT / "cv.md").read_text(),
         "profile": (INPUT_ROOT / "profile.yml").read_text(),

@@ -4,7 +4,7 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
-from career_ops.evaluation.decisions import classify, order
+from career_ops.evaluation.decisions import classify, order, valid_scores, worth_attention
 
 
 score = {"direction": 4, "compensation": 4, "company": None}
@@ -34,3 +34,10 @@ for invalid in ("2026-02-30", "2026-9-30"):
         raise AssertionError("invalid deadline accepted")
 
 print("workflow decisions: action policy and ordering passed")
+
+v4 = {"direction": 4.96, "company": 4.02, "culture": 3.40, "compensation": None}
+assert valid_scores(v4) and not worth_attention(v4)
+assert classify(v4, {"status": "pass"}) == "evidence_review"
+assert classify({k: 5.0 for k in v4}, {"status": "pass"}) == "evidence_review"
+assert classify(v4, {"status": "fail"}) == "discard"
+assert not valid_scores({**v4, "culture": float("nan")})

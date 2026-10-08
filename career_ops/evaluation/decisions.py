@@ -6,18 +6,20 @@ import math
 from datetime import date
 
 
-ORDER = {"focus": 0, "deprioritize": 1, "discard": 2}
+ORDER = {"evidence_review": 0, "focus": 1, "deprioritize": 2, "discard": 3}
 
 
 def valid_scores(score: dict) -> bool:
-    return isinstance(score, dict) and set(score) == {"direction", "compensation", "company"} and all(
-        value is None or type(value) is int and 1 <= value <= 5 for value in score.values()
+    return isinstance(score, dict) and set(score) in ({"direction", "compensation", "company"}, {"direction", "compensation", "company", "culture"}) and all(
+        value is None or type(value) in (int, float) and math.isfinite(value) and 1 <= value <= 5 for value in score.values()
     )
 
 
 def worth_attention(score: dict) -> bool:
     if not valid_scores(score):
         raise ValueError("invalid dimension scores")
+    if "culture" in score:
+        return False
     known = [value for value in score.values() if value is not None]
     return len(known) >= 2 and all(value >= 4 for value in known)
 
@@ -29,6 +31,8 @@ def classify(score: dict, prescreen: dict) -> str:
         raise ValueError("complete prescreen decision required")
     if prescreen["status"] == "fail":
         return "discard"
+    if "culture" in score:
+        return "evidence_review"
     return "focus" if attention else "deprioritize"
 
 

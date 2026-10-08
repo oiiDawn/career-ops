@@ -127,12 +127,11 @@ details summary { cursor: pointer; font-weight: 600; }
 
 <section class="filters">
   <input type="search" id="q" placeholder="搜索公司 / 职位 / 地点 / ID">
-  <label>决策 <select id="fAction"><option value="">全部</option><option value="focus">focus</option>
+  <label>决策 <select id="fAction"><option value="">全部</option><option value="evidence_review">证据待审阅</option><option value="focus">focus</option>
     <option value="deprioritize">deprioritize</option><option value="discard">discard</option><option value="none">未打分</option><option value="stale">分数过期</option></select></label>
   <label>状态 <select id="fState"></select></label>
   <label>来源 <select id="fSource"></select></label>
   <label>存活 <select id="fLiveness"></select></label>
-  <label>最低分 <input type="number" id="fMin" min="0" max="5" step="0.5" style="width:70px"></label>
   <label><input type="checkbox" id="fMaterials"> 仅有材料</label>
   <button class="ghost" id="reset">重置</button>
 </section>
@@ -169,8 +168,7 @@ const COLUMNS = [
   { key: "id", label: "ID", num: true },
   { key: "company", label: "公司 / 职位" },
   { key: "location", label: "地点", cls: "hide-sm" },
-  { key: "score", label: "分数", num: true },
-  { key: "dims", label: "方向·薪酬·公司", sortValue: j => j.scores ? (j.scores.direction ?? 0) : -1 },
+  { key: "dims", label: "方向·公司·文化·薪酬", sortValue: j => j.scores ? (j.scores.direction ?? 0) : -1 },
   { key: "action", label: "决策" },
   { key: "state", label: "状态" },
   { key: "application_status", label: "投递" },
@@ -195,7 +193,7 @@ const POLL_MS = 3000;
 let state = loadState();
 
 function loadState() {
-  const fallback = { stage: "all", sort: "id", dir: "desc", q: "", action: "", state: "", source: "", liveness: "", min: "", materials: false };
+  const fallback = { stage: "all", sort: "id", dir: "desc", q: "", action: "", state: "", source: "", liveness: "", materials: false };
   try { return { ...fallback, ...JSON.parse(localStorage.getItem(STORAGE_KEY) || "{}") }; }
   catch { return fallback; }
 }
@@ -217,11 +215,11 @@ function safeUrl(url) { return /^https?:\/\//i.test(url || "") ? url : "#"; }
 function jobLink(job, text = "↗") {
   return `<a class="ext" href="${esc(safeUrl(job.url))}" target="_blank" rel="noopener noreferrer" onclick="event.stopPropagation()" title="打开职位链接">${text}</a>`;
 }
-function dims(scores) {
+function dims(scores, dimensions = {}) {
   if (!scores) return '<span class="sub">—</span>';
-  return `<span class="dims">${["direction", "compensation", "company"].map(k => {
+  return `<span class="dims">${["direction", "company", "culture", "compensation"].map(k => {
     const v = scores[k];
-    return `<span class="dim ${v ? "s" + v : ""}" title="${k}">${v ?? "?"}</span>`;
+    return `<span class="dim ${v ? "s" + Math.floor(v) : ""}" title="${esc(k + ": " + JSON.stringify(dimensions[k] || {}))}">${v ?? "pending"}</span>`;
   }).join("")}</span>`;
 }
 
@@ -269,14 +267,12 @@ function inStage(job, stage) {
 
 function filtered() {
   const q = state.q.trim().toLowerCase();
-  const min = state.min === "" ? null : Number(state.min);
   return jobs.filter(j => inStage(j, state.stage)
     && (!q || [j.id, j.company, j.role, j.location, j.source].some(v => String(v ?? "").toLowerCase().includes(q)))
     && (!state.action || (state.action === "none" ? !j.scores : state.action === "stale" ? j.score_current === false : j.action === state.action))
     && (!state.state || j.state === state.state)
     && (!state.source || j.source === state.source)
     && (!state.liveness || j.liveness === state.liveness)
-    && (min === null || (j.score ?? -1) >= min)
     && (!state.materials || j.material_count > 0));
 }
 
@@ -308,16 +304,15 @@ function render() {
       <td class="num">${j.id}</td>
       <td><div class="role">${esc(j.role)}${jobLink(j)}</div><div class="sub">${esc(j.company)} · ${esc(j.source)}${j.material_count ? " · 📎 材料" : ""}${runs[j.id]?.status === "running" ? ` · ⏳ ${ACTION_TEXT[runs[j.id].action].running}` : ""}</div></td>
       <td class="hide-sm">${esc(j.location || "—")}</td>
-      <td class="num">${j.score ?? "—"}${j.score_current === false ? ' <span class="pill stale" title="简历、资料或打分规则已变更">过期</span>' : ""}</td>
-      <td>${dims(j.scores)}</td>
+      <td>${dims(j.scores, j.dimensions)}${j.score_current === false ? pill("stale") : ""}${j.scoring_model === "attractiveness-v3" ? pill("旧三维") : ""}</td>
       <td>${pill(j.action)}</td>
       <td>${pill(j.state)}</td>
       <td>${pill(j.application_status)}</td>
       <td class="num hide-sm">${shortDate(j.created_at)}</td>
       <td class="num hide-sm">${shortDate(j.scored_at)}</td>
     </tr>`).join("");
-  ["q", "fAction", "fMin"].forEach(id => {
-    const key = { q: "q", fAction: "action", fMin: "min" }[id];
+  ["q", "fAction"].forEach(id => {
+    const key = { q: "q", fAction: "action" }[id];
     if ($(id).value !== String(state[key])) $(id).value = state[key];
   });
   $("fMaterials").checked = state.materials;
@@ -374,7 +369,7 @@ function overview(d) {
     ["公司", esc(d.company)], ["来源", esc(d.source)], ["地点", esc(d.location || "—")],
     ["流程状态", pill(d.state)], ["存活", `${pill(d.liveness)} <span class="sub">${esc(artifact.liveness_reason || "")}</span>`],
     ["预筛", pill(d.prescreen)], ["资格", pill(d.eligibility)],
-    ["综合分", `${d.score ?? "—"} ${d.score_current === false ? pill("stale") + ' <span class="sub">打分后简历、资料或规则有变更</span>' : ""}`], ["维度分", dims(d.scores)], ["决策", pill(d.action)],
+    ["维度分", dims(d.scores, d.dimensions)], ["决策", pill(d.action)],
     ["发现时间", esc(d.created_at)], ["抓取时间", esc(d.captured_at || "—")], ["打分时间", esc(d.scored_at || "—")],
     ["投递状态", `${pill(d.application_status)} <span class="sub">${esc(d.application_updated_at || "")}</span>`],
   ];
@@ -560,9 +555,9 @@ document.addEventListener("click", event => {
 });
 const bind = (id, key, read = el => el.value) => $(id).addEventListener("input", e => { state[key] = read(e.target); render(); });
 bind("q", "q"); bind("fAction", "action"); bind("fState", "state"); bind("fSource", "source");
-bind("fLiveness", "liveness"); bind("fMin", "min"); bind("fMaterials", "materials", el => el.checked);
+bind("fLiveness", "liveness"); bind("fMaterials", "materials", el => el.checked);
 $("reset").addEventListener("click", () => {
-  state = { ...state, q: "", action: "", state: "", source: "", liveness: "", min: "", materials: false };
+  state = { ...state, q: "", action: "", state: "", source: "", liveness: "", materials: false };
   fillSelects(); render();
 });
 $("refresh").addEventListener("click", loadJobs);

@@ -7,10 +7,8 @@ import tempfile
 from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
-from langchain_core.language_models.fake_chat_models import GenericFakeChatModel
-from langchain_core.messages import AIMessage, ToolMessage
 
-from career_ops import llm, model as adapter
+from career_ops import model as adapter
 
 
 assert adapter.parse_object('Explanation\n```json\n{"ok":true}\n```') == {"ok": True}
@@ -20,57 +18,6 @@ with tempfile.TemporaryDirectory() as temporary:
     assert json.loads(path.read_text()) == {"ok": True}
     assert path.read_text().endswith("\n")
 
-research = {
-    "searched_at": "2026-09-20", "queries": ["q"],
-    "compensation": {}, "company": {},
-    "findings": [
-        {"id": "f1", "url": "https://example.com", "status": "retrieved", "quote": "exact source"},
-        {"id": "f2", "url": "https://other.com", "status": "search_only", "quote": "snippet"},
-    ],
-}
-messages = [ToolMessage(
-    json.dumps({"results": [{"url": "https://example.com", "content": "Exact\nsource"}]}),
-    name="web_extract", tool_call_id="extract-1",
-)]
-frozen = adapter.freeze_research(research, messages)
-assert frozen["sources"] == [{"id": "web1", "text": "Exact\nsource"}]
-assert frozen["research"]["findings"][1]["source"] is None
-assert frozen["research"]["findings"][1]["quote"] is None
-invalid_status = json.loads(json.dumps(frozen))
-invalid_status["research"]["findings"][1]["status"] = "unresolved"
-normalized = adapter.normalize_research(invalid_status)
-assert normalized["research"]["findings"][1]["status"] == "excluded"
-assert "unrecognized access status: unresolved" in normalized["research"]["findings"][1]["limitation"]
-assert invalid_status["research"]["findings"][1]["status"] == "unresolved"
-missing_url = json.loads(json.dumps(invalid_status))
-missing_url["research"]["findings"][1]["url"] = None
-assert [item["id"] for item in adapter.normalize_research(missing_url)["research"]["findings"]] == ["f1"]
-invalid_citable_url = json.loads(json.dumps(frozen))
-invalid_citable_url["research"]["findings"][0]["url"] = None
-assert adapter.normalize_research(invalid_citable_url)["research"]["findings"][0]["id"] == "f1"
-missing_limit = json.loads(json.dumps(frozen))
-missing_limit["research"]["findings"][0]["limitation"] = None
-assert adapter.normalize_research(missing_limit)["research"]["findings"][0]["limitation"] == "Source applicability remains unverified."
-invalid_query = json.loads(json.dumps(frozen))
-invalid_query["research"]["queries"] = ["pay", "company"]
-invalid_query["research"]["dimensions"] = {
-    name: {"queries": [index], "conclusion": "Original conclusion", "next_step": "Verify"}
-    for index, name in enumerate(("compensation", "company"))
-}
-invalid_query["research"]["dimensions"]["company"]["queries"] = [2]
-normalized_query = adapter.normalize_research(invalid_query)["research"]["dimensions"]["company"]
-assert normalized_query["queries"] == [1] and normalized_query["conclusion"].startswith("Unknown")
-assert invalid_query["research"]["dimensions"]["company"]["queries"] == [2]
-
-responses = iter(({key: value for key, value in research.items() if key != "findings"},
-                  {**research, "findings": []}))
-attempts = []
-with patch.object(adapter.llm, "research",
-                  lambda *_args: attempts.append(True) or (json.dumps(next(responses)), [])):
-    result, _ = adapter.call_agent("research", "research prompt", ["web"])
-assert len(attempts) == 2
-assert result["research"]["findings"] == []
-
 scan_attempts = []
 scan_responses = iter(({"jobs": []}, {"complete_jd": False, **dict.fromkeys((
     "company", "role", "liveness", "liveness_reason", "assessment_complete",
@@ -79,41 +26,9 @@ scan_responses = iter(({"jobs": []}, {"complete_jd": False, **dict.fromkeys((
 ))}))
 with patch.object(adapter.llm, "complete_json",
                   lambda *_args: scan_attempts.append(True) or json.dumps(next(scan_responses))):
-    result, _ = adapter.call_agent("prescreen_evidence", "scan prompt", [])
+    result, _ = adapter.call_agent("prescreen_evidence", "scan prompt")
 assert len(scan_attempts) == 2
 assert result["complete_jd"] is False
-
-usage = {}
-records = []
-tavily_calls = []
-search, extract = llm.research_tools(lambda: records.append(True), usage)
-with patch.object(llm, "tavily", lambda endpoint, payload: tavily_calls.append((endpoint, payload)) or {"results": []}):
-    for _ in range(5):
-        assert "error" not in json.loads(search.invoke({"query": "q"}))
-    assert "budget" in json.loads(search.invoke({"query": "q"}))["error"]
-    extract.invoke({"urls": ["a", "b", "c", "d"]})
-    assert "budget" in json.loads(extract.invoke({"urls": ["a"]}))["error"]
-assert usage == {"tool_calls": 6} and len(records) == 6
-assert tavily_calls[-1] == ("extract", {"urls": ["a", "b", "c"]})
-
-
-class ToolCallingFake(GenericFakeChatModel):
-    def bind_tools(self, tools, **_kwargs):
-        return self
-
-
-page = "Annual report: revenue grew 10 percent."
-final = {**research, "findings": [{"id": "f1", "url": "https://example.com", "status": "retrieved",
-                                   "quote": "revenue grew 10 percent"}]}
-fake = ToolCallingFake(messages=iter([
-    AIMessage("", tool_calls=[{"name": "web_extract", "args": {"urls": ["https://example.com"]}, "id": "call-1"}]),
-    AIMessage(json.dumps(final)),
-]))
-with patch.object(llm, "chat_model", lambda: fake), \
-        patch.object(llm, "tavily", lambda *_args: {"results": [{"url": "https://example.com", "raw_content": page}]}):
-    result, _ = adapter.call_agent("research", "research prompt", ["web"])
-assert result["sources"] == [{"id": "web1", "text": page}]
-assert result["research"]["findings"][0]["source"] == "web1"
 
 for years, expected in [(0, None), (None, None), (3, 3), (False, False)]:
     evidence = adapter.attach_evidence({
@@ -128,3 +43,26 @@ for years, expected in [(0, None), (None, None), (3, 3), (False, False)]:
     assert evidence["jd"] == "Original JD"
 
 print("workflow model adapter: parsing and evidence normalization passed")
+
+with tempfile.TemporaryDirectory() as temporary:
+    from career_ops.db import BusinessStore
+    store = BusinessStore(Path(temporary) / "usage.db")
+    task = store.start("job", "score", "inputs")
+    token = adapter.USAGE.set((str(store.path), task["task_id"], None))
+    try:
+        for _ in range(25):
+            adapter.record_call()
+        assert store.task(task["task_id"])["attempt_tool_calls"] == 25
+    finally:
+        adapter.USAGE.reset(token)
+    token = adapter.USAGE.set((str(store.path), task["task_id"], 25))
+    try:
+        try:
+            adapter.record_call()
+        except TimeoutError:
+            pass
+        else:
+            raise AssertionError("explicit scan/apply call limit ignored")
+    finally:
+        adapter.USAGE.reset(token)
+        store.close()

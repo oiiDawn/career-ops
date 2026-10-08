@@ -7,6 +7,7 @@ import sqlite3
 import uuid
 from pathlib import Path
 from career_ops.evaluation.decisions import classify as classify_decision, order as order_decisions, valid_scores
+from career_ops.evaluation.report import dimension_scores
 from career_ops.context import WORKFLOW_VERSION
 from career_ops.input_contracts import canonical_scan_input, digest, score_inputs, verify_package_files
 from career_ops.task_state import WorkflowState
@@ -74,6 +75,25 @@ class BusinessStore:
             );
             CREATE UNIQUE INDEX IF NOT EXISTS one_result_per_input
               ON results(opportunity_id,module,input_hash);
+            CREATE TABLE IF NOT EXISTS company_ratings (
+              scoring_request_sha256 TEXT NOT NULL,
+              profile_id TEXT NOT NULL,
+              company_id TEXT NOT NULL,
+              dimension TEXT NOT NULL CHECK(dimension IN ('company','culture','compensation')),
+              scope_json TEXT NOT NULL,
+              payload_json TEXT NOT NULL,
+              valid_until TEXT NOT NULL,
+              PRIMARY KEY(scoring_request_sha256,profile_id)
+            );
+            CREATE TABLE IF NOT EXISTS job_company_profiles (
+              result_key TEXT NOT NULL REFERENCES results(result_key),
+              dimension TEXT NOT NULL CHECK(dimension IN ('company','culture','compensation')),
+              company_id TEXT,
+              profile_id TEXT,
+              scoring_request_sha256 TEXT,
+              payload_json TEXT NOT NULL,
+              PRIMARY KEY(result_key,dimension)
+            );
             CREATE TABLE IF NOT EXISTS events (
               id INTEGER PRIMARY KEY,
               task_id TEXT NOT NULL REFERENCES tasks(task_id),
@@ -423,6 +443,17 @@ class BusinessStore:
         )
         return self.task(task_id)
 
+    @staticmethod
+    def retain_company_ratings(connection: sqlite3.Connection, ratings: list[dict]) -> None:
+        """Persist completed company dimensions independently, or within an existing publication transaction."""
+        for rating in ratings:
+            connection.execute(
+                "INSERT INTO company_ratings(scoring_request_sha256,profile_id,company_id,dimension,scope_json,payload_json,valid_until) "
+                "VALUES(?,?,?,?,?,?,?) ON CONFLICT(scoring_request_sha256,profile_id) DO NOTHING",
+                (rating["scoring_request_sha256"], rating["profile_id"], rating["company_id"], rating["dimension"],
+                 json.dumps(rating["scope"], sort_keys=True), json.dumps(rating, ensure_ascii=False), rating["valid_until"]),
+            )
+
     def publish(self, state: WorkflowState) -> dict:
         task = self.task(state["task_id"])
         if task["status"] != "running":
@@ -456,6 +487,11 @@ class BusinessStore:
                 or not valid_scores(score)
             ):
                 raise ValueError("Score artifact or report hash is invalid")
+            if artifact.get("scoring_model") == "attractiveness-v4":
+                if dimension_scores(artifact.get("dimensions")) != score:
+                    raise ValueError("Raw dimensions disagree with saved scores")
+                if artifact.get("recommendation") != "evidence_review":
+                    raise ValueError("Four-dimension recommendation requires evidence review")
         if state["outcome"] == "exclude" and (
             artifact.get("type") != "exclusion" or not artifact.get("reason") or not artifact.get("evidence")
         ):
@@ -483,6 +519,15 @@ class BusinessStore:
                     json.dumps(payload, sort_keys=True),
                 ),
             )
+            if task["module"] == "score" and state["outcome"] == "score":
+                self.retain_company_ratings(self.db, artifact.get("company_ratings", []))
+                for dimension, reference in artifact.get("company_profiles", {}).items():
+                    self.db.execute(
+                        "INSERT INTO job_company_profiles(result_key,dimension,company_id,profile_id,scoring_request_sha256,payload_json) "
+                        "VALUES(?,?,?,?,?,?) ON CONFLICT(result_key,dimension) DO NOTHING",
+                        (state["task_id"], dimension, reference.get("company_id"), reference.get("profile_id"),
+                         reference.get("request_sha256"), json.dumps(reference, ensure_ascii=False)),
+                    )
             self.db.execute(
                 "UPDATE tasks SET status='completed',waiting_reason=NULL WHERE task_id=?",
                 (state["task_id"],),
@@ -592,6 +637,10 @@ class BusinessStore:
             if valid_scores(score) or isinstance(score, dict) and set(score) == {"lower", "upper", "coverage"}:
                 values.append({
                     "opportunity_id": opportunity_id, "scores": score if valid_scores(score) else None,
+                    "scoring_model": artifact.get("scoring_model", "attractiveness-v3"),
+                    "dimensions": artifact.get("dimensions", {}),
+                    "company_profiles": artifact.get("company_profiles", {}),
+                    "company_research": artifact.get("company_research", {}),
                     "valid": valid and valid_scores(score),
                     "stale_reason": reason if valid_scores(score) else "candidate_or_policy_inputs_changed",
                 })

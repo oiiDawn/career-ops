@@ -53,7 +53,7 @@ with tempfile.TemporaryDirectory() as temporary:
     (package / "upskill.md").write_text("# Upskill\n\nLearn **evals**.")
     (package / "interview-prep.md").write_text("# Prep")
     (directory / "secret.md").write_text("not referenced")
-    score = {"direction": 5, "compensation": None, "company": 4}
+    score = {"direction": 4.96, "compensation": None, "company": 4.02, "culture": None}
     prescreen = {"status": "pass"}
     database = directory / "opportunities.db"
     db = sqlite3.connect(database)
@@ -89,7 +89,7 @@ with tempfile.TemporaryDirectory() as temporary:
         scan = {"outcome": "jd_report", "input_hash": "h", "artifact": jd_report(opportunity)}
         db.execute("INSERT INTO results VALUES(?,?,?,?,?,?)", (f"scan-{opportunity}", f"scan-{opportunity}", opportunity, "scan", "h", json.dumps(scan)))
     for opportunity, input_hash in score_hashes.items():
-        scored = {"outcome": "score", "input_hash": input_hash, "artifact": {"report": "## A. 岗位概览\n\nGood fit", "score": score}}
+        scored = {"outcome": "score", "input_hash": input_hash, "artifact": {"report": "## A. 岗位概览\n\nGood fit", "score": score, "scoring_model": "attractiveness-v4", "dimensions": {"culture": {"score": None, "status": "pending"}}}}
         db.execute("INSERT INTO results VALUES(?,?,?,?,?,?)", (f"score-{opportunity}", f"score-{opportunity}", opportunity, "score", input_hash, json.dumps(scored)))
     db.execute("INSERT INTO tasks VALUES('apply-3','3','apply','waiting','h',1,'user_review','v','{}')")
     db.execute("INSERT INTO drafts VALUES('apply-3',1,'h','p',?)", (json.dumps({"files": {
@@ -107,7 +107,9 @@ with tempfile.TemporaryDirectory() as temporary:
         assert "<title>Career Ops Dashboard</title>" in fetch(base, "/")
         jobs = {job["id"]: job for job in fetch(base, "/api/jobs")}
         assert [jobs[i]["stage"] for i in (1, 2, 3)] == ["scanned", "scored", "applied"]
-        assert jobs[2]["score"] == 4.5 and jobs[2]["action"] == "focus" and jobs[1]["score"] is None
+        assert "score" not in jobs[2] and jobs[2]["action"] == "evidence_review" and "score" not in jobs[1]
+        assert jobs[2]["dimensions"]["culture"]["status"] == "pending"
+        assert jobs[2]["scores"]["direction"] == 4.96 and jobs[3]["action"] is None
         assert jobs[3]["application_status"] == "applied" and jobs[3]["material_count"] == 1
         assert jobs[3]["url"] == "https://example.com/3" and jobs[1]["location"] == "Shanghai"
         assert [jobs[i]["score_current"] for i in (1, 2, 3)] == [None, True, False]

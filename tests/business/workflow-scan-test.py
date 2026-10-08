@@ -207,7 +207,7 @@ with tempfile.TemporaryDirectory(prefix="career-ops-cron-") as temporary:
     assert database.execute("SELECT state FROM opportunities WHERE id=1").fetchone()[0] == "evaluated"
     assert database.execute("SELECT count(*) FROM evaluations WHERE opportunity_id=1").fetchone()[0] == 1
     assert json.loads(database.execute("SELECT dimension_scores FROM evaluations WHERE opportunity_id=1").fetchone()[0]) == {
-        "direction": 4, "compensation": 4, "company": None,
+        "direction": 4.37, "compensation": 4.12, "company": None, "culture": None,
     }
     assert database.execute("SELECT count(*) FROM artifacts WHERE opportunity_id=1 AND kind='report'").fetchone()[0] == 1
     assert database.execute("SELECT count(*) FROM checkpoints WHERE opportunity_id=1 AND phase='publish'").fetchone()[0] == 1

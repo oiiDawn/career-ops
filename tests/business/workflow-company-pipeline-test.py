@@ -9,9 +9,8 @@ import sys
 import tempfile
 
 ROOT = Path(__file__).resolve().parents[2]
-spec = importlib.util.spec_from_file_location('pipeline', ROOT/'scripts/experiments/company-score.py')
-c = importlib.util.module_from_spec(spec)
-spec.loader.exec_module(c)
+sys.path.insert(0, str(ROOT))
+from career_ops.evaluation import company_pipeline as c
 a = c.research_adapter()
 c.research_adapter = lambda: a
 from langchain_core.messages import AIMessage

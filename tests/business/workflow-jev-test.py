@@ -10,9 +10,9 @@ from urllib.error import HTTPError
 
 
 ROOT = Path(__file__).resolve().parents[2]
-spec = importlib.util.spec_from_file_location("jev_score", ROOT / "scripts/experiments/jev-score.py")
-jev = importlib.util.module_from_spec(spec)
-spec.loader.exec_module(jev)
+import sys
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+from career_ops.evaluation import jev as jev
 request = jev.request_for({"posting": {"jd": "A retained job"}}, jev.RUBRIC.read_text())
 assert len(request["questions"]) == 8
 assert all(len(request["questions"][d]["criteria"]) == 5 for d in jev.DIMENSIONS)

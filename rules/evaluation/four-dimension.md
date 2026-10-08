@@ -1,11 +1,10 @@
-# 四维 Jev 评分标准 — attractiveness-v4-experiment
+# 四维 Jev 评分标准 — attractiveness-v4
 
-这是 OII-397 已确认标准的唯一可执行实验口径。`scripts/experiments/jev-score.py`
-直接读取本文的四维锚点及独立充分性问题。当前用于隔离实验，尚未切换正式评分、
-报告、数据库、Dashboard 或定时任务；充分性阈值等待真实样本审阅。
+这是 OII-397 已确认标准的正式评分口径。`career_ops/evaluation/score_graph.py`
+通过三维公司 agent 与 Jev 评分入口执行本文锚点；报告、数据库与 Dashboard 保留四维原始结果。
+历史评分不改写。独立充分性阈值仍待确认，正式结果进入 `evidence_review`，不自动推荐或通知。
 
-标准依据为 [OII-397](https://linear.app/oii-workspace/issue/OII-397)，2026-10-08
-09:10:50.932 UTC 版本及其后用户授权。旧三维生产规则和历史报告保持原口径。
+标准依据为 [OII-397](https://linear.app/oii-workspace/issue/OII-397) 及用户后续确认。
 
 ## 共同口径
 
@@ -21,18 +20,20 @@
 
 `direction` 按岗位评价。`company`、`culture`、`compensation` 的公开研究及基准评价按公司维护，
 由岗位引用适用的公司档案版本；不因同公司新增岗位而重复研究或重新生成同范围的公司评分。
-隔离入口为 `scripts/experiments/company-score.py`，公司研究入口为
-`scripts/experiments/adaptive-research.py --company-input ...`；正式流程尚未切换。
+正式入口为 `.venv/bin/python -B -m career_ops task start score ID scan:ID --re-evaluate`；
+`career_ops/evaluation/company_pipeline.py` 维护公司档案，实验 CLI 复用同一实现。
 
-完整隔离入口接收公开公司实体、适用范围、来源线索及显式有效期，company/culture/compensation 三个独立 agent 并行完成各自采集及
+正式流程先由公共 JD 范围规划节点声明公司实体和适用范围，再由公司入口接收公开实体、来源线索及有效期，company/culture/compensation 三个独立 agent 并行完成各自采集及
 各自 LLM JSON 摘要、结构校验，摘要完成即各自调用一个 Jev 评分请求并持久保存，不要求人工先填事实或 profiles。
-每个 agent 独立 200K token（采集 150K、所有摘要共预留 50K）、20 保守 credits，多个薪酬范围共用一个
+每个 agent 独立 200K token（采集最多 150K、为所有摘要至少预留 50K，未用采集额度转入摘要）、20 保守 credits，多个薪酬范围共用一个
 compensation agent；没有公司共享总 token 限额。主流程只合并程序 profiles，无跨维度 LLM 摘要。
 研究与摘要仅使用公开资料，不发个人薪资标准、CV 或岗位 JD；私人评分标准仅发给已授权的 Jev。
 摘要保留日期、来源 URL 或 ID、金额拆分、适用范围、制度承诺与执行的区分、冲突及缺口。
 程序检查 JSON 和声明的公司/profile 范围，不以正文逐字一致、offset 或 hash 完整性作验收门槛；
 摘要正确性通过保留的来源与原始模型产物进行低成本审阅。模型事实不能因来自摘要而视为已验证。
-无效 JSON 不评分；后续新 attempt 可从保留材料重试摘要，同一 attempt 不无限重试或替代评分。
+材料较大时按 token 分批摘要，再由同维度 agent 合并；每次输出含推理受模型上限（当前 32768 tokens）及剩余额度共同约束、low reasoning。
+分批、合并及最多一次 JSON／长度修复共用剩余额度，瞬时重试逐次记账，未知用量按预留量保守计费。
+仍无效的 JSON 不评分；后续 attempt 可复用保留材料重试，不用人工或 LLM 替代 Jev 评分。
 当前同范围档案有效时不再采集或摘要；新增范围只补缺失范围，过期或显式刷新才重采。
 摘要整理规则变化可复用冻结来源重新摘要；评分标准变化仅重评 Jev，旧档案和原始响应均保留。
 
@@ -47,7 +48,9 @@ compensation agent；没有公司共享总 token 限额。主流程只合并程�
 
 新公司、未覆盖的地区或职级、已过期的资料及实质新证据需要补查或更新公司档案。输入证据、
 适用范围或标准变化后生成新版本，旧版本及当时岗位引用保留；相同输入复用已有结果。
-本轮实验档案以显式有效截止日期防止过期复用，不据此制定正式刷新周期或充分性阈值。
+正式档案有效期截止本周日，最长七天；该有效期同时进入正式输入指纹，跨周旧评分标为过期。
+实验入口仍接收显式截止日期。档案与原始来源留在 data/company-profiles，正式公司评分和岗位引用由
+SQLite 同事务保存。充分性阈值不由程序擅自设定。
 
 ## direction：工作内容与职业方向
 

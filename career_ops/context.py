@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
+from datetime import date, timedelta
 from dotenv import load_dotenv
 
 
@@ -33,7 +34,7 @@ WORKFLOW_VERSION = "oii-333-v1"
 
 SCAN_POLICY_VERSION = 2
 
-SCORE_POLICY_VERSION = 3
+SCORE_POLICY_VERSION = 5
 
 ATTEMPT_SECONDS = 900
 
@@ -43,3 +44,9 @@ ATTEMPT_CALLS = 20
 def load_project_environment(root: Path) -> None:
     """Load project settings while preserving explicit inherited environment values."""
     load_dotenv(root / ".env", override=False)
+
+
+def company_valid_until() -> str:
+    """Expire shared evidence by Sunday, at most seven days, and bind formal inputs to that same window."""
+    today = date.today()
+    return (today + timedelta(days=6-today.weekday())).isoformat()

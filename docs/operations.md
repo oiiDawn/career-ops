@@ -116,6 +116,23 @@ evaluation, notifications, the business store or scheduling.
 
 Company reuse is tested through a separate isolated entrypoint:
 
+Formal scoring uses the same `career_ops/evaluation/company_pipeline.py`, `adaptive_research.py`
+and `jev.py` modules. Run `.venv/bin/python -B -m career_ops task start score ID scan:ID --re-evaluate`
+to score a retained active JD through the complete pipeline. A public-only planning node declares exact employer,
+region and grade scopes; absent grade remains unknown. Three agents gather and summarize independently,
+then each calls Jev as soon as its summary is ready. Only direction is evaluated per job.
+Formal source/response archives live in `data/company-profiles`; SQLite persists reusable company ratings and
+per-result job references in the publication transaction. Archives expire by Sunday (at most seven days),
+and that same window is part of input validity. Existing results remain historical.
+Reports and Dashboard preserve four raw fractional scores, confidence and independent sufficiency.
+Until a sufficiency threshold is reviewed, formal decisions remain `evidence_review` and do not trigger notifications.
+Score research has no shared 20-call ceiling; each agent retains its own 200K tokens and 20 Tavily credits.
+Large inputs are batched and summarized by their own dimension agent, then merged; low reasoning and an
+configured model output ceiling (currently 32768) include reasoning tokens. All batches, merges and at most one JSON/length repair share
+the remaining allowance. Parent task deadlines remain binding.
+
+The following isolated CLI uses the same implementation with an experiment-only store:
+
 ```bash
 .venv/bin/python -B scripts/experiments/company-score.py --input COMPANY_JOB_BUNDLE.json --store data/experiments/company-profiles --output NEW_RUN_DIR --check
 .venv/bin/python -B scripts/experiments/company-score.py --input COMPANY_JOB_BUNDLE.json --store data/experiments/company-profiles --output NEW_RUN_DIR
