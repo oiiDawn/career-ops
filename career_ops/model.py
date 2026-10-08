@@ -68,7 +68,7 @@ credentials is [{name,mandatory:boolean,status:"present|absent|unknown",evidence
 Credentials contain degrees, certifications and licenses only. Put every experience-duration requirement in years, never again in credentials.
 Years required=0 only if the JD states no minimum. Missing verified years must stay null, not guessed.
 Absence of proof for the full requested tenure does NOT mean zero years. Count supported relevant periods; otherwise return null.
-Prescreen: a >=3-year proven shortfall or >=2 genuinely missing core mandatory capabilities fails; adjacent/unverified does not.
+Prescreen: a proven shortfall of more than 1 year or >=2 genuinely missing core mandatory capabilities fails; adjacent/unverified does not.
 Apply actual location/employment/size/payroll/compensation requirements from profile and targeting; salary absent is unknown.
 Quote the exact source evidence for liveness; closed signals take precedence over generic Apply text.
 This is a compact gate check, not the report: keep each reason/evidence under 100 Chinese characters.
@@ -235,14 +235,14 @@ def call_agent(phase, prompt, tools, usage=None):
             if attempt == 0:
                 continue
             raise ValueError(f'{phase} response is incomplete')
-        if phase == 'scan_evidence' and not all(key in value for key in (
+        if phase == 'prescreen_evidence' and not all(key in value for key in (
             'company', 'role', 'complete_jd', 'liveness', 'liveness_reason',
             'assessment_complete', 'location', 'employment', 'compensation',
             'company_size', 'years', 'core_capabilities', 'credentials'
         )):
             if attempt == 0:
                 continue
-            raise ValueError('scan_evidence response is incomplete')
+            raise ValueError('prescreen_evidence response is incomplete')
         if phase == 'research' and not all(key in value for key in (
             'searched_at', 'queries', 'findings', 'compensation', 'company'
         )):

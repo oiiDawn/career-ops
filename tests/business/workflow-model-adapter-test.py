@@ -79,7 +79,7 @@ scan_responses = iter(({"jobs": []}, {"complete_jd": False, **dict.fromkeys((
 ))}))
 with patch.object(adapter.llm, "complete_json",
                   lambda *_args: scan_attempts.append(True) or json.dumps(next(scan_responses))):
-    result, _ = adapter.call_agent("scan_evidence", "scan prompt", [])
+    result, _ = adapter.call_agent("prescreen_evidence", "scan prompt", [])
 assert len(scan_attempts) == 2
 assert result["complete_jd"] is False
 

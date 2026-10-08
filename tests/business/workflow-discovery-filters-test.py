@@ -13,6 +13,14 @@ from career_ops.discovery.filters import (classify_tier, content_match, country_
                                         salary_match, title_match, visa_match)
 
 
+portals = yaml.safe_load((ROOT / 'inputs/portals.yml').read_text())
+for title in ('Applied AI Engineer, Vice President', 'SVP, AI Platform', 'Director, Agentic AI Platform, China',
+              'Associate Director, Software Engineering', 'Principal AI Engineer', 'Senior/Staff AI Engineer',
+              'Head of Developer Experience & AI Engineering'):
+    assert not title_match(title, portals['title_filter'])[0], title
+for title in ('Agentic AI Engineer, AVP', 'Senior AI Engineer', 'Lead Software Engineer'):
+    assert title_match(title, portals['title_filter'])[0], title
+
 title_filter = {"positive": ["vp", "word:intern", "director + engineering", "C++"],
                 "negative": ["word:internship", "coo"]}
 assert title_match("VP, Engineering", title_filter) == (True, ["vp"])

@@ -77,6 +77,12 @@ score advances existing evaluation tasks and uses the previously authorized
 notification policy. Check `system doctor --json` and the offline suite before enabling
 changed wrappers. Neither doctor nor offline fixtures send candidate data.
 
+`evaluate ID` and `system advance` trace one opportunity as `job-evaluation`,
+with `prescreen` and `score` stages under the same root. A scheduled run continues
+from a completed prescreen into scoring; exclusions or waiting conditions stop it.
+The persisted task module `scan` identifies the prescreen stage and retains its
+existing checkpoint and evidence keys. Batch source collection is `discovery`.
+
 Model calls run inside the LangGraph nodes with settings from `.env`. When the
 Langfuse settings are present, every top-level graph run becomes one trace in the
 local Langfuse (`~/dev/langfuse`, http://localhost:3001) with full node inputs,

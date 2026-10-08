@@ -130,11 +130,11 @@ def run_score(inputs: dict, draft_root: Path, root: Path) -> dict:
         jd = state["inputs"]["jd_report"]
         research_inputs = {
             "url": jd["url"], "company": jd["company"], "role": jd["role"],
-            "jd": jd["jd"], "date": jd.get("captured_at", "unknown"), "prompt": model_adapter.RESEARCH,
+            "jd": jd["jd"], "date": jd.get("captured_at", "unknown"),
         }
         research_path = directory / "research-result.json"
         checkpoint_path = directory / "research-result.checkpoint.json"
-        research_key = hashlib.sha256(json.dumps(research_inputs, ensure_ascii=False, sort_keys=True).encode()).hexdigest()
+        research_key = hashlib.sha256(json.dumps({**research_inputs, "prompt": model_adapter.RESEARCH}, ensure_ascii=False, sort_keys=True).encode()).hexdigest()
         checkpoint = json.loads(checkpoint_path.read_text()) if checkpoint_path.exists() else {}
         if (research_path.exists() and checkpoint.get("input_hash") == research_key
                 and checkpoint.get("output_hash") == hashlib.sha256(research_path.read_bytes()).hexdigest()):
@@ -158,7 +158,7 @@ def run_score(inputs: dict, draft_root: Path, root: Path) -> dict:
         sources.update({f"writing{index}": content for index, content in enumerate(values.get("writing_samples", {}).values(), 1)})
         assessment_inputs = {
             "url": jd["url"], "sources": sources,
-            "evidence": jd, "research": research, "prompt": model_adapter.ASSESS,
+            "evidence": jd, "research": research,
         }
         assessment_path = directory / "assessment.json"
         if assessment_path.exists():

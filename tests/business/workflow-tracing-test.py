@@ -12,6 +12,8 @@ from langfuse.langchain import CallbackHandler
 from langgraph.graph import END, START, StateGraph
 
 from career_ops.tracing import traced
+from career_ops.tasks import evaluate_opportunity
+from langchain_core.runnables import RunnableLambda
 
 
 class State(TypedDict):
@@ -29,9 +31,11 @@ def graph(name, node):
 class Recorder(BaseCallbackHandler):
     def __init__(self):
         self.names = []
+        self.runs = []
 
     def on_chain_start(self, serialized, inputs, *, name=None, **kwargs):
         self.names.append(name)
+        self.runs.append((name, kwargs.get("run_id"), kwargs.get("parent_run_id")))
 
 
 SETTINGS = {"LANGFUSE_HOST": "http://127.0.0.1:9", "LANGFUSE_PUBLIC_KEY": "pk-lf-test",
@@ -67,6 +71,35 @@ with patch.dict(os.environ, SETTINGS):
     assert result == {"value": 2}
     assert nested_configs == [{"run_name": "score-graph"}]
     assert "score-graph" in recorder.names, recorder.names
+
+    recorder = Recorder()
+    def prescreen(*_args):
+        return RunnableLambda(lambda _: {"task_id": "pre"}).invoke({}, traced({}, "prescreen", "pre"))
+
+    def score(*_args):
+        return RunnableLambda(lambda _: {"task_id": "score"}).invoke({}, traced({}, "score", "score"))
+
+    def task_view(_directory, task_id):
+        return {"task_id": task_id, "status": "completed", "artifact": {"outcome": "jd_report" if task_id == "pre" else "score"}}
+
+    with patch("langfuse.langchain.CallbackHandler", return_value=recorder), \
+         patch("career_ops.tasks.scan_discovered", side_effect=prescreen), \
+         patch("career_ops.tasks.start_and_run", side_effect=score) as start, \
+         patch("career_ops.tasks.view", side_effect=task_view):
+        assert evaluate_opportunity(Path("unused"), "97")["task_id"] == "score"
+        start.assert_called_once_with(Path("unused"), "97", "score", "scan:97", None, False)
+    roots = [run for run in recorder.runs if run[2] is None]
+    assert len(roots) == 1 and roots[0][0] == "job-evaluation", recorder.runs
+    assert [run[0] for run in recorder.runs] == ["job-evaluation", "prescreen", "score"]
+    assert all(run[2] == roots[0][1] for run in recorder.runs[1:])
+
+    for status, outcome in (("waiting", None), ("completed", "exclude")):
+        with patch("career_ops.tasks.scan_discovered", return_value={"task_id": "pre"}), \
+             patch("career_ops.tasks.view", return_value={"status": status, "artifact": {"outcome": outcome}}), \
+             patch("career_ops.tasks.start_and_run") as start, \
+             patch("langfuse.langchain.CallbackHandler", return_value=Recorder()):
+            evaluate_opportunity(Path("unused"), "97")
+            start.assert_not_called()
 
     unreachable = graph("outer", inner_step).invoke({"value": 1}, traced({}, "score", "task-2"))
     assert unreachable == {"value": 2}

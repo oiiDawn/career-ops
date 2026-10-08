@@ -7,7 +7,7 @@ from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
-from career_ops.evaluation import scan_graph
+from career_ops.evaluation import prescreen, scan_graph
 
 
 def inputs(name: str) -> dict:
@@ -32,6 +32,19 @@ def extracted(*, liveness: str = "active", complete: bool = True, location: str 
         "years": {"required": 3, "verified": 3, "evidence": "CV"},
         "core_capabilities": [], "credentials": [],
     }
+
+
+def years_status(required: float) -> str:
+    gate = {"status": "pass", "reason": "pass", "evidence": "Official posting"}
+    return prescreen.evaluate({
+        "complete_jd": True, "assessment_complete": True,
+        "gates": {name: gate for name in ("location", "employment", "compensation", "company_size")},
+        "years": {"required": required, "verified": 3.3, "evidence": "CV"},
+        "core_capabilities": [], "credentials": [],
+    })["status"]
+
+
+assert [years_status(required) for required in (3, 4, 5)] == ["pass", "uncertain", "fail"]
 
 
 with tempfile.TemporaryDirectory(prefix="career-ops-scan-graph-") as temporary:

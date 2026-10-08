@@ -40,7 +40,7 @@ def run_scan(inputs: dict, draft_root: Path) -> dict:
             "targeting": values["targeting"],
             "rules": values["rules"],
         }, ensure_ascii=False)
-        extracted = model_adapter.call_agent("scan_evidence", prompt, [])[0]
+        extracted = model_adapter.call_agent("prescreen_evidence", prompt, [])[0]
         evidence = model_adapter.attach_evidence(extracted, {"text": source["jd"]})
         if evidence["liveness"] not in ("active", "expired"):
             return {"evidence": evidence, "waiting_reason": "source_access_unknown", "tool_calls": 1}
@@ -104,7 +104,7 @@ def run_scan(inputs: dict, draft_root: Path) -> dict:
     graph.add_conditional_edges("prescreen", lambda state: "wait" if state.get("waiting_reason") else state["outcome"],
                                 {"wait": END, "exclude": END, "jd_report": "report"})
     graph.add_edge("report", END)
-    config = traced({"configurable": {"thread_id": key}}, "scan-graph", key)
+    config = traced({"configurable": {"thread_id": key}}, "prescreen-graph", key)
     with SqliteSaver.from_conn_string(str(directory / "scan-checkpoints.db")) as saver:
         compiled = graph.compile(checkpointer=saver)
         checkpoint = compiled.get_state(config)
