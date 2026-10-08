@@ -24,7 +24,7 @@ from career_ops.insights.upskill import upskill_view
 from career_ops.context import INPUT_ROOT, ROOT
 from career_ops.interviews.context import load_context
 from career_ops.db import BusinessStore
-from career_ops.tasks import cancel_task, cron_score, list_views, resume_task, run_task, scan_discovered, start_and_run, view
+from career_ops.tasks import cancel_task, cron_score, evaluate_opportunity, list_views, resume_task, run_task, start_and_run, view
 
 
 def parser() -> argparse.ArgumentParser:
@@ -255,11 +255,7 @@ def main() -> None:
                                     vendors=tuple(vendor for vendor in requested if vendor != "workday"),
                                     include_workday="workday" in requested, write=args.write)
         elif args.operation == "evaluate":
-            started = scan_discovered(args.directory, args.opportunity, args.re_evaluate)
-            scanned = view(args.directory, started["task_id"])
-            if scanned["status"] == "completed" and scanned["artifact"]["outcome"] == "jd_report":
-                started = start_and_run(args.directory, args.opportunity, "score", f"scan:{args.opportunity}", None, args.re_evaluate)
-            result = view(args.directory, started["task_id"])
+            result = evaluate_opportunity(args.directory, args.opportunity, args.re_evaluate)
         elif args.operation == "prepare":
             started = start_and_run(args.directory, args.opportunity, "apply", f"score:{args.opportunity}", None, args.re_evaluate)
             result = view(args.directory, started["task_id"])

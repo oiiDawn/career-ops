@@ -18,7 +18,7 @@ RUNNER = str(ROOT / 'tests' / 'fixtures' / 'workflow-model-runner.py')
 sys.path.insert(0, str(ROOT))
 from career_ops.db import BusinessStore
 from career_ops.input_contracts import canonical_scan_input, score_inputs
-from career_ops.tasks import cron_score, scan_discovered
+from career_ops.tasks import cron_score, scan_discovered, view
 
 
 BUSINESS_RESULTS = """
@@ -193,7 +193,8 @@ with tempfile.TemporaryDirectory(prefix="career-ops-cron-") as temporary:
     database.executescript(BUSINESS_RESULTS)
     database.commit()
     database.close()
-    assert run(directory, "system", "advance")["task"]["status"] == "completed"
+    with patch.dict(os.environ, {"CAREER_OPS_MODEL_STUB": RUNNER}):
+        assert scan_discovered(directory, "1")["status"] == "completed"
     score_crash = subprocess.run(
         [str(PYTHON), str(ROOT / "tests/fixtures/workflow-cli.py"), "--directory", str(directory), "task", "start", "score", "1", "scan:1", "--crash-at", "publish"],
         text=True, capture_output=True, env={**os.environ, "CAREER_OPS_MODEL_STUB": RUNNER},
@@ -234,7 +235,7 @@ with tempfile.TemporaryDirectory(prefix="career-ops-cron-wait-") as temporary:
     assert run(directory, "system", "advance")["task"]["status"] == "waiting"
     advanced = run(directory, "system", "advance")
     assert advanced["opportunity_id"] == "2" and advanced["task"]["status"] == "completed"
-    assert run(directory, "system", "advance")["opportunity_id"] == "2"
+    assert run(directory, "system", "advance")["opportunity_id"] == "1"
     blocked_task = next(task for task in run(directory, "task", "list") if task["opportunity_id"] == "1")
     refreshed = {
         "status": "captured", "url": "https://example.com/jobs/blocked",
@@ -246,7 +247,7 @@ with tempfile.TemporaryDirectory(prefix="career-ops-cron-wait-") as temporary:
     with patch("career_ops.tasks.capture_jd", return_value=refreshed), patch.dict(os.environ, {"CAREER_OPS_MODEL_STUB": RUNNER}):
         recovered = cron_score(directory)
     assert recovered["opportunity_id"] == "1"
-    assert recovered["task"]["task_id"] == blocked_task["task_id"]
+    assert view(directory, blocked_task["task_id"])["status"] == "completed"
     assert recovered["task"]["status"] == "completed"
 
 with tempfile.TemporaryDirectory(prefix="career-ops-cron-fair-") as temporary:

@@ -17,6 +17,8 @@ from pathlib import Path
 from urllib.parse import parse_qs, urlsplit
 from langgraph.checkpoint.sqlite import SqliteSaver
 from langgraph.graph import END, START, StateGraph
+from langchain_core.runnables import RunnableLambda
+from uuid import uuid4
 from career_ops.discovery.configured import capture_jd
 from career_ops.applications.resume_renderer import render_resume
 from career_ops.applications.apply_graph import apply_evaluate as run_apply
@@ -361,7 +363,8 @@ def _run_task(
             store.wait(task_id, "workflow_version_incompatible")
             return {"task_id": task_id, "status": "waiting", "reason": "workflow_version_incompatible"}
         runtime = Runtime(store, directory, crash_at)
-        config = traced({"configurable": {"thread_id": f"{task_id}:{task['attempt']}"}}, task["module"], task_id)
+        name = "prescreen" if task["module"] == "scan" else task["module"]
+        config = traced({"configurable": {"thread_id": f"{task_id}:{task['attempt']}"}}, name, task_id)
         with SqliteSaver.from_conn_string(str(directory / "workflow-checkpoints.db")) as saver:
             graph = runtime.graph(saver)
             if start_state is None and task["status"] == "waiting" and (task["waiting_reason"] or "").startswith("failure:"):
@@ -571,8 +574,45 @@ def scan_discovered(directory: Path, opportunity_id: str, re_evaluate: bool = Fa
     return start_and_run(directory, opportunity_id, "scan", input_text, None, re_evaluate)
 
 
+def evaluate_opportunity(directory: Path, opportunity_id: str, re_evaluate: bool = False) -> dict:
+    """Trace one opportunity from JD capture and prescreen through published scoring."""
+    def evaluate(_):
+        started = scan_discovered(directory, opportunity_id, re_evaluate)
+        screened = view(directory, started["task_id"])
+        if screened["status"] == "completed" and screened["artifact"]["outcome"] == "jd_report":
+            started = start_and_run(directory, opportunity_id, "score", f"scan:{opportunity_id}", None, re_evaluate)
+        return view(directory, started["task_id"])
+
+    return RunnableLambda(evaluate).invoke(
+        {"opportunity_id": opportunity_id},
+        traced({}, "job-evaluation", f"opportunity:{opportunity_id}"),
+    )
+
+
 def cron_score(directory: Path) -> dict:
-    """Advance at most one discovered scanner record through scan and score."""
+    """Evaluate one scheduled opportunity, continuing a completed prescreen into score."""
+    def advance(_):
+        result = _advance_evaluation(directory)
+        task = result.get("task", {})
+        if task.get("status") != "completed" or not task.get("task_id"):
+            return result
+        store = BusinessStore(directory / "opportunities.db")
+        try:
+            completed = store.task(task["task_id"])
+            artifact = store.result(task["task_id"])
+            needs_score = completed["module"] == "scan" and artifact and artifact["outcome"] == "jd_report"
+        finally:
+            store.close()
+        if needs_score:
+            opportunity_id = result["opportunity_id"]
+            result["task"] = start_and_run(directory, opportunity_id, "score", f"scan:{opportunity_id}", None)
+        return result
+
+    return RunnableLambda(advance).invoke({}, traced({}, "job-evaluation", f"evaluation:{uuid4()}"))
+
+
+def _advance_evaluation(directory: Path) -> dict:
+    """Select one opportunity and resume its current durable evaluation stage."""
     store = BusinessStore(directory / "opportunities.db")
     stale_opportunity_id = None
     try:

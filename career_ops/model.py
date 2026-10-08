@@ -235,14 +235,14 @@ def call_agent(phase, prompt, tools, usage=None):
             if attempt == 0:
                 continue
             raise ValueError(f'{phase} response is incomplete')
-        if phase == 'scan_evidence' and not all(key in value for key in (
+        if phase == 'prescreen_evidence' and not all(key in value for key in (
             'company', 'role', 'complete_jd', 'liveness', 'liveness_reason',
             'assessment_complete', 'location', 'employment', 'compensation',
             'company_size', 'years', 'core_capabilities', 'credentials'
         )):
             if attempt == 0:
                 continue
-            raise ValueError('scan_evidence response is incomplete')
+            raise ValueError('prescreen_evidence response is incomplete')
         if phase == 'research' and not all(key in value for key in (
             'searched_at', 'queries', 'findings', 'compensation', 'company'
         )):
