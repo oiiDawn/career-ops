@@ -94,3 +94,22 @@ JD capture cache lives at `data/cache/scan-jds/` and is reused for at most 24 ho
 Retained source evidence belongs to the business store and referenced artifacts.
 Unreferenced acceptance output, expired captures and old tracker-import batches
 are removed without an archive.
+
+The isolated four-dimension Jev entrypoint reads
+`rules/evaluation/four-dimension.md` directly:
+
+```bash
+.venv/bin/python -B scripts/experiments/jev-score.py --input FROZEN_CASES.json --output NEW_EXPERIMENT_DIR --check
+.venv/bin/python -B scripts/experiments/jev-score.py --input FROZEN_CASES.json --output NEW_EXPERIMENT_DIR
+```
+
+Cases contain a safe unique `id`, `sample_type` (`real_retained` or
+`controlled_probe`), and frozen `evidence`; source selection and baseline
+metadata may be retained locally. The API receives only the rubric, evidence,
+and eight questions. Exclude generic-market compensation from the evidence
+before calling. `--check` freezes requests without network access. The live run
+uses the existing `.env` `TYPESAFE_API_KEY` and Jev 1.13.0 API protocol, keeps
+raw responses and failed attempts, and resumes only identical inputs. Results
+preserve decimal scores, original confidence and independent sufficiency;
+recommendation remains `threshold_pending`. This does not change production
+evaluation, notifications, the business store or scheduling.
