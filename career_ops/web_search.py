@@ -4,20 +4,31 @@ import json
 import os
 import sys
 from urllib.request import Request, urlopen
+from urllib.error import HTTPError
 
 
 def tavily(endpoint: str, payload: dict) -> dict:
-    """POST one Tavily API request; non-2xx responses raise with the response body."""
+    """POST to Tavily, retrying once with the backup key on exhausted credits."""
     key = os.environ.get("TAVILY_API_KEY")
     if not key:
         raise RuntimeError("TAVILY_API_KEY is not configured")
-    request = Request(
-        f"{os.environ.get('TAVILY_BASE_URL', 'https://api.tavily.com')}/{endpoint}",
-        data=json.dumps(payload).encode(),
-        headers={"Authorization": f"Bearer {key}", "Content-Type": "application/json"},
-    )
-    with urlopen(request, timeout=60) as response:
-        return json.load(response)
+    backup_key = os.environ.get("TAVILY_BACKUP_API_KEY")
+    keys = [key]
+    if backup_key and backup_key != key:
+        keys.append(backup_key)
+    for index, request_key in enumerate(keys):
+        request = Request(
+            f"{os.environ.get('TAVILY_BASE_URL', 'https://api.tavily.com')}/{endpoint}",
+            data=json.dumps(payload).encode(),
+            headers={"Authorization": f"Bearer {request_key}", "Content-Type": "application/json"},
+        )
+        try:
+            with urlopen(request, timeout=60) as response:
+                return json.load(response)
+        except HTTPError as error:
+            if error.code not in (432, 433) or index == len(keys) - 1:
+                raise
+            error.close()
 
 
 def main() -> None:
