@@ -8,6 +8,19 @@ root = Path(__file__).resolve().parents[2]
 spec = importlib.util.spec_from_file_location('adaptive', root / 'scripts/experiments/adaptive-research.py')
 a = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(a)
+public_company = {'company_id':'sample', 'name':'Sample', 'identity_url':'https://example.test',
+                  'scopes':[{'dimension':'compensation', 'scope':{'region':'China','level':'SDE2'}}],
+                  'seed_urls':['https://example.test/pay']}
+prompt = a.company_prompt(public_company)
+assert 'research_unit' in prompt and 'company' in prompt
+assert '350K' not in prompt and '720K' not in prompt and '候选' not in prompt
+public_company['scopes'][0]['scope']['personal_floor'] = 'private value'
+try:
+    a.company_prompt(public_company)
+except ValueError:
+    pass
+else:
+    raise AssertionError('Private preferences accepted in company research')
 with tempfile.TemporaryDirectory() as temp:
     r = a.Research(Path(temp) / 'run')
     body = 'Menu\n\n' + 'x' * 4500 + '\n\n## Paid leave\nAnnual leave 20 days\n\n' + 'z' * 22000

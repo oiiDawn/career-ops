@@ -130,4 +130,6 @@ expired scopes remain pending. Identical requests reuse the persistent isolated
 store; changed evidence, scopes or rubric produce new versions. Each run directory
 is immutable. `--company-input` accepts public identity, scopes and seed URLs;
 it researches one company across the requested scopes without a job or candidate
-payload. The validity dates are experiment inputs, not a production refresh policy.
+payload or personal salary thresholds. Only the public research checklist is sent
+to research providers; the scoring rubric remains in the authorized Jev scoring
+requests. The validity dates are experiment inputs, not a production refresh policy.
