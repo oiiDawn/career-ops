@@ -153,7 +153,10 @@ def run(company, postings, output):
         observation['output'] = {'profiles': answer['profiles'], 'research': metrics}
         if usage:
             observation['usage'] = {'prompt_tokens': sum(u.get('input_tokens', 0) for u in usage),
-                                    'completion_tokens': sum(u.get('output_tokens', 0) for u in usage)}
+                                    'completion_tokens': sum(u.get('output_tokens', 0) for u in usage),
+                                    'input_token_details': {
+                                        'cache_read': sum(u.get('cached_input_tokens', 0) for u in usage),
+                                        'cache_write': sum(u.get('cache_write_input_tokens', 0) for u in usage)}}
         return answer
 
 

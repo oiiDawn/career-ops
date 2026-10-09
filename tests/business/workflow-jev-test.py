@@ -37,7 +37,7 @@ assert len(request["questions"]) == 8
 assert all(len(request["questions"][d]["criteria"]) == 5 for d in jev.DIMENSIONS)
 assert "净工作时长" in request["questions"]["culture_evidence"]["instructions"]
 assert "base / bonus / equity" in request["questions"]["compensation_evidence"]["instructions"]
-response = {"model": jev.MODEL, "answers": {}}
+response = {"model": jev.MODEL, "answers": {}, "usage": {"input_tokens": 120, "output_tokens": 8}}
 for name, question in request["questions"].items():
     response["answers"][name] = ({"type": "noul", "noul": .12} if question["type"] == "noul" else
                                 {"type": "score", "score": 2.37, "confidence": .93,
@@ -85,7 +85,7 @@ with tempfile.TemporaryDirectory() as directory:
     assert evaluate.invoke({}, config) == result
     assert len(recorder.calls) == 3 and len(recorder.results) == 1
     assert json.loads(recorder.results[0].generations[0][0].text) == response
-    assert recorder.results[0].llm_output['token_usage'] == {}
+    assert recorder.results[0].llm_output['token_usage'] == {'prompt_tokens': 120, 'completion_tokens': 8}
     changed = deepcopy(request)
     changed["state"]["evidence"]["different"] = True
     try:

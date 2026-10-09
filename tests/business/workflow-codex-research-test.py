@@ -40,7 +40,7 @@ answer = {'profiles':[{'profile_id':c.scope_key('culture',{'region':'China'}), '
 with tempfile.TemporaryDirectory() as directory:
     root = Path(directory)
     fake = root/'cli.py'
-    fake.write_text('import json, pathlib, sys\np=pathlib.Path(sys.argv[1])\np.write_text(sys.argv[2])\nprint(json.dumps({"type":"turn.completed","usage":{"input_tokens":10,"output_tokens":5}}))\n')
+    fake.write_text('import json, pathlib, sys\np=pathlib.Path(sys.argv[1])\np.write_text(sys.argv[2])\nprint(json.dumps({"type":"turn.completed","usage":{"input_tokens":10,"cached_input_tokens":6,"cache_write_input_tokens":2,"output_tokens":5}}))\n')
     invalid = False
     timeout = False
     workdirs = []
@@ -68,7 +68,8 @@ with tempfile.TemporaryDirectory() as directory:
             {}, {'callbacks': [recorder], 'run_name': 'score'})
         assert result==answer and not workdirs[-1].exists()
         assert len(recorder.generations)==1 and recorder.generations[0]['parent_run_id'] is not None
-        assert recorder.responses[0].llm_output['token_usage']=={'prompt_tokens':10,'completion_tokens':5}
+        assert recorder.responses[0].llm_output['token_usage']=={'prompt_tokens':10,'completion_tokens':5,
+            'input_token_details': {'cache_read':6,'cache_write':2}}
         metrics=json.loads((root/'success/result.json').read_text())
         assert metrics['status']=='researched' and metrics['usage'][0]['output_tokens']==5
         assert json.loads((root/'success/facts.json').read_text())==answer

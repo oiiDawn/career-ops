@@ -129,10 +129,32 @@ attempt starts a new isolated Codex task; completed evidence and Jev ratings are
 
 Local Langfuse records the Codex task as one aggregate generation with its public prompt, final output
 and reported token usage. Each dispatched Jev HTTP attempt has its own generation with the request,
-validated response or error; Jev token usage is unavailable. These inherit the owning score graph's
+validated response or error, and provider-reported input/output token usage. Codex cache reads and
+writes are separate input categories; its multi-turn aggregate cannot establish per-request long-context
+pricing, so its cost is a Standard API equivalent estimate, not a subscription charge. These inherit the owning score graph's
 trace. Cached results create no model generation. The callback requires the explicit `langchain`
 dependency; `system doctor` checks its import as well as local server health. Codex's individual web
 tool calls remain in the retained CLI events rather than separate Langfuse observations.
+
+The local project's model prices were verified on 2026-10-09 (USD per million tokens):
+
+| Model | Uncached input | Cached input | Cache writes | Output, including reasoning |
+| --- | --- | --- | --- | --- |
+| `jev-1.13.0` | 0.042 | — | — | 0 |
+| `gpt-6-astra` Codex aggregate estimate | 10 | 1 | 12.50 | 50 |
+| `deepseek-v4.1-flash`, configured peak rates | 0.30 | 0.006 | — | 1.20 |
+
+Sources: [TypeSafe](https://docs.typesafe.ai/models),
+[OpenAI](https://developers.openai.com/api/docs/models/gpt-6-astra), and
+[DeepSeek](https://api-docs.deepseek.com/quick_start/pricing/).
+DeepSeek off-peak rates are half the configured peak rates; peak hours are weekdays
+01:00–04:00 and 06:00–10:00 UTC, excluding Chinese public holidays. The current model
+definition uses peak rates, so off-peak observations need a separate cost reconciliation.
+OpenAI's long-context premium is based on each request's input, not Codex's cumulative
+CLI total. The custom Codex aggregate definition uses Standard API prices only; it cannot
+infer long-context premiums, service-tier premiums, tool fees, or subscription billing.
+Langfuse v4 observations are immutable after ingestion. Historical corrections are attached
+as annotations and audit spans; they do not replace the original dashboard totals.
 
 Run `.venv/bin/python -B scripts/eval-company-research.py --output /tmp/company-research-eval`
 to exercise the actual macOS sandbox with synthetic files. Add `--live` to research Microsoft and

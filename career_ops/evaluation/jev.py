@@ -117,6 +117,10 @@ def call(name: str, request: dict, output: Path, key: str) -> dict:
                 response = json.loads(raw)
                 validate(request, response)
                 observation['output'] = response
+                usage = response.get('usage', {})
+                if usage:
+                    observation['usage'] = {'prompt_tokens': usage['input_tokens'],
+                                            'completion_tokens': usage['output_tokens']}
         except (HTTPError, URLError, TimeoutError, ValueError) as error:
             status = getattr(error, "code", None)
             if isinstance(error, HTTPError):
