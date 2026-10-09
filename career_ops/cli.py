@@ -135,7 +135,7 @@ def parser() -> argparse.ArgumentParser:
     for name in ("interview", "cv"):
         commands.add_parser(name, help="manage " + name + " preparation and confirmation", add_help=False).add_argument("arguments", nargs=argparse.REMAINDER)
 
-    dashboard = commands.add_parser("dashboard", help="serve a read-only local dashboard of jobs, scores and applications")
+    dashboard = commands.add_parser("dashboard", help="serve a local dashboard of jobs, scores and applications")
     dashboard.set_defaults(operation="dashboard")
     dashboard.add_argument("--host", default="127.0.0.1")
     dashboard.add_argument("--port", type=int, default=8765)

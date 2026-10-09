@@ -42,7 +42,7 @@ button.ghost { border: 1px solid var(--line); background: var(--panel); color: v
   border-radius: 6px; cursor: pointer; font: inherit; }
 button.ghost:hover { background: var(--hover); }
 .filters { display: flex; gap: 8px; padding: 12px 24px; flex-wrap: wrap; align-items: center; }
-.filters input, .filters select { font: inherit; color: var(--text); background: var(--panel); border: 1px solid var(--line);
+.filters input, .filters select, .record input, .record select { font: inherit; color: var(--text); background: var(--panel); border: 1px solid var(--line);
   border-radius: 6px; padding: 6px 8px; }
 .filters input[type=search] { width: 260px; }
 .filters label { color: var(--muted); font-size: 12px; display: flex; align-items: center; gap: 6px; }
@@ -113,6 +113,9 @@ details summary { cursor: pointer; font-weight: 600; }
 .material-nav { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 12px; }
 .material-nav button.active { background: var(--accent-soft); color: var(--accent); border-color: var(--accent); }
 .error { color: var(--discard); padding: 16px; }
+.record { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.record input[name=notes] { flex: 1; min-width: 160px; }
+.record .error { padding: 0; flex-basis: 100%; white-space: pre-wrap; }
 @media (max-width: 720px) {
   header, .filters, main { padding-left: 16px; padding-right: 16px; }
   .filters input[type=search] { width: 100%; }
@@ -566,7 +569,88 @@ function renderArtifact(value) {
 
 function jsonBlock(value) { return `<pre class="plain md"><code>${esc(JSON.stringify(value, null, 2))}</code></pre>`; }
 
+const STATUS_TEXT = {
+  responded: "对方已回复", interview_progress: "进入面试 / 新一轮面试", offer_received: "收到 offer", hired: "已入职",
+  offer_declined: "拒绝 offer", rejected: "被拒", no_response: "无回应，不再跟进", interview_only: "面试后无下文",
+};
+const URGENCY_TEXT = { urgent: "紧急", overdue: "已到跟进时间", waiting: "等待中", cold: "已冷却" };
+const VIA = ["官网", "Boss直聘", "LinkedIn", "内推", "邮件"];
+const today = () => new Date().toLocaleDateString("sv-SE");
+
+function recordForm(kind, label, fields) {
+  return `<div class="card"><h4>${label}</h4><form class="record" data-record="${kind}">
+    <input type="hidden" name="key" value="${crypto.randomUUID()}">${fields}
+    <input name="notes" placeholder="备注（可选）" maxlength="2000">
+    <button class="primary" type="submit">保存</button><div class="error" hidden></div></form></div>`;
+}
+const dateInput = (value = today(), max = today()) =>
+  `<input type="date" name="date" required value="${value}"${max ? ` max="${max}"` : ""}>`;
+const channelInput = name => `<input name="${name}" list="viaList" placeholder="渠道（可选）" maxlength="200">`;
+
+function followupSummary(d) {
+  if (d.followup === undefined) loadFollowup(d.id);
+  const f = d.followup;
+  if (f === undefined || f === "loading") return '<p class="sub">正在读取跟进节奏…</p>';
+  if (f?.error) return `<p class="error">读取跟进节奏失败：${esc(f.error)}</p>`;
+  if (!f) return '<p class="sub">该投递已结束或不在跟进中。</p>';
+  const next = f.nextFollowupDate ? `下次跟进 <strong>${esc(f.nextFollowupDate)}</strong>（${f.daysUntilNext >= 0 ? `${f.daysUntilNext} 天后` : `已过 ${-f.daysUntilNext} 天`}）` : "暂无下次跟进日期";
+  return `<p>${pill(f.urgency)} ${esc(URGENCY_TEXT[f.urgency] || f.urgency)} · ${next} · <span class="sub">上次跟进 ${esc(f.lastFollowupAt || "—")}</span></p>`;
+}
+
+function recordPanel(d) {
+  const datalist = `<datalist id="viaList">${VIA.map(v => `<option value="${v}">`).join("")}</datalist>`;
+  if (!d.application_status) {
+    const linked = d.confirmed_package ? `<span class="sub">将关联已确认材料包 ${esc(d.confirmed_package)}</span>` : "";
+    return datalist + recordForm("submit", `标记已投递 ${linked}`, dateInput() + channelInput("via"));
+  }
+  const options = d.status_options.map(v => `<option value="${v}">${esc(STATUS_TEXT[v] || v)}</option>`).join("");
+  return datalist + followupSummary(d)
+    + (options ? recordForm("status", "更新投递状态", `<select name="value" required>${options}</select>`) : "")
+    + recordForm("followup", "记录已发跟进", dateInput() + channelInput("channel"))
+    + recordForm("schedule", "设定下次跟进日期", dateInput("", ""));
+}
+
+async function loadFollowup(id) {
+  detail.followup = "loading";
+  let followup;
+  try {
+    const response = await fetch(`/api/jobs/${id}/followup`);
+    const body = await readJson(response);
+    if (!response.ok) throw new Error(body.error || response.statusText);
+    followup = body.followup;
+  } catch (error) {
+    followup = { error: error.message };
+  }
+  if (detail?.id === id) { detail.followup = followup; if (detail.tab === "timeline") renderDetail(); }
+}
+
+async function saveRecord(form) {
+  const error = form.querySelector(".error");
+  const button = form.querySelector("button");
+  const id = detail.id;
+  button.disabled = true;
+  error.hidden = true;
+  try {
+    const response = await fetch(`/api/jobs/${id}/record`, {
+      method: "POST", headers: { "X-Career-Ops": "dashboard", "Content-Type": "application/json" },
+      body: JSON.stringify({ kind: form.dataset.record, ...Object.fromEntries(new FormData(form)) }),
+    });
+    const body = await readJson(response);
+    if (!response.ok) throw new Error(body.error || response.statusText);
+    await loadJobs();
+    if (detail?.id === id) await openJob(id, "timeline");
+  } catch (e) {
+    error.textContent = "保存失败：" + e.message;
+    error.hidden = false;
+    button.disabled = false;
+  }
+}
+
 function timeline(d) {
+  return `${recordPanel(d)}<div class="section-title">历史记录</div>${timelineItems(d)}`;
+}
+
+function timelineItems(d) {
   const items = [
     ...d.application_events.map(e => ({ at: e.created_at, title: `${e.from_status || "—"} → ${e.to_status}`, tag: e.action, source: e.source, payload: e.payload })),
     ...d.application_activity.map(e => ({ at: e.created_at, title: e.type, tag: "activity", source: e.source, payload: e.payload })),
@@ -600,6 +684,12 @@ $("reset").addEventListener("click", () => {
 });
 $("refresh").addEventListener("click", loadJobs);
 $("close").addEventListener("click", closeJob);
+document.addEventListener("submit", event => {
+  const form = event.target.closest("form[data-record]");
+  if (!form) return;
+  event.preventDefault();
+  saveRecord(form);
+});
 document.addEventListener("keydown", e => { if (e.key === "Escape" && detail) closeJob(); });
 
 loadJobs().then(() => {

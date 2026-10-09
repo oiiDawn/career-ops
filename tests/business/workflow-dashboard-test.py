@@ -1,4 +1,4 @@
-"""Verify the read-only dashboard stages, materials and file boundary."""
+"""Verify dashboard stages, materials, file boundary and CLI-backed application records."""
 
 import hashlib
 import json
@@ -35,9 +35,10 @@ class StubRunner:
         return {key: {"action": action, "status": "running"} for key, action in self.started}
 
 
-def fetch(base: str, path: str, status: int = 200, method: str = "GET", headers: dict | None = None):
+def fetch(base: str, path: str, status: int = 200, method: str = "GET", headers: dict | None = None, body: dict | None = None):
+    data = json.dumps(body).encode() if body is not None else None
     try:
-        with urlopen(Request(base + path, method=method, headers=headers or {})) as response:
+        with urlopen(Request(base + path, data=data, method=method, headers=headers or {})) as response:
             assert response.status == status, (path, response.status)
             body = response.read()
             return json.loads(body) if "json" in response.headers["Content-Type"] else body.decode()
@@ -168,5 +169,36 @@ with tempfile.TemporaryDirectory() as temporary:
     assert "Current score is stale" in finished["error"], finished["error"]
     with sqlite3.connect(database) as check:
         assert check.execute("SELECT COUNT(*) FROM tasks WHERE opportunity_id='3' AND module='apply'").fetchone()[0] == 1
+
+    # Application records are written synchronously through the CLI with the page's idempotency key.
+    server = ThreadingHTTPServer(("127.0.0.1", 0), handler_for(database, StubRunner()))
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    base = f"http://127.0.0.1:{server.server_port}"
+    action = {"X-Career-Ops": "dashboard", "Content-Type": "application/json"}
+    record = "/api/jobs/2/record"
+    try:
+        assert fetch(base, "/api/jobs/2")["status_options"] == []
+        assert fetch(base, "/api/jobs/3")["status_options"][0] == "responded"
+        submit = {"kind": "submit", "key": "dashboard-key-1", "date": "2026-10-01", "via": "内推", "notes": "via friend"}
+        fetch(base, record, 403, "POST", {"Content-Type": "application/json"}, submit)
+        assert fetch(base, record, 200, "POST", action, submit)["result"]["status"] == "applied"
+        assert fetch(base, record, 200, "POST", action, submit)["result"]["reused"] is True
+        assert "submitted" in fetch(base, record, 409, "POST", action, {**submit, "key": "dashboard-key-2"})["error"]
+        assert "YYYY-MM-DD" in fetch(base, record, 409, "POST", action, {**submit, "key": "dashboard-key-3", "date": "soon"})["error"]
+        assert "不能记录" in fetch(base, record, 409, "POST", action, {"kind": "status", "key": "dashboard-key-4", "value": "hired"})["error"]
+        fetch(base, record, 200, "POST", action, {"kind": "status", "key": "dashboard-key-5", "value": "responded"})
+        fetch(base, record, 200, "POST", action, {"kind": "followup", "key": "dashboard-key-6", "date": "2026-10-05", "channel": "邮件"})
+        fetch(base, record, 200, "POST", action, {"kind": "schedule", "key": "dashboard-key-7", "date": "2099-01-01"})
+        followup = fetch(base, "/api/jobs/2/followup")["followup"]
+        assert followup["status"] == "responded" and followup["nextFollowupDate"] == "2099-01-01", followup
+        assert followup["lastFollowupAt"] == "2026-10-05" and followup["via"] == "内推", followup
+        detail = fetch(base, "/api/jobs/2")
+        assert detail["application_status"] == "responded" and "rejected" in detail["status_options"]
+        assert detail["application_events"][0]["payload"] == {"submitted_at": "2026-10-01", "via": "内推", "notes": "via friend"}
+        assert {event["source"] for event in detail["application_events"]} == {"dashboard"}
+        assert fetch(base, "/api/jobs/1/followup")["followup"] is None
+    finally:
+        server.shutdown()
+        server.server_close()
 
 print("workflow dashboard: ok")

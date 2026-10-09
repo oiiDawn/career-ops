@@ -13,7 +13,7 @@ import re
 import sys
 from urllib.parse import parse_qs, urlparse
 
-from career_ops.dashboard.actions import ACTIONS, ActionRunner
+from career_ops.dashboard.actions import ACTIONS, ActionRunner, followup_state, record_command, run_cli
 from career_ops.dashboard.data import connect, job_detail, list_jobs, material_files
 
 
@@ -22,6 +22,9 @@ DETAIL = re.compile(r"^/api/jobs/(\d+)$")
 FILE = re.compile(r"^/api/jobs/(\d+)/file$")
 ACTION = re.compile(r"^/api/jobs/(\d+)/(" + "|".join(ACTIONS) + r")$")
 RUN = re.compile(r"^/api/jobs/(\d+)/run$")
+RECORD = re.compile(r"^/api/jobs/(\d+)/record$")
+FOLLOWUP = re.compile(r"^/api/jobs/(\d+)/followup$")
+BODY_LIMIT = 16_384
 ACTION_HEADER = "X-Career-Ops"
 LOCAL_HOSTS = {"127.0.0.1", "localhost", "[::1]"}
 
@@ -71,6 +74,8 @@ def handler_for(database: Path, runner: ActionRunner) -> type[BaseHTTPRequestHan
                     self.send_file(match[1], parse_qs(url.query).get("id", [""])[0])
                 elif match := RUN.match(url.path):
                     self.send_json({"run": runner.status(int(match[1]))})
+                elif match := FOLLOWUP.match(url.path):
+                    self.send_json({"followup": followup_state(database.parent, int(match[1]))})
                 else:
                     self.send_json({"error": "not found"}, HTTPStatus.NOT_FOUND)
             except Exception as error:  # surface store errors to the page instead of dropping the connection
@@ -87,11 +92,15 @@ def handler_for(database: Path, runner: ActionRunner) -> type[BaseHTTPRequestHan
         def do_POST(self) -> None:
             url = urlparse(self.path)
             match = ACTION.match(url.path)
-            if not match:
+            record = RECORD.match(url.path)
+            if not match and not record:
                 self.send_json({"error": "not found"}, HTTPStatus.NOT_FOUND)
                 return
             if not self.same_origin_action():
                 self.send_json({"error": "forbidden"}, HTTPStatus.FORBIDDEN)
+                return
+            if record:
+                self.record(int(record[1]))
                 return
             opportunity_id, action = int(match[1]), match[2]
             try:
@@ -107,6 +116,29 @@ def handler_for(database: Path, runner: ActionRunner) -> type[BaseHTTPRequestHan
                 self.send_json({"error": str(error)}, HTTPStatus.CONFLICT)
             except Exception as error:
                 self.log_message("error on %s: %r", url.path, error)
+                self.send_json({"error": str(error)}, HTTPStatus.INTERNAL_SERVER_ERROR)
+
+        def record(self, opportunity_id: int) -> None:
+            """Write one user-confirmed application record synchronously through the CLI."""
+            length = int(self.headers.get("Content-Length") or 0)
+            if not 0 < length <= BODY_LIMIT:
+                self.send_json({"error": "请求内容为空或过大"}, HTTPStatus.BAD_REQUEST)
+                return
+            try:
+                body = json.loads(self.rfile.read(length))
+                if not isinstance(body, dict):
+                    raise ValueError("请求内容必须是 JSON 对象")
+                with closing(connect(database)) as db:
+                    job = job_detail(db, opportunity_id)
+                if job is None:
+                    self.send_json({"error": "not found"}, HTTPStatus.NOT_FOUND)
+                    return
+                command = record_command(opportunity_id, body, job["status_options"], job["confirmed_package"])
+                self.send_json({"result": run_cli(database.parent, command)})
+            except ValueError as error:  # bad form input or a lifecycle refusal the page should show
+                self.send_json({"error": str(error)}, HTTPStatus.CONFLICT)
+            except Exception as error:
+                self.log_message("error on record %s: %r", opportunity_id, error)
                 self.send_json({"error": str(error)}, HTTPStatus.INTERNAL_SERVER_ERROR)
 
         def send_file(self, opportunity_id: str, file_id: str) -> None:

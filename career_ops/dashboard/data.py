@@ -7,6 +7,7 @@ import json
 from pathlib import Path
 import sqlite3
 
+from career_ops.applications.application_lifecycle import OUTCOMES, TRANSITIONS
 from career_ops.evaluation.decisions import classify, valid_scores
 from career_ops.input_contracts import score_is_current
 
@@ -25,7 +26,7 @@ TEXT_SUFFIXES = {".md", ".json", ".txt"}
 
 
 def connect(database: Path) -> sqlite3.Connection:
-    """Open the store read-only so the dashboard can never change business state."""
+    """Open the store read-only; dashboard writes go only through the CLI."""
     db = sqlite3.connect(f"file:{database.resolve()}?mode=ro", uri=True, check_same_thread=False)
     db.row_factory = sqlite3.Row
     return db
@@ -226,6 +227,22 @@ def _rows(db: sqlite3.Connection, table: str, opportunity_id: str) -> list[dict]
             for row in db.execute(f"SELECT * FROM {table} WHERE opportunity_id=? ORDER BY id", (opportunity_id,))]
 
 
+def status_options(status: str | None) -> list[str]:
+    """Status changes the lifecycle accepts next: `responded` is a transition, the rest are outcomes."""
+    allowed = TRANSITIONS.get(status or "", set())
+    options = ["responded"] if "responded" in allowed else []
+    # A non-terminal status may repeat its own outcome, e.g. another interview round.
+    return options + [name for name, target in OUTCOMES.items() if target in allowed or (allowed and target == status)]
+
+
+def confirmed_package(db: sqlite3.Connection, opportunity_id: str) -> str | None:
+    row = db.execute(
+        "SELECT result_key FROM results WHERE opportunity_id=? AND module='apply' "
+        "AND json_extract(payload,'$.outcome')='package_confirmed' ORDER BY rowid DESC LIMIT 1", (opportunity_id,)
+    ).fetchone()
+    return row["result_key"] if row else None
+
+
 def job_detail(db: sqlite3.Connection, opportunity_id: int) -> dict | None:
     """The full retained record of one opportunity for the detail panel."""
     job = next((item for item in list_jobs(db) if item["id"] == opportunity_id), None)
@@ -250,6 +267,8 @@ def job_detail(db: sqlite3.Connection, opportunity_id: int) -> dict | None:
         "application_events": _rows(db, "application_events", key),
         "application_activity": _rows(db, "application_activity", key),
         "followups": _rows(db, "application_followup_directives", key),
+        "status_options": status_options(job["application_status"]),
+        "confirmed_package": confirmed_package(db, key),
         "materials": materials,
         "interviews": _interview_materials(db, key),
     }
