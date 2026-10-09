@@ -146,5 +146,5 @@ def dimensions(response: dict) -> dict:
     answers = response["answers"]
     return {name: {"score": answers[name]["score"] + 1, "confidence": answers[name]["confidence"],
                    "evidence_sufficiency": answers[name + "_evidence"]["noul"],
-                   "evidence_status": "assessed", "probabilities": answers[name]["probabilities"]}
+                   "probabilities": answers[name]["probabilities"]}
             for name in DIMENSIONS}

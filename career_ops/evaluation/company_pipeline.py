@@ -32,8 +32,7 @@ def rating(response: dict, name: str) -> dict:
     answer = response['answers'][name]
     return {'score': answer['score'] + 1, 'confidence': answer['confidence'],
             'probabilities': answer['probabilities'],
-            'evidence_sufficiency': response['answers'][name + '_evidence']['noul'],
-            'evidence_status': 'assessed'}
+            'evidence_sufficiency': response['answers'][name + '_evidence']['noul']}
 
 
 def company_request(company: dict, rubric: str) -> dict:
@@ -191,7 +190,9 @@ def evaluate(bundle: dict, rubric: str, store: Path, output: Path, key: str | No
             if key is not None and path.exists():
                 cached = json.loads(path.read_text())
                 jev.validate(cached['request'], cached['response'])
-                profiles[name] = cached['rating']
+                # Re-derive from the raw response so cached ratings follow the current field shape.
+                profiles[name] = {**{k: cached['rating'][k] for k in ('scope', 'dimension', 'scoring_request_sha256')},
+                                  **rating(cached['response'], name)}
             else:
                 missing.append(profile)
         fingerprint = None
@@ -239,7 +240,7 @@ def evaluate(bundle: dict, rubric: str, store: Path, output: Path, key: str | No
                                'request_sha256': profile.get('scoring_request_sha256') if profile else None,
                                'scope': job['scopes'][dimension], 'valid_until': companies[job['company_id']]['valid_until']}
             dimensions[dimension] = ({k: v for k, v in profile.items() if k not in ('scope', 'dimension', 'scoring_request_sha256')}
-                                     if profile else {'status': 'pending', 'reason':
+                                     if profile else {'score': None, 'reason':
                                          'expired_company_profile' if version['status'] == 'expired' else 'no_matching_valid_profile'})
         if job.get('compensation_quote') and result and result['status'] == 'scored':
             dimensions['compensation'] = rating(result['response'], 'compensation')

@@ -3,7 +3,7 @@
 # This is the single source of truth for your personal data across all modes.
 
 attractiveness:
-  model: attractiveness-v3
+  model: attractiveness-v4
 
 candidate:
   full_name: "Jane Smith"

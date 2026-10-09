@@ -84,7 +84,7 @@ with tempfile.TemporaryDirectory() as temp:
     incomplete['companies'][0]['profiles'][1]['evidence']['new_fact'] = 'not yet scored'
     partial = c.evaluate(incomplete, rubric, root/'store', root/'aggregation-only', 'test-key', reuse_company_scores=True)
     assert partial['companies']['sample']['status'] == 'partial'
-    assert partial['http_attempts'] == 0 and partial['jobs'][0]['dimensions']['culture']['status'] == 'pending'
+    assert partial['http_attempts'] == 0 and partial['jobs'][0]['dimensions']['culture']['score'] is None
     changed = deepcopy(bundle)
     changed['companies'][0]['profiles'][1]['evidence']['new_fact'] = 'changed actual evidence'
     result = run('new-evidence', changed)
@@ -97,8 +97,8 @@ with tempfile.TemporaryDirectory() as temp:
     changed['jobs'][1]['scopes']['culture']['region'] = 'Hong Kong'
     changed['jobs'][1]['scopes']['compensation']['level'] = 'Senior'
     result = run('wrong-scope', changed)
-    assert result['jobs'][1]['dimensions']['culture']['status'] == 'pending'
-    assert result['jobs'][1]['dimensions']['compensation']['status'] == 'pending'
+    assert result['jobs'][1]['dimensions']['culture']['score'] is None
+    assert result['jobs'][1]['dimensions']['compensation']['score'] is None
     result = run('expired', today=date(2026,10,16))
     assert result['jobs'][0]['dimensions']['culture']['reason'] == 'expired_company_profile'
     assert 'direction' in result['jobs'][0]['dimensions']

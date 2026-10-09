@@ -328,7 +328,7 @@ with tempfile.TemporaryDirectory(prefix="career-ops-cron-stale-") as temporary:
     store.db.execute("UPDATE tasks SET status='completed' WHERE task_id=?", (scored["task_id"],))
     store.db.execute("INSERT INTO results(result_key,task_id,opportunity_id,module,input_hash,payload) VALUES(?,?,?,?,?,?)",
                      (scored["task_id"], scored["task_id"], "1", "score", store.task(scored["task_id"])["input_hash"],
-                      json.dumps({"outcome": "score", "artifact": {"score": {"direction": 4, "compensation": None, "company": 4}}})))
+                      json.dumps({"outcome": "score", "artifact": {"score": {"direction": 4, "compensation": None, "company": 4, "culture": None}}})))
     store.close()
     with patch("career_ops.tasks.capture_jd", return_value=None), \
          patch("career_ops.tasks.start_and_run", return_value={"status": "waiting"}) as start:

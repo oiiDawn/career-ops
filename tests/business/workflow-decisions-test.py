@@ -9,12 +9,12 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from career_ops.evaluation.decisions import classify, order, valid_scores, worth_attention
 
 
-score = {"direction": 4, "compensation": 4, "company": None}
+score = {"direction": 4.5, "compensation": 4.5, "company": 3.5, "culture": 3.5}
 assert classify(score, {"status": "pass"}) == "focus"
 assert classify(score, {"status": "uncertain"}) == "focus"
 assert classify({**score, "company": 3}, {"status": "pass"}) == "deprioritize"
 assert classify({**score, "compensation": None}, {"status": "pass"}) == "deprioritize"
-assert classify({**score, "company": 5}, {"status": "pass"}) == "focus"
+assert not valid_scores({"direction": 4, "compensation": 4, "company": None})
 assert classify(score, {"status": "fail"}) == "discard"
 
 rows = [

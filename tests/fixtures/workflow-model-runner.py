@@ -76,10 +76,10 @@ def run(phase, payload):
                 "tool_calls": 0,
             }
         known = lambda value: {"score": value, "confidence": .93, "evidence_sufficiency": .12,
-                               "evidence_status": "assessed", "probabilities": {"0": 0, "1": 0, "2": 0, "3": 5-value, "4": value-4}}
+                               "probabilities": {"0": 0, "1": 0, "2": 0, "3": 5-value, "4": value-4}}
         dimensions = {"direction": known(4.37), "compensation": known(4.12),
-                      "company": {"score": None, "status": "pending", "reason": "summary_failed"},
-                      "culture": {"score": None, "status": "pending", "reason": "no_matching_valid_profile"}}
+                      "company": {"score": None, "reason": "summary_failed"},
+                      "culture": {"score": None, "reason": "no_matching_valid_profile"}}
         artifact = {
             "type": "score",
             "company": report["company"],

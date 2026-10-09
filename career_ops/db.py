@@ -486,12 +486,11 @@ class BusinessStore:
                 or not valid_scores(score)
             ):
                 raise ValueError("Score artifact or report hash is invalid")
-            if artifact.get("scoring_model") == "attractiveness-v4":
-                if dimension_scores(artifact.get("dimensions")) != score:
-                    raise ValueError("Raw dimensions disagree with saved scores")
-                prescreen = json.loads(task["input_payload"])["jd_report"].get("prescreen", {"status": "uncertain"})
-                if artifact.get("recommendation") != classify_decision(score, prescreen):
-                    raise ValueError("Recommendation disagrees with dimension scores and prescreen")
+            if dimension_scores(artifact.get("dimensions")) != score:
+                raise ValueError("Raw dimensions disagree with saved scores")
+            prescreen = json.loads(task["input_payload"])["jd_report"].get("prescreen", {"status": "uncertain"})
+            if artifact.get("recommendation") != classify_decision(score, prescreen):
+                raise ValueError("Recommendation disagrees with dimension scores and prescreen")
         if state["outcome"] == "exclude" and (
             artifact.get("type") != "exclusion" or not artifact.get("reason") or not artifact.get("evidence")
         ):
@@ -633,15 +632,15 @@ class BusinessStore:
                     reason = None if valid else "candidate_or_policy_inputs_changed"
                 except (KeyError, OSError, ValueError):
                     reason = "stored_input_invalid"
-            if valid_scores(score) or isinstance(score, dict) and set(score) == {"lower", "upper", "coverage"}:
+            if valid_scores(score):
                 values.append({
-                    "opportunity_id": opportunity_id, "scores": score if valid_scores(score) else None,
-                    "scoring_model": artifact.get("scoring_model", "attractiveness-v3"),
+                    "opportunity_id": opportunity_id, "scores": score,
+                    "scoring_model": artifact.get("scoring_model"),
                     "dimensions": artifact.get("dimensions", {}),
                     "company_profiles": artifact.get("company_profiles", {}),
                     "company_research": artifact.get("company_research", {}),
-                    "valid": valid and valid_scores(score),
-                    "stale_reason": reason if valid_scores(score) else "candidate_or_policy_inputs_changed",
+                    "valid": valid,
+                    "stale_reason": reason,
                 })
         values.sort(key=lambda item: item["opportunity_id"])
         return values

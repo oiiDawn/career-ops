@@ -209,7 +209,7 @@ def run_score(inputs: dict, draft_root: Path, root: Path) -> dict:
                       http_attempts=sum(c['http_attempts'] for c in result['calls']))
         _write_json(output / 'scores/results.json', result)
         row = result['jobs'][0]
-        dimensions = {d: row['dimensions'].get(d, {'status': 'pending', 'reason': 'jev_request_failed'})
+        dimensions = {d: row['dimensions'].get(d, {'score': None, 'reason': 'jev_request_failed'})
                       for d in pipeline.jev.DIMENSIONS}
         for dimension in dimensions.values():
             dimension.setdefault('score', None)

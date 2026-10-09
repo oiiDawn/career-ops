@@ -10,7 +10,7 @@ ORDER = {"focus": 0, "deprioritize": 1, "discard": 2}
 
 
 def valid_scores(score: dict) -> bool:
-    return isinstance(score, dict) and set(score) in ({"direction", "compensation", "company"}, {"direction", "compensation", "company", "culture"}) and all(
+    return isinstance(score, dict) and set(score) == {"direction", "compensation", "company", "culture"} and all(
         value is None or type(value) in (int, float) and math.isfinite(value) and 1 <= value <= 5 for value in score.values()
     )
 
@@ -18,10 +18,7 @@ def valid_scores(score: dict) -> bool:
 def worth_attention(score: dict) -> bool:
     if not valid_scores(score):
         raise ValueError("invalid dimension scores")
-    if "culture" in score:
-        return all(value is not None and value > 3 for value in score.values()) and sum(value > 4 for value in score.values()) >= 2
-    known = [value for value in score.values() if value is not None]
-    return len(known) >= 2 and all(value >= 4 for value in known)
+    return all(value is not None and value > 3 for value in score.values()) and sum(value > 4 for value in score.values()) >= 2
 
 
 def classify(score: dict, prescreen: dict) -> str:

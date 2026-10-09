@@ -56,15 +56,13 @@ def dimension_scores(dimensions: dict) -> dict:
         if score is not None and (type(score) not in (int, float) or not math.isfinite(score) or not 1 <= score <= 5):
             raise ValueError(f"{name}: score must be null or a number from 1 to 5")
         if score is None:
-            if dimension.get("status") != "pending":
-                raise ValueError(f"{name}: null score must be pending")
+            if not isinstance(dimension.get("reason"), str) or not dimension["reason"].strip():
+                raise ValueError(f"{name}: null score requires a reason")
         else:
             for field in ("confidence", "evidence_sufficiency"):
                 value = dimension.get(field)
                 if type(value) not in (int, float) or not math.isfinite(value) or not 0 <= value <= 1:
                     raise ValueError(f"{name}: invalid {field}")
-            if not isinstance(dimension.get("evidence_status"), str):
-                raise ValueError(f"{name}: evidence status required")
         scores[name] = score
     return scores
 
@@ -89,7 +87,7 @@ def render_report(packet: dict, evidence: dict, assessment: dict) -> dict:
         files[source["id"]] = directory / f"{source['id']}.txt"
         files[source["id"]].write_text(source["text"])
     dimensions = {name: assessment.get("dimensions", {}).get(name,
-                  {"score": None, "status": "pending", "reason": "dimension_unavailable"}) for name in DIMENSIONS}
+                  {"score": None, "reason": "dimension_unavailable"}) for name in DIMENSIONS}
     score = dimension_scores(dimensions)
     research = assessment.get("company_research", {})
     if not isinstance(research, (dict, list)):
@@ -122,10 +120,9 @@ def render_report(packet: dict, evidence: dict, assessment: dict) -> dict:
         "dimensions": dimensions, "company_profiles": assessment.get("company_profiles", {}),
         "company_research": research, "recommendation": classify(score, evidence.get("prescreen", {"status": "uncertain"})),
     }
-    table = "| 维度 | 分数 | Confidence | 充分性 | 状态 |\n|---|---|---|---|---|\n" + "\n".join(
-        f"| {name} | {format(score[name], '.2f') if score[name] is not None else 'Unknown'} | "
-        f"{dimensions[name].get('confidence', '—')} | {dimensions[name].get('evidence_sufficiency', '—')} | "
-        f"{dimensions[name].get('status', dimensions[name].get('evidence_status', 'pending'))} |"
+    table = "| 维度 | 分数 | Confidence | 充分性 |\n|---|---|---|---|\n" + "\n".join(
+        f"| {name} | {format(score[name], '.2f') if score[name] is not None else 'Unknown（' + dimensions[name]['reason'] + '）'} | "
+        f"{dimensions[name].get('confidence', '—')} | {dimensions[name].get('evidence_sufficiency', '—')} |"
         for name in DIMENSIONS
     )
     research_status = "公司档案、摘要与原始来源记录见 Machine Summary；初期推荐仅按四维评分，置信度与充分性供参考"

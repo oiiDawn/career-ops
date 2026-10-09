@@ -45,7 +45,7 @@ for name, question in request["questions"].items():
 jev.validate(request, response)
 raw = jev.dimensions(response)["culture"]
 assert raw["score"] == 3.37 and raw["confidence"] == .93 and raw["evidence_sufficiency"] == .12
-assert raw["evidence_status"] == "assessed"
+assert "evidence_status" not in raw
 for value in (float("nan"), float("inf"), True, -1, 5):
     invalid = deepcopy(response)
     invalid["answers"]["culture"]["score"] = value

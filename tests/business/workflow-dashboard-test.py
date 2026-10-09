@@ -90,7 +90,7 @@ with tempfile.TemporaryDirectory() as temporary:
         db.execute("INSERT INTO results VALUES(?,?,?,?,?,?)", (f"scan-{opportunity}", f"scan-{opportunity}", opportunity, "scan", "h", json.dumps(scan)))
     for opportunity, input_hash in score_hashes.items():
         db.execute("INSERT INTO tasks VALUES(?,?,?,?,?,?,?,?,?)", (f"score-{opportunity}", opportunity, "score", "completed", input_hash, 1, None, "v", score_inputs(jd_report(opportunity))))
-        scored = {"outcome": "score", "input_hash": input_hash, "artifact": {"report": "## A. 岗位概览\n\nGood fit", "score": score, "scoring_model": "attractiveness-v4", "dimensions": {"culture": {"score": None, "status": "pending"}}}}
+        scored = {"outcome": "score", "input_hash": input_hash, "artifact": {"report": "## A. 岗位概览\n\nGood fit", "score": score, "scoring_model": "attractiveness-v4", "dimensions": {"culture": {"score": None, "reason": "no_matching_valid_profile"}}}}
         db.execute("INSERT INTO results VALUES(?,?,?,?,?,?)", (f"score-{opportunity}", f"score-{opportunity}", opportunity, "score", input_hash, json.dumps(scored)))
     db.execute("INSERT INTO tasks VALUES('apply-3','3','apply','waiting','h',1,'user_review','v','{}')")
     db.execute("INSERT INTO drafts VALUES('apply-3',1,'h','p',?)", (json.dumps({"files": {
@@ -109,7 +109,7 @@ with tempfile.TemporaryDirectory() as temporary:
         jobs = {job["id"]: job for job in fetch(base, "/api/jobs")}
         assert [jobs[i]["stage"] for i in (1, 2, 3)] == ["scanned", "scored", "applied"]
         assert "score" not in jobs[2] and jobs[2]["action"] == "deprioritize" and "score" not in jobs[1]
-        assert jobs[2]["dimensions"]["culture"]["status"] == "pending"
+        assert jobs[2]["dimensions"]["culture"]["reason"] == "no_matching_valid_profile"
         assert jobs[2]["scores"]["direction"] == 4.96 and jobs[3]["action"] is None
         assert jobs[3]["application_status"] == "applied" and jobs[3]["material_count"] == 1
         assert jobs[3]["url"] == "https://example.com/3" and jobs[1]["location"] == "Shanghai"

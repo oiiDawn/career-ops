@@ -21,7 +21,7 @@ with tempfile.TemporaryDirectory(prefix="career-ops-report-") as temporary:
     evidence = {"company": "Example", "role": "Engineer", "complete_jd": True, "liveness": "active",
                 "jd": "Build and maintain software products."}
     raw = {"score": 3.3700000000000006, "confidence": .93, "evidence_sufficiency": .12,
-           "evidence_status": "assessed", "probabilities": {"0": .1, "1": .1, "2": .43, "3": .07, "4": .3}}
+           "probabilities": {"0": .1, "1": .1, "2": .43, "3": .07, "4": .3}}
     reference = {"company_id": "example", "profile_id": "culture-cn", "request_sha256": "batch",
                  "scope": {"region": "China"}, "valid_until": "2026-10-15"}
     assessment = {
@@ -39,7 +39,7 @@ with tempfile.TemporaryDirectory(prefix="career-ops-report-") as temporary:
     machine = yaml.safe_load(rendered["report"].split("```yaml\n")[1].split("```")[0])
     assert machine["scoring_model"] == "attractiveness-v4" and machine["recommendation"] == "deprioritize"
     assert machine["dimensions"]["culture"] == raw
-    assert machine["dimensions"]["company"]["score"] is None and machine["dimensions"]["company"]["status"] == "pending"
+    assert machine["dimensions"]["company"]["score"] is None and machine["dimensions"]["company"]["reason"]
     assert machine["company_profiles"] == assessment["company_profiles"]
     assert machine["company_research"] == assessment["company_research"]
     assert machine["sources"] and "advertised_comp" in machine
