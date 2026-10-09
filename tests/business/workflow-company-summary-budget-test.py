@@ -72,6 +72,21 @@ with tempfile.TemporaryDirectory() as temp:
     assert result['repair_used'] and result['tokens_accounted'] == 200
     assert (root/'length/call-1.response.json').exists() and (root/'length/call-2.request.json').exists()
 
+    def typed_repair(messages, n):
+        reply = answer(messages)
+        if n == 1:
+            body = json.loads(reply.content)
+            body['profiles'][0]['facts'][0]['date'] = None
+            reply.content = json.dumps(body)
+        else:
+            assert 'date must be a nonempty string' in messages[-1].content
+        return reply
+    behavior = typed_repair
+    result = run('typed-repair')
+    assert result['status'] == 'summarized' and result['repair_used'] and len(result['calls']) == 2
+    diagnostic = json.loads((root/'typed-repair/validation-1.json').read_text())
+    assert 'date must be a nonempty string' in diagnostic['error']
+
     behavior = lambda messages,n: answer(messages, invalid=True)
     result = run('invalid')
     assert result['status'] == 'failed' and len(result['calls']) == 2 and result['tokens_accounted'] == 200
