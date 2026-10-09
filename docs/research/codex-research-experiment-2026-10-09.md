@@ -94,3 +94,24 @@ The research prompt also omits explicit coverage of several current rubric topic
 An existing rubric inconsistency remains outside this experiment: its opening paragraph recommends using all four numerical scores without sufficiency gates, while its later sufficiency/recommendation section says unsupported high scores cannot provide positive grounds. This experiment does not resolve that product decision or validate downstream recommendation behavior. Direction scoring, complete job assembly, SQLite publication and dashboard rendering were not exercised.
 
 Verification: live fact/citation preservation assertions and cache replay passed; existing company-scope/cache and Jev response/retry tests passed. Syntax and workflow scan checks also passed. Original Codex outputs and all raw Jev responses remain unedited.
+
+## Revised screening-reference rubric rerun
+
+After reviewing the shared questions, the user authorized rescoring with the revised rules from commit `5ba23ef5`. The same frozen input bundle, including all facts, scopes, gaps and conflicts, was passed through the current shared Jev adapter. No new research or editing of evidence occurred. The changed variables are the rubric and request instructions, including the definition of sufficiency. The model remains `jev-1.13.0`. Outputs, the frozen revised rubric and `comparison.json` are in `data/experiments/codex-research-2026-10-09/jev/screening-reference-results/`; raw requests and responses are in the adjacent `screening-reference-store/`. The retained `rescore.py` runs this experiment and refuses to overwrite its output.
+
+All eight calls succeeded on the first HTTP attempt, taking 8.08 seconds in aggregate. Actual outbound requests were checked against the original bundle: facts, gaps, conflicts and scopes remained unchanged for all eight profiles. Empty Climind compensation remains unscored. No business database writes or recommendation publication occurred.
+
+| Employer | Dimension | Score before → after | Sufficiency before → after | Confidence before → after |
+| --- | --- | --- | --- | --- |
+| Microsoft | company | 4.22 → 4.39 | 0.32 → 0.89 | 0.64 → 0.57 |
+| Microsoft | culture | 2.82 → 2.94 | 0.14 → 0.79 | 0.52 → 0.59 |
+| Microsoft | compensation | 4.21 → 4.47 | 0.17 → 0.90 | 0.69 → 0.57 |
+| NVIDIA | company | 4.40 → 4.54 | 0.36 → 0.90 | 0.52 → 0.62 |
+| NVIDIA | culture | 3.20 → 3.32 | 0.12 → 0.71 | 0.56 → 0.57 |
+| NVIDIA | compensation | 4.18 → 4.46 | 0.14 → 0.87 | 0.59 → 0.54 |
+| Climind | company | 2.97 → 2.99 | 0.07 → 0.72 | 0.93 → 0.97 |
+| Climind | culture | 3.05 → 3.05 | 0.09 → 0.54 | 0.51 → 0.53 |
+
+The unchanged evidence produces markedly different sufficiency under the revised decision question, while attraction scores change by 0.00–0.28. This supports question framing as a material contributor to the previously low readings; those readings alone did not establish inadequate research. It does not show improved evidence or better-calibrated predictions: sufficiency now concerns bounded screening usefulness rather than stronger applicability/completeness requirements. The two columns describe different assessment targets and must not be presented as an improvement in research coverage or accuracy.
+
+Microsoft/NVIDIA financial and same-employer salary evidence can now serve as references despite unresolved target-role details. Climind culture, consisting of employer statements, remains the lowest sufficiency at 0.54; that number is not a validated pass threshold or proof of actual working conditions. Company or salary reference usefulness does not establish a specific offer or team experience. There is one revised run per profile, no new repeatability study, no labeled calibration set and no per-answer rationale. All raw scores and uncertainties remain available for review.
