@@ -131,7 +131,8 @@ with tempfile.TemporaryDirectory() as temp:
     def empty_document(messages, n, unrelated=False):
         reply=answer(messages)
         value=json.loads(reply.content)
-        for profile in value['profiles']: profile['facts']=[]
+        if not unrelated:
+            for profile in value['profiles']: profile['facts']=[]
         if unrelated:
             value['document_scope']={'status':'unrelated_employer','entity':'Other Employer',
                                      'basis':'Annual report heading explicitly names Other Employer'}

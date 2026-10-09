@@ -567,8 +567,9 @@ def summarize_source(public: dict, sources: list, output: Path) -> dict:
             answers.append(answer)
             if (index == 0 and len(sources) == 1 and document_scope
                     and document_scope.get('status') == 'unrelated_employer'
-                    and all(isinstance(document_scope.get(k), str) and document_scope[k].strip() for k in ('entity', 'basis'))
-                    and not any(p['facts'] for p in answer['profiles'])):
+                    and all(isinstance(document_scope.get(k), str) and document_scope[k].strip() for k in ('entity', 'basis'))):
+                for profile in answer['profiles']:
+                    profile['facts'] = []
                 fragments_skipped = sum(len(rest) for rest in batches[index+1:])
                 break
         while len(answers) > 1:
