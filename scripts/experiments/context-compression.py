@@ -275,7 +275,7 @@ class Experiment:
         if result_path.exists():
             result = json.loads(result_path.read_text())
         else:
-            result = pipeline.summarize_company(public, filtered, summary_dir)
+            result = pipeline.summarize_source(public, filtered, summary_dir)
             self.events.append({'name': 'c-summary', 'tokens_accounted': result['tokens_accounted'],
                                 'status': result['status'], 'seconds': time.perf_counter() - started,
                                 'calls': result['calls']})
@@ -298,7 +298,8 @@ def run_dimension(dimension, output, stages):
     public = json.loads((capture / 'company-input.json').read_text())
     pipeline.research_adapter().company_prompt(public)
     evidence = json.loads((capture / 'evidence.json').read_text())
-    sources = pipeline.summary_sources({'sources': evidence['retrieved_sources']})
+    sources = [{**source, 'text': Path(source['full_body_local_path']).read_text()}
+               for source in evidence['retrieved_sources']]
     jev.save(experiment.directory / 'manifest.json', {'production_writes': False, 'new_network_searches': False,
              'dimension_token_budget_per_stage': BUDGET, 'public': public, 'capture': str(capture), 'baseline': str(baseline),
              'model': os.environ['CAREER_OPS_MODEL'], 'jev_model': jev.MODEL})

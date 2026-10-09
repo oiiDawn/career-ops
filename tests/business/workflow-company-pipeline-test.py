@@ -51,14 +51,14 @@ class Model:
 def invoke(prepare, messages, name):
     prepare(Model())
     model_calls.append(name)
-    if name in ('isolated-company-summary', 'isolated-source-summary'):
+    if name == 'isolated-source-summary':
         data = json.loads(messages[1].content)
         assert 'standards' not in data and 'posting' not in data and '350000' not in messages[0].content
         dimension = data['profiles'][0]['dimension']
         assert all(p['dimension'] == dimension for p in data['profiles'])
-        assert 'Organize only '+dimension in messages[0].content
-        if name == 'isolated-company-summary': summary_dimensions.append(dimension)
-        if ready_check and dimension == 'company' and name == 'isolated-company-summary':
+        assert dimension in messages[0].content
+        summary_dimensions.append(dimension)
+        if ready_check and dimension == 'company' and name == 'isolated-source-summary':
             assert culture_scored.wait(3), 'Company summary blocked culture independent scoring'
         source = data['sources'][0]
         assert '2026-10-08' in source['source_header'] or source.get('material_kind') == 'document_fact_cards'
@@ -72,12 +72,14 @@ def invoke(prepare, messages, name):
         calls = []
     elif len(messages) == 2:
         dimension = json.loads(messages[1].content)['public_company_and_scopes']['scopes'][0]['dimension']
-        assert 'Research only the '+dimension in messages[0].content
-        assert 'quotation offsets' in messages[0].content and 'exact contiguous' not in messages[0].content
+        assert 'main '+dimension+' research Agent' in messages[0].content
+        assert 'Only you decide' in messages[0].content
         text = ''
-        calls = [{'name': 'web_extract', 'args': {'urls': ['https://sample.test/facts']}, 'id': 'extract', 'type': 'tool_call'}]
+        calls = [{'name': 'collect_facts', 'args': {'urls': ['https://sample.test/facts']}, 'id': 'extract', 'type': 'tool_call'}]
     else:
-        text = '{"facts":[],"gaps":"Research output is not the separate summary"}'
+        data = json.loads(messages[1].content)
+        facts = json.loads(next(m.content for m in reversed(messages) if m.type=='tool'))['facts']
+        text = json.dumps({'profiles':[{'profile_id':p['profile_id'], 'facts':[{k:v for k,v in f.items() if k!='profile_id'} for f in facts if f['profile_id']==p['profile_id']], 'gaps':[], 'conflicts':[]} for p in data['profiles']]})
         calls = []
     return AIMessage(content=text, tool_calls=calls, usage_metadata={'input_tokens': 20, 'output_tokens': 20, 'total_tokens': 40})
 
@@ -104,13 +106,13 @@ def score(name, request, output, key):
             'attempts': [{'http_status': 200}], 'elapsed_seconds': .1}
 
 
-original_summary = c.summarize_company
+original_summary = c.summarize_source
 
 def summary_with_tracking(public, sources, output, **kwargs):
-    if not kwargs.get('document'): summary_groups.append(public['scopes'][0]['dimension'])
+    summary_groups.append(public['scopes'][0]['dimension'])
     return original_summary(public, sources, output, **kwargs)
 
-c.summarize_company = summary_with_tracking
+c.summarize_source = summary_with_tracking
 a.llm.invoke, a.tavily, c.jev.call = invoke, tavily, score
 rubric = c.jev.RUBRIC.read_text()
 with tempfile.TemporaryDirectory() as temp:
@@ -121,7 +123,7 @@ with tempfile.TemporaryDirectory() as temp:
         prepared = c.prepare_companies(supplied, root/'store', output, today=today)
         return c.evaluate(prepared, rubric, root/'store', output/'scores', 'test-key', today)
     cold = run('cold')
-    assert len(network_calls) == 3 and model_calls.count('isolated-company-summary') == 3
+    assert len(network_calls) == 3 and model_calls.count('isolated-source-summary') == 3
     assert set(summary_dimensions) == set(c.SHARED) and summary_dimensions.count('compensation') == 1
     assert set(summary_groups) == set(c.SHARED)
     assert any(b.get('reasoning_effort') == 'low' and b.get('response_format') == {'type': 'json_object'} for b in bindings)
@@ -160,7 +162,7 @@ with tempfile.TemporaryDirectory() as temp:
     count = len(network_calls)
     run('summary-rule-change', expanded)
     assert len(network_calls) == count
-    assert summary_groups.count('compensation') == 2
+    assert summary_groups.count('compensation') == 1
     rubric += '\nChanged scoring standard.'
     count = len(model_calls)
     run('scoring-rule-change')

@@ -33,14 +33,15 @@ class Model:
                 for p in data['profiles']]}
             reply = AIMessage(content=json.dumps(answer))
         elif not any(isinstance(m, ToolMessage) for m in messages):
-            reply = AIMessage(content='',tool_calls=[{'name':'web_extract','args':{
+            reply = AIMessage(content='',tool_calls=[{'name':'collect_facts','args':{
                 'urls':['https://sample.test/policy']},'id':'extract','type':'tool_call'}])
         elif fail_once:
             assert digests and all('BODY_ONLY_SENTINEL' not in m.content for m in messages)
             fail_once = False
             raise RuntimeError('interrupted after successful document compression')
         else:
-            reply = AIMessage(content='{"sources":["https://sample.test/policy"],"gaps":["Execution unknown"]}')
+            facts=json.loads(next(m.content for m in reversed(messages) if isinstance(m,ToolMessage)))['facts']
+            reply = AIMessage(content=json.dumps({'profiles':[{'profile_id':p['profile_id'], 'facts':[{k:v for k,v in f.items() if k!='profile_id'} for f in facts if f['profile_id']==p['profile_id']], 'gaps':[], 'conflicts':[]} for p in json.loads(messages[1].content)['profiles']]}))
         reply.usage_metadata = {'input_tokens':210000,'output_tokens':10,'total_tokens':210010}
         return reply
 
@@ -57,7 +58,7 @@ with tempfile.TemporaryDirectory() as temp, patch.object(a.llm,'chat_model',Mode
     assert digests and 'BODY_ONLY_SENTINEL' in json.dumps(digests)
     assert all('BODY_ONLY_SENTINEL' not in m.content for m in first.messages)
     returned=json.loads(next(m for m in first.messages if isinstance(m,ToolMessage)).content)
-    assert returned['results'][0]['facts'][0]['facts'][0]['claim']=='Annual leave policy is 20 days.'
+    assert returned['facts'][0]['claim']=='Annual leave policy is 20 days.'
     assert len(list(path.glob('model-*.failure.json')))==1
     before_digests=len(digests)
     resumed=a.Research(path)
@@ -66,8 +67,8 @@ with tempfile.TemporaryDirectory() as temp, patch.object(a.llm,'chat_model',Mode
     source=resumed.retrieved_evidence()['retrieved_sources'][0]
     assert Path(source['full_body_local_path']).read_text()==body and 'sections' not in source
     tools={t.name:t for t in resumed.tools()}
-    repeated=json.loads(tools['web_extract'].invoke({'urls':['https://sample.test/policy']}))
-    assert repeated['results'][0]['facts'] and len(network)==1 and len(digests)==before_digests
+    repeated=json.loads(tools['collect_facts'].invoke({'urls':['https://sample.test/policy']}))
+    assert repeated['facts'] and len(network)==1 and len(digests)==before_digests
     before=len(models)
     complete=a.Research(path)
     complete.run(a.company_prompt(public))
@@ -84,10 +85,10 @@ with tempfile.TemporaryDirectory() as temp:
     answer={'profiles':[{'profile_id':c.scope_key('culture',{'region':'China'}),
         'facts':[], 'gaps':['Execution unknown'],'conflicts':[]}]}
     a.save(saved/'result.json',{'status':'summarized','answer':answer,'tokens_accounted':123,'calls':[]})
-    with patch.object(c,'summarize_company',side_effect=AssertionError('A durable successful digest must be reused')):
+    with patch.object(c,'summarize_source',side_effect=AssertionError('A durable successful digest must be reused')):
         assert researcher.source_facts(sid)['facts']==answer['profiles'] and researcher.tokens==123
     failed_sid,_=researcher.freeze({'url':'https://sample.test/failure','raw_content':body})
-    with patch.object(c,'summarize_company',return_value={'status':'failed','tokens_accounted':456,'calls':[]}):
+    with patch.object(c,'summarize_source',return_value={'status':'failed','tokens_accounted':456,'calls':[]}):
         try:
             researcher.source_facts(failed_sid)
         except RuntimeError:

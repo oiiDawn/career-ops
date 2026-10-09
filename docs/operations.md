@@ -187,3 +187,14 @@ it researches one company across the requested scopes without a job or candidate
 payload or personal salary thresholds. Only the public research checklist is sent
 to research providers; the scoring rubric remains in the authorized Jev scoring
 requests. The validity dates are experiment inputs, not a production refresh policy.
+
+Company research uses three parallel main Agents, one per shared dimension. Each has only
+`collect_facts(query, urls)`: a fixed retrieval Agent executes the specified Tavily query/URLs,
+then a stateless source-summary Agent extracts brief scoped facts without scoring instructions.
+Only the main Agent decides follow-up research, consolidates facts and stops. Its final fact
+profiles go directly to the dimension's Jev request. Unsuccessful searches do not establish
+absence; unsupported denials are excluded. The shared allowance remains 60 conservative
+Tavily credits per dimension, with no cumulative token or aggregate-time cap.
+Every formal score attempt retains actual LLM request counts, per-attempt latency and reported
+usage in its draft `model-calls/`; dimension ledgers count `collect_facts` invocations separately
+from source-summary LLMs, Tavily and Jev requests. Missing provider usage remains unknown.

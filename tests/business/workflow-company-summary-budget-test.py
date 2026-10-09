@@ -57,7 +57,7 @@ with tempfile.TemporaryDirectory() as temp:
     def run(name, sources=None):
         bindings.clear()
         dispatched.clear()
-        return c.summarize_company(public, sources or [source], root/name)
+        return c.summarize_source(public, sources or [source], root/name)
 
     behavior = lambda messages,n: answer(messages, finish='length' if n == 1 else 'stop')
     expected_deadline = time.monotonic()+100

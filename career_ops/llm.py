@@ -5,6 +5,9 @@ from __future__ import annotations
 from contextvars import ContextVar
 import importlib.util
 import os
+import json
+import uuid
+from datetime import datetime, timezone
 from pathlib import Path
 import time
 from typing import Callable
@@ -20,6 +23,7 @@ CALL_TIMEOUT_SECONDS = 600
 MAX_OUTPUT_TOKENS = 32768
 MODEL_ATTEMPTS = 3
 RETRYABLE = (APIConnectionError, InternalServerError, RateLimitError)  # APITimeoutError subclasses APIConnectionError
+CAPTURE: ContextVar[Path | None] = ContextVar("career_ops_model_capture", default=None)
 DEADLINE: ContextVar[float | None] = ContextVar("career_ops_model_deadline", default=None)
 
 
@@ -54,11 +58,28 @@ def chat_model() -> ChatOpenAI:
 def invoke(prepare: Callable[[ChatOpenAI], Runnable], messages: list[BaseMessage], name: str) -> BaseMessage:
     """Retry transient endpoint failures, giving every attempt only the task time that is left."""
     for attempt in range(MODEL_ATTEMPTS):
+        directory = CAPTURE.get()
+        path = directory / (uuid.uuid4().hex+'.json') if directory else None
+        started = time.monotonic()
+        record = {'name': name, 'attempt': attempt+1, 'started_at': datetime.now(timezone.utc).isoformat(),
+                  'status': 'dispatching'}
+        def retain():
+            if path:
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_text(json.dumps(record, ensure_ascii=False, default=str))
+        retain()
         try:
-            return prepare(chat_model()).invoke(messages, {"run_name": name})
-        except RETRYABLE:
-            if attempt == MODEL_ATTEMPTS - 1:
+            response = prepare(chat_model()).invoke(messages, {"run_name": name})
+            record.update(status='completed', usage=response.usage_metadata or {},
+                          response_metadata=response.response_metadata)
+            return response
+        except Exception as error:
+            record.update(status='failed', error_type=type(error).__name__)
+            if not isinstance(error, RETRYABLE) or attempt == MODEL_ATTEMPTS-1:
                 raise
+        finally:
+            record['elapsed_seconds'] = time.monotonic()-started
+            retain()
 
 
 def complete_json(system: str, prompt: str, name: str = "model") -> str:

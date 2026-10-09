@@ -114,6 +114,7 @@ def _complete_sections(assessment: dict, jd: dict, sources: dict, research: dict
         "Structured location_evidence is official location evidence; do not claim the city is undisclosed when present. "
         "A browser_snapshot liveness_reason records a page capture; do not claim no snapshot exists. "
         "Do not repeat existing sections, change dimension scores, or infer any score. Generic market salary statistics or other employers in candidate materials cannot replace applicable company pay evidence. Initial recommendations use only the four dimension scores (all >=4); confidence and sufficiency are informational, not gates. Explain missing and uncertain facts without blocking recommendations on sufficiency.\n"
+        + pipeline.EVIDENCE_RULES + "\n"
         + json.dumps({"jd_report": jd, "candidate_sources": sources, "research": research,
                       "dimensions": assessment["dimensions"],
                       "existing_sections": [name for name, value in sections.items() if value]}, ensure_ascii=False)
@@ -249,13 +250,17 @@ def run_score(inputs: dict, draft_root: Path, root: Path) -> dict:
     for a,b in [('plan','score'),('score','sections'),('sections','render'),('render',END)]:
         graph.add_edge(a,b)
     config = traced({'configurable': {'thread_id': key}}, 'score-graph', key)
-    with SqliteSaver.from_conn_string(str(directory/'score-checkpoints.db')) as saver:
-        compiled = graph.compile(checkpointer=saver)
-        checkpoint = compiled.get_state(config)
-        if checkpoint.next:
-            result = compiled.invoke(None, config)
-        elif checkpoint.values and checkpoint.values.get('artifact'):
-            result = checkpoint.values
-        else:
-            result = compiled.invoke({'inputs': inputs, 'tool_calls': 0}, config)
+    capture = pipeline.research_adapter().llm.CAPTURE.set(directory/'model-calls')
+    try:
+        with SqliteSaver.from_conn_string(str(directory/'score-checkpoints.db')) as saver:
+            compiled = graph.compile(checkpointer=saver)
+            checkpoint = compiled.get_state(config)
+            if checkpoint.next:
+                result = compiled.invoke(None, config)
+            elif checkpoint.values and checkpoint.values.get('artifact'):
+                result = checkpoint.values
+            else:
+                result = compiled.invoke({'inputs': inputs, 'tool_calls': 0}, config)
+    finally:
+        pipeline.research_adapter().llm.CAPTURE.reset(capture)
     return {'outcome': result['outcome'], 'artifact': result['artifact'], 'tool_calls': result['tool_calls']}

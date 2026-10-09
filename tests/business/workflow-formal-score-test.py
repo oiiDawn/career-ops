@@ -26,7 +26,7 @@ class Model:
 def invoke(prepare, messages, name):
     prepare(Model())
     research_calls.append(name)
-    if name in ('isolated-company-summary', 'isolated-source-summary'):
+    if name == 'isolated-source-summary':
         data = json.loads(messages[1].content)
         assert 'cv' not in data and 'standards' not in data
         source = data['sources'][0]
@@ -35,8 +35,11 @@ def invoke(prepare, messages, name):
             'limitations': 'Execution unknown', 'source_ids': [source['source_id'], 'second-public-source']}], 'gaps':['Offer and team unknown'],
             'conflicts':[]} for p in data['profiles']]}
         return AIMessage(content=json.dumps(answer), usage_metadata={'input_tokens':20,'output_tokens':20,'total_tokens':40})
-    calls = [] if len(messages)>2 else [{'name':'web_extract','args':{'urls':['https://sample.test/policy']},'id':'read','type':'tool_call'}]
-    return AIMessage(content='' if calls else '{"sources":[],"gaps":[]}', tool_calls=calls,
+    calls = [] if len(messages)>2 else [{'name':'collect_facts','args':{'urls':['https://sample.test/policy']},'id':'read','type':'tool_call'}]
+    data = json.loads(messages[1].content)
+    facts = json.loads(messages[-1].content)['facts'] if not calls else []
+    answer = {'profiles':[{'profile_id':p['profile_id'], 'facts':[{k:v for k,v in f.items() if k!='profile_id'} for f in facts if f['profile_id']==p['profile_id']], 'gaps':[], 'conflicts':[]} for p in data['profiles']]}
+    return AIMessage(content='' if calls else json.dumps(answer), tool_calls=calls,
                      usage_metadata={'input_tokens':20,'output_tokens':20,'total_tokens':40})
 
 
@@ -86,7 +89,7 @@ with tempfile.TemporaryDirectory() as temp:
             store.close()
         assert set(first['artifact']['score']) == {'direction','company','culture','compensation'}
         assert first['artifact']['score']['culture']==3.37 and first['artifact']['recommendation']=='deprioritize'
-        assert len(jev_calls)==4 and len(research_calls)==12
+        assert len(jev_calls)==4 and len(research_calls)==9
         before=(len(jev_calls),len(research_calls),len(model_calls))
         assert g.run_score(values,root/'workflow-drafts',root)==first
         assert before==(len(jev_calls),len(research_calls),len(model_calls))
@@ -99,7 +102,7 @@ with tempfile.TemporaryDirectory() as temp:
         before=(len(jev_calls),len(research_calls),len(model_calls))
         second=g.run_score(values,root/'workflow-drafts',root)
         assert before==(len(jev_calls),len(research_calls),len(model_calls))
-        assert len(jev_calls)==5 and len(research_calls)==12
+        assert len(jev_calls)==5 and len(research_calls)==9
         assert first['artifact']['company_profiles']==second['artifact']['company_profiles']
         assert len(second['artifact']['company_ratings'])==3
         assert 'attractiveness-v4' in second['artifact']['report']
@@ -113,6 +116,6 @@ with tempfile.TemporaryDirectory() as temp:
             else:raise AssertionError('Concurrent company research was duplicated')
             assert before==(len(jev_calls),len(research_calls))
         third=g.run_score(values,root/'workflow-drafts',root)
-        assert len(jev_calls)==6 and len(research_calls)==12
+        assert len(jev_calls)==6 and len(research_calls)==9
         assert third['artifact']['company_profiles']==first['artifact']['company_profiles']
 print('formal score: cold four requests, shared company cache, raw metadata and resume without repeated calls passed')
