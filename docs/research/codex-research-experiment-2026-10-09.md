@@ -11,7 +11,7 @@ Status: completed, including source review. This is a single-arm feasibility exp
 - Return the existing `profiles / facts / gaps / conflicts` structure. Every fact includes claim, date, kind, applicability, limitations, and an original source URL. Profile IDs in this experiment are the three dimension names; they are not production scope keys.
 - Test Microsoft Software Engineer 2—M365 UIPilot (opportunity 9), NVIDIA Senior Performance Software Engineer—Deep Learning Libraries (24), and Climind Full-Stack Engineer (176). Preserve multi-location and unknown-level scope.
 - Each job has a 15-minute external deadline covering all three dimensions. Preserve partial artifacts and label a timed-out task incomplete.
-- No Jev calls, business database writes, or production workflow changes.
+- The research phase makes no Jev calls. A separately authorized scoring follow-up is recorded below. Neither phase writes the business database or changes the production workflow.
 
 ## Assessment
 
@@ -65,3 +65,32 @@ Per-fact audit outcomes and scope caveats are in each sample's `citation-audit.j
 This experiment supports using Codex as a candidate replacement for the research loop: all three jobs yielded structured, source-linked findings in 95–117 seconds, with useful uncertainty handling. It does not establish a causal speedup, superior recall, unattended reliability, or lower monetary cost compared with the current implementation.
 
 Before production integration, the remaining concrete gap is evidence retention: the CLI JSONL preserves tool metadata and source references/snippets, not complete immutable source bodies. A source URL and valid JSON alone do not establish that original page content was acquired. Preserve that distinction when connecting results to existing evidence storage and scoring; do not pass reference-level salary figures as verified job-level offers. Candidate preferences remain exclusively in scoring.
+
+## Facts-to-Jev follow-up
+
+The user explicitly authorized sending the three employers' public facts and the complete existing rubric, including personal preferences, to `https://api.typesafe.ai/v1/systemone` for eight dimension calls and three independent culture repeats. The retained runner and all requests/responses are under `data/experiments/codex-research-2026-10-09/jev/`. Research was not rerun. Jev used `jev-1.13.0` and the frozen `first/rubric.md`.
+
+The adapter reused `summary_profiles`, `company_request`, `evaluate`, and the existing Jev transport/validation. It mapped experimental dimension IDs to explicit scope keys without changing any facts, gaps, conflicts or source URLs. Research provenance hashes refer to the actual Codex prompt/schema and original output, not the previous research implementation. Region scopes preserve the target locations; unknown corporate grades remain unknown, with the public role title retained. These declared target scopes do not establish that every fact applies to them. All stores are isolated; no production database or dashboard publication was tested.
+
+All 11 calls succeeded on their first HTTP attempt. The initial eight calls took 6.17 seconds in aggregate; the three repeats took 2.22 seconds, for 8.39 seconds of recorded call time. Replaying the identical bundle reused all eight profiles with zero HTTP attempts and identical retained ratings. Empty Climind compensation facts produced no profile and no Jev call. A company status of `scored` means its supplied profiles were scored, not that all three dimensions are available.
+
+| Employer | Dimension | Score, 1–5 | Raw confidence | Evidence sufficiency |
+| --- | --- | ---: | ---: | ---: |
+| Microsoft | company | 4.22 | 0.64 | 0.32 |
+| Microsoft | culture | 2.82 | 0.52 | 0.14 |
+| Microsoft | compensation | 4.21 | 0.69 | 0.17 |
+| NVIDIA | company | 4.40 | 0.52 | 0.36 |
+| NVIDIA | culture | 3.20 | 0.56 | 0.12 |
+| NVIDIA | compensation | 4.18 | 0.59 | 0.14 |
+| Climind | company | 2.97 | 0.93 | 0.07 |
+| Climind | culture | 3.05 | 0.51 | 0.09 |
+
+Independent culture repeats returned Microsoft 2.87, NVIDIA 3.23, and Climind 3.00: absolute changes of 0.05, 0.03, and 0.05. Their sufficiency values stayed at 0.14, 0.12, and 0.09. One repeat per employer demonstrates only this sample's small variation, not general repeatability or correctness.
+
+The transport and evidence-preservation checks passed, but scoring quality is not established. All eight sufficiency values are low (0.07–0.36); no pass threshold is introduced. In particular, Climind company confidence 0.93 coexists with sufficiency 0.07, and Microsoft compensation scores 4.21 despite uncertain grade applicability and sufficiency 0.17. The numerical culture results around 3 must not be interpreted as evidence of ordinary working conditions. The API returns distributions and sufficiency, not an explanatory rationale; the exact causes of each number cannot be inferred from the response alone.
+
+The research prompt also omits explicit coverage of several current rubric topics, including actual weekly hours, paid leave and local social-insurance/housing-fund terms. The original source audit established claim support, not enough coverage to score confidently. Extend the public research checklist using objective evidence questions, without exposing private preference thresholds, before claiming useful scoring quality. Preserve the current raw scores and uncertainty; do not invent corrections or silently change recommendation policy.
+
+An existing rubric inconsistency remains outside this experiment: its opening paragraph recommends using all four numerical scores without sufficiency gates, while its later sufficiency/recommendation section says unsupported high scores cannot provide positive grounds. This experiment does not resolve that product decision or validate downstream recommendation behavior. Direction scoring, complete job assembly, SQLite publication and dashboard rendering were not exercised.
+
+Verification: live fact/citation preservation assertions and cache replay passed; existing company-scope/cache and Jev response/retry tests passed. Syntax and workflow scan checks also passed. Original Codex outputs and all raw Jev responses remain unedited.
