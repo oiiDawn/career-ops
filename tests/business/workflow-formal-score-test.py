@@ -121,4 +121,21 @@ with tempfile.TemporaryDirectory() as temp:
 with tempfile.TemporaryDirectory() as temp, patch.object(model,'call_agent',lambda phase,prompt: ({'identity_url':'https://www.microsoft.com/', 'scopes':{**scopes,'compensation':{**scopes['compensation'],'level':'2'}}},'plan')):
     bundle=g.public_bundle({**jd,'company':'Microsoft','role':'Software Engineer 2--M365 UIPilot team'},Path(temp),'2026-10-11')
     assert bundle['companies'][0]['scopes'][2]['scope']['level']=='Software Engineer 2'
+with tempfile.TemporaryDirectory() as temp:
+    attempts=[]
+    def plan_repair(phase,prompt):
+        attempts.append(prompt)
+        compensation={**scopes['compensation'],'level':'unknown'}
+        if len(attempts)==1:
+            compensation['cities']='Shanghai'
+        else:
+            assert 'Explicit applicability scope required' in prompt and 'secret CV' not in prompt
+        return {'identity_url':'https://www.nvidia.com/', 'scopes':{**scopes,'compensation':compensation}},'plan'
+    with patch.object(model,'call_agent',plan_repair):
+        bundle=g.public_bundle({**jd,'company':'NVIDIA'},Path(temp),'2026-10-11')
+    assert len(attempts)==2 and len(list(Path(temp).glob('scope-plan-attempt-*')))==2
+    assert bundle['companies'][0]['scopes'][2]['scope']['level']=='unknown'
+    assert 'cities' not in bundle['companies'][0]['scopes'][2]['scope']
+    with patch.object(model,'call_agent',side_effect=AssertionError('Repeated saved scope plan')):
+        g.public_bundle({**jd,'company':'NVIDIA'},Path(temp),'2026-10-11')
 print('formal score: cold four requests, shared company cache, raw metadata and resume without repeated calls passed')
