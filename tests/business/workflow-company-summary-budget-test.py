@@ -149,6 +149,17 @@ with tempfile.TemporaryDirectory() as temp:
              if 'sources' in json.loads(messages[1].content)]
     assert ''.join(s['text'] for group in batches for s in group)==body
 
+    def same_employer_mislabeled(messages,n):
+        reply=empty_document(messages,n,unrelated=True)
+        value=json.loads(reply.content)
+        value['document_scope']['entity']=public['name']
+        reply.content=json.dumps(value)
+        return reply
+    behavior=same_employer_mislabeled
+    result=run('same-employer-mislabeled', [large])
+    assert result['status']=='summarized' and result['fragments_skipped']==0 and len(result['calls'])>1
+    assert result['answer']['profiles'][0]['facts']
+
     def expensive(messages, n):
         reply = answer(messages)
         reply.usage_metadata = {'input_tokens': 200000, 'output_tokens': 20, 'total_tokens': 200020}

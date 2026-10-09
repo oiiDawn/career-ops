@@ -49,6 +49,8 @@ Use status="unrelated_employer" only when the supplied document heading explicit
 as the subject of its policies/report, with no relevant target-company facts. Quote the identified employer in entity
 and describe the explicit heading in basis. An empty excerpt does not prove the entire document is unrelated;
 uncertain, mixed-employer or potentially relevant contractual relationships must not use this status.
+The target company is never an unrelated employer. A publisher is not the document's subject employer;
+general law or market guidance may yield empty facts but is not another employer's policy.
 When this status applies, return empty facts for every requested profile; other employers' facts do not belong there.
 This describes the source's subject, never absence of a target-company policy. It is not a research plan or a score.
 """)
@@ -568,7 +570,8 @@ def summarize_source(public: dict, sources: list, output: Path) -> dict:
             answers.append(answer)
             if (index == 0 and len(sources) == 1 and document_scope
                     and document_scope.get('status') == 'unrelated_employer'
-                    and all(isinstance(document_scope.get(k), str) and document_scope[k].strip() for k in ('entity', 'basis'))):
+                    and all(isinstance(document_scope.get(k), str) and document_scope[k].strip() for k in ('entity', 'basis'))
+                    and normalize_company(document_scope['entity']) != normalize_company(public['name'])):
                 for profile in answer['profiles']:
                     profile['facts'] = []
                 fragments_skipped = sum(len(rest) for rest in batches[index+1:])
