@@ -67,10 +67,15 @@ td .sub { color: var(--muted); font-size: 12px; }
 .pill.deprioritize, .pill.uncertain, .pill.unknown, .pill.responded, .pill.interview { background: var(--depri-bg); color: var(--depri); }
 .pill.discard, .pill.fail, .pill.stale, .pill.expired, .pill.closed, .pill.rejected, .pill.ineligible { background: var(--discard-bg); color: var(--discard); }
 .dims { display: flex; gap: 4px; }
-.dim { width: 22px; text-align: center; border-radius: 4px; font-size: 12px; background: var(--neutral-bg); color: var(--muted); }
-.dim.s5, .dim.s4 { background: var(--focus-bg); color: var(--focus); }
-.dim.s3 { background: var(--depri-bg); color: var(--depri); }
-.dim.s2, .dim.s1 { background: var(--discard-bg); color: var(--discard); }
+.dim { min-width: 36px; padding: 0 4px; text-align: center; border-radius: 4px; font-size: 12px; font-variant-numeric: tabular-nums;
+  background: var(--neutral-bg); color: var(--muted); }
+.dim.hi { background: var(--focus-bg); color: var(--focus); }
+.dim.mid { background: var(--depri-bg); color: var(--depri); }
+.dim.lo { background: var(--discard-bg); color: var(--discard); }
+.dim.weak { opacity: .5; outline: 1px dashed currentColor; outline-offset: -1px; }
+.dim-table { width: 100%; font-size: 13px; margin-bottom: 8px; }
+.dim-table th { position: static; cursor: auto; }
+.dim-table td:first-child { white-space: nowrap; }
 .empty { padding: 40px; text-align: center; color: var(--muted); }
 .drawer { position: fixed; top: 0; right: 0; bottom: 0; width: min(860px, 100vw); background: var(--panel);
   box-shadow: var(--shadow); transform: translateX(100%); transition: transform .2s ease; z-index: 10;
@@ -215,12 +220,43 @@ function safeUrl(url) { return /^https?:\/\//i.test(url || "") ? url : "#"; }
 function jobLink(job, text = "↗") {
   return `<a class="ext" href="${esc(safeUrl(job.url))}" target="_blank" rel="noopener noreferrer" onclick="event.stopPropagation()" title="打开职位链接">${text}</a>`;
 }
+const DIMS = { direction: "方向", company: "公司", culture: "文化", compensation: "薪酬" };
+// Mirrors decisions.worth_attention: every dimension >3, at least two >4. Confidence/sufficiency are informational.
+const WEAK = 0.6;
+function band(v) { return v == null ? "" : v > 4 ? "hi" : v > 3 ? "mid" : "lo"; }
+function weak(d) { return d && d.score != null && (d.confidence < WEAK || d.evidence_sufficiency < WEAK); }
+function pct(v) { return v == null ? "—" : Math.round(v * 100) + "%"; }
+function dimTitle(k, d = {}) {
+  return d.score == null ? `${DIMS[k]}：未评分（${d.reason || "unknown"}）`
+    : `${DIMS[k]} ${d.score.toFixed(2)} · 置信度 ${pct(d.confidence)} · 充分度 ${pct(d.evidence_sufficiency)}`;
+}
+function dimCell(k, d) {
+  return `<span class="dim ${band(d.score)} ${weak(d) ? "weak" : ""}" title="${esc(dimTitle(k, d))}">${d.score == null ? "—" : d.score.toFixed(2)}</span>`;
+}
 function dims(scores, dimensions = {}) {
   if (!scores) return '<span class="sub">—</span>';
-  return `<span class="dims">${["direction", "company", "culture", "compensation"].map(k => {
-    const v = scores[k];
-    return `<span class="dim ${v ? "s" + Math.floor(v) : ""}" title="${esc(k + ": " + JSON.stringify(dimensions[k] || {}))}">${v == null ? "pending" : v.toFixed(2)}</span>`;
-  }).join("")}</span>`;
+  return `<span class="dims">${Object.keys(DIMS).map(k => dimCell(k, { ...dimensions[k], score: scores[k] })).join("")}</span>`;
+}
+function dimSource(d, k) {
+  const ref = (d.company_profiles || {})[k];
+  if (!ref) return '<span class="sub">岗位 JD</span>';
+  if (ref.source === "explicit_job_quotation") return "JD 明确薪资";
+  const scope = Object.entries(ref.scope || {}).map(([a, b]) => `${a}=${b}`).join(", ");
+  const expired = ref.valid_until && ref.valid_until < new Date().toISOString().slice(0, 10);
+  const shared = (d.profile_shared || {})[k];
+  return `${esc(scope)} <span class="sub">至 ${esc(ref.valid_until || "—")}</span>${expired ? " " + pill("expired") : ""}`
+    + (shared > 1 ? ` <a href="#" data-company="${esc(d.company)}">共用于 ${shared} 个岗位</a>` : "");
+}
+function dimTable(d) {
+  if (!d.scores) return "";
+  const rows = Object.keys(DIMS).map(k => {
+    const x = { ...(d.dimensions || {})[k], score: d.scores[k] };
+    const probs = x.probabilities ? Object.entries(x.probabilities).filter(([, p]) => p >= .05).map(([s, p]) => `${+s + 1}:${pct(p)}`).join(" ") : "";
+    return `<tr><td>${DIMS[k]}</td><td>${dimCell(k, x)}</td>
+      <td class="num">${pct(x.confidence)}</td><td class="num">${pct(x.evidence_sufficiency)}</td>
+      <td>${x.score == null ? `<span class="sub">${esc(x.reason || "")}</span>` : `<span class="sub">${esc(probs)}</span>`}</td><td>${dimSource(d, k)}</td></tr>`;
+  }).join("");
+  return `<div class="section-title">维度评分</div><table class="dim-table"><thead><tr><th>维度</th><th>分数</th><th>置信度</th><th>充分度</th><th>分布 / 原因</th><th>来源</th></tr></thead><tbody>${rows}</tbody></table>`;
 }
 
 async function readJson(response) {
@@ -304,7 +340,7 @@ function render() {
       <td class="num">${j.id}</td>
       <td><div class="role">${esc(j.role)}${jobLink(j)}</div><div class="sub">${esc(j.company)} · ${esc(j.source)}${j.material_count ? " · 📎 材料" : ""}${runs[j.id]?.status === "running" ? ` · ⏳ ${ACTION_TEXT[runs[j.id].action].running}` : ""}</div></td>
       <td class="hide-sm">${esc(j.location || "—")}</td>
-      <td>${dims(j.scores, j.dimensions)}${j.score_current === false ? pill("stale") : ""}${j.scoring_model === "attractiveness-v3" ? pill("旧三维") : ""}</td>
+      <td>${dims(j.scores, j.dimensions)}${j.score_current === false ? pill("stale") : ""}${j.profile_expired ? pill("expired") : ""}</td>
       <td>${pill(j.action)}</td>
       <td>${pill(j.state)}</td>
       <td>${pill(j.application_status)}</td>
@@ -369,7 +405,7 @@ function overview(d) {
     ["公司", esc(d.company)], ["来源", esc(d.source)], ["地点", esc(d.location || "—")],
     ["流程状态", pill(d.state)], ["存活", `${pill(d.liveness)} <span class="sub">${esc(artifact.liveness_reason || "")}</span>`],
     ["预筛", pill(d.prescreen)], ["资格", pill(d.eligibility)],
-    ["维度分", dims(d.scores, d.dimensions)], ["决策", pill(d.action)],
+    ["决策", pill(d.action)],
     ["发现时间", esc(d.created_at)], ["抓取时间", esc(d.captured_at || "—")], ["打分时间", esc(d.scored_at || "—")],
     ["投递状态", `${pill(d.application_status)} <span class="sub">${esc(d.application_updated_at || "")}</span>`],
   ];
@@ -377,6 +413,7 @@ function overview(d) {
   const findings = [...(prescreen.discard_reasons || []), ...(prescreen.uncertainties || []), ...(prescreen.missing || [])];
   const evidence = d.eligibility_detail ? (d.eligibility_detail.evidence.evidence || d.eligibility_detail.evidence.uncertainties || []) : [];
   return `<dl class="kv">${rows.map(([k, v]) => `<dt>${k}</dt><dd>${v}</dd>`).join("")}</dl>
+    ${dimTable(d)}
     ${findings.length ? `<div class="section-title">预筛发现</div>${findings.map(evidenceCard).join("")}` : ""}
     ${evidence.length ? `<div class="section-title">资格证据</div>${evidence.map(evidenceCard).join("")}` : ""}
     ${artifact.core_capabilities && artifact.core_capabilities.length ? `<div class="section-title">核心能力要求</div>${jsonBlock(artifact.core_capabilities)}` : ""}`;
@@ -541,9 +578,10 @@ function timeline(d) {
 }
 
 document.addEventListener("click", event => {
-  const target = event.target.closest("[data-stage],[data-sort],tr[data-id],[data-tab],[data-material],[data-action]");
+  const target = event.target.closest("[data-stage],[data-sort],tr[data-id],[data-tab],[data-material],[data-action],[data-company]");
   if (!target) return;
-  if (target.dataset.action) startAction(Number(target.dataset.job), target.dataset.action);
+  if (target.dataset.company) { event.preventDefault(); state.q = $("q").value = target.dataset.company; closeJob(); }
+  else if (target.dataset.action) startAction(Number(target.dataset.job), target.dataset.action);
   else if (target.dataset.stage) { state.stage = target.dataset.stage; render(); }
   else if (target.dataset.sort) {
     state.dir = state.sort === target.dataset.sort && state.dir === "desc" ? "asc" : "desc";

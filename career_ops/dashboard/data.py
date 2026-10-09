@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import date
 import json
 from pathlib import Path
 import sqlite3
@@ -76,6 +77,12 @@ def _action(score: dict | None, scan: dict | None) -> str | None:
         return None
 
 
+def _profile_expired(profiles: dict) -> bool:
+    """Shared company dimensions are dated; an expired profile no longer describes the employer today."""
+    today = date.today().isoformat()
+    return any(ref.get("valid_until") and ref["valid_until"] < today for ref in profiles.values())
+
+
 def _stage(row: sqlite3.Row, lifecycle: dict | None, score: dict | None) -> str:
     if lifecycle or row["application_state"] == "submitted":
         return "applied"
@@ -110,9 +117,9 @@ def list_jobs(db: sqlite3.Connection) -> list[dict]:
             "prescreen": (scan_artifact.get("prescreen") or {}).get("status"),
             "eligibility": eligibility.get(key),
             "scores": score if isinstance(score, dict) else None,
-            "scoring_model": artifact.get("scoring_model", "attractiveness-v3") if score else None,
             "dimensions": artifact.get("dimensions", {}),
             "company_profiles": artifact.get("company_profiles", {}),
+            "profile_expired": _profile_expired(artifact.get("company_profiles", {})),
             "company_research": artifact.get("company_research", {}),
             "action": _action(score, scan) if _score_current(db, score_result, scan) else None,
             "score_current": _score_current(db, score_result, scan),
@@ -123,6 +130,16 @@ def list_jobs(db: sqlite3.Connection) -> list[dict]:
             "material_count": materials.get(key, 0),
             "apply_task": apply_tasks.get(key),
         })
+    # Profile IDs derive from scope alone, so sharing is per company.
+    shared: dict[tuple, int] = {}
+    for job in jobs:
+        for ref in job["company_profiles"].values():
+            if ref.get("profile_id"):
+                key = (ref.get("company_id"), ref["profile_id"])
+                shared[key] = shared.get(key, 0) + 1
+    for job in jobs:
+        job["profile_shared"] = {dim: shared[(ref.get("company_id"), ref["profile_id"])]
+                                 for dim, ref in job["company_profiles"].items() if ref.get("profile_id")}
     return jobs
 
 
