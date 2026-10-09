@@ -119,7 +119,8 @@ Company reuse is tested through a separate isolated entrypoint:
 Formal scoring uses the same `career_ops/evaluation/company_pipeline.py`, `adaptive_research.py`
 and `jev.py` modules. Run `.venv/bin/python -B -m career_ops task start score ID scan:ID --re-evaluate`
 to score a retained active JD through the complete pipeline. A public-only planning node declares exact employer,
-region and grade scopes; absent grade remains unknown. Three main Agents research in parallel,
+region and grade scopes; absent grade remains unknown. Invalid scope formatting gets one model repair,
+with every attempt retained; invalid plans never dispatch company research. Three main Agents research in parallel,
 then each calls Jev as soon as its organized facts are ready. Only direction is evaluated per job.
 Formal source/response archives live in `data/company-profiles`; SQLite persists reusable company ratings and
 per-result job references in the publication transaction. Archives expire by Sunday (at most seven days),
@@ -136,6 +137,9 @@ Each retrieved document is frozen and immediately summarized by its dimension's 
 each one or two sentences. Only facts, source pointers and operational status enter subsequent research turns. Successful document
 summaries are reused on duplicate retrieval and resume; original bodies remain archived for review. The main Agent
 organizes these facts directly for its independent Jev request. All document-summary calls count toward usage.
+The stateless reader may stop a document whose explicit heading identifies another employer as its subject.
+The target company cannot be filtered as another employer; uncertain or mixed documents continue. Source-subject
+labels are model judgments, and original bodies remain available to inspect possible relevance mistakes.
 Prompts prioritize applicable recent evidence, independent source families and unresolved gaps, skipping unrelated seeds.
 Large summary inputs use 16K batches/32K merges and at most one JSON/length repair, with the configured native
 output ceiling (currently 32768). Failed owned research resumes from saved messages and caches without repeating
