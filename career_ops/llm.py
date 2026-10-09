@@ -90,7 +90,7 @@ def invoke(prepare: Callable[[ChatOpenAI], Runnable], messages: list[BaseMessage
 def complete_json(system: str, prompt: str, name: str = "model") -> str:
     """Run one tool-free JSON-mode model call and return its raw text."""
     parameters = {"response_format": {"type": "json_object"}}
-    if name in ("scope_plan", "score_sections"):
+    if name == "score_sections":
         parameters.update(reasoning_effort="low")
     return invoke(lambda model: model.bind(**parameters),
                   [SystemMessage(system), HumanMessage(prompt)], name).text

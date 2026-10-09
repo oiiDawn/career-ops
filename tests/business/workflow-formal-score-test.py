@@ -28,9 +28,6 @@ def research(company, postings, output):
 
 def agent(phase, prompt):
     model_calls.append(phase)
-    if phase == 'scope_plan':
-        assert 'secret CV' not in prompt and 'personal_floor' not in prompt
-        return {'identity_url':'https://sample.test/', 'scopes':scopes}, 'plan'
     assert phase == 'score_sections'
     return {n:'Grounded explanation; unknown facts remain unknown.' for n in (
         'overview','capabilities','compensation','questions','legitimacy','risks','checklist')}, 'sections'
@@ -51,7 +48,7 @@ with tempfile.TemporaryDirectory() as temp:
     root=Path(temp)
     jd={'opportunity_id':'1','url':'https://sample.test/jobs/1','company':'Sample','role':'Software Engineer II',
         'jd':'Build agent products. Grade SDE2. Suzhou, China.', 'captured_at':'2026-10-08',
-        'liveness':'active','prescreen':{'status':'pass'}}
+        'location_evidence':'China, Jiangsu, Suzhou', 'liveness':'active','prescreen':{'status':'pass'}}
     values={'jd_report':jd,'cv':'secret CV','profile':'language: {output: zh-CN}', 'targeting':'Agent work',
             'rules':'Current rules','rubric':c.jev.RUBRIC.read_text()}
     with patch.object(model,'call_agent',agent),patch.object(a,'run',research),\
@@ -96,24 +93,35 @@ with tempfile.TemporaryDirectory() as temp:
         third=g.run_score(values,root/'workflow-drafts',root)
         assert len(jev_calls)==6 and len(research_calls)==1
         assert third['artifact']['company_profiles']==first['artifact']['company_profiles']
-with tempfile.TemporaryDirectory() as temp, patch.object(model,'call_agent',lambda phase,prompt: ({'identity_url':'https://www.microsoft.com/', 'scopes':{**scopes,'compensation':{**scopes['compensation'],'level':'2'}}},'plan')):
-    bundle=g.public_bundle({**jd,'company':'Microsoft','role':'Software Engineer 2--M365 UIPilot team'},Path(temp),'2026-10-11')
-    assert bundle['companies'][0]['scopes'][2]['scope']['level']=='Software Engineer 2'
+        values = {**values, 'jd_report': {**jd, 'opportunity_id':'4', 'url':'https://sample.test/jobs/4',
+            'location_evidence':'Shanghai, China'}}
+        fourth = g.run_score(values, root/'workflow-drafts', root)
+        assert len(research_calls) == 2
+        assert [item['dimension'] for item in research_calls[-1]['scopes']] == ['compensation']
+        assert fourth['artifact']['company_profiles']['culture'] == first['artifact']['company_profiles']['culture']
+        assert set(model_calls) == {'score_sections'}
 with tempfile.TemporaryDirectory() as temp:
-    attempts=[]
-    def plan_repair(phase,prompt):
-        attempts.append(prompt)
-        compensation={**scopes['compensation'],'level':'unknown'}
-        if len(attempts)==1:
-            compensation['cities']='Shanghai'
-        else:
-            assert 'Explicit applicability scope required' in prompt and 'secret CV' not in prompt
-        return {'identity_url':'https://www.nvidia.com/', 'scopes':{**scopes,'compensation':compensation}},'plan'
-    with patch.object(model,'call_agent',plan_repair):
-        bundle=g.public_bundle({**jd,'company':'NVIDIA'},Path(temp),'2026-10-11')
-    assert len(attempts)==2 and len(list(Path(temp).glob('scope-plan-attempt-*')))==2
-    assert bundle['companies'][0]['scopes'][2]['scope']['level']=='unknown'
-    assert 'cities' not in bundle['companies'][0]['scopes'][2]['scope']
-    with patch.object(model,'call_agent',side_effect=AssertionError('Repeated saved scope plan')):
-        g.public_bundle({**jd,'company':'NVIDIA'},Path(temp),'2026-10-11')
-print('formal score: cold four requests, shared company cache, raw metadata and resume without repeated calls passed')
+    directory = Path(temp)/'workflow-drafts'/'job'
+    directory.mkdir(parents=True)
+    with patch.object(model, 'call_agent', side_effect=AssertionError('Scope lookup must not call a model')):
+        bundle = g.public_bundle({**jd, 'company':'Microsoft', 'role':'Software Engineer 2--M365 UIPilot team',
+            'location_evidence':'China, Shanghai, Shanghai; China, Beijing, Beijing; China, Jiangsu, Suzhou'}, directory, '2026-10-11')
+        assert bundle['jobs'][0]['scopes']['culture'] == {'region':'China'}
+        compensation = bundle['jobs'][0]['scopes']['compensation']
+        assert compensation['level'] == 'Software Engineer 2'
+        assert compensation['region'] == 'China:Beijing|Shanghai|Suzhou'
+        entity = {k:bundle['companies'][0][k] for k in ('company_id','name','identity_url')}
+        entity['identity_url'] = 'https://www.microsoft.com/'
+        archive = directory.parent.parent/'company-profiles'/entity['company_id']/'evidence'
+        archive.mkdir(parents=True)
+        (archive/'existing.json').write_text(json.dumps({'entity':entity}))
+        second = g.public_bundle({**jd, 'company':'Microsoft', 'role':'Senior Software Engineer',
+            'url':'https://another-ats.test/job', 'location_evidence':[{'address':{
+                'addressCountry':'CN', 'addressLocality':'Suzhou'}}]}, directory, '2026-10-11')
+        assert second['companies'][0]['identity_url'] == entity['identity_url']
+        assert second['companies'][0]['company_id'] == entity['company_id']
+        assert second['jobs'][0]['scopes']['compensation']['level'] == 'Senior Software Engineer'
+        unknown = g.public_bundle({**jd, 'location_evidence':None, 'role':'Engineer'}, directory, '2026-10-11')
+        assert unknown['jobs'][0]['scopes']['culture']['region'] == 'unknown'
+        assert unknown['jobs'][0]['scopes']['compensation']['level'] == 'unknown'
+print('formal score: deterministic scopes, retained identity, company reuse and checkpoint recovery passed')

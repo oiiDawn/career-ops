@@ -98,7 +98,7 @@ are removed without an archive.
 ## Company research and scoring
 
 Run `.venv/bin/python -B -m career_ops task start score ID scan:ID --re-evaluate`
-for a retained active JD. A public-only planning node declares employer and region/grade scopes.
+for a retained active JD. A deterministic lookup reuses retained employer identities and constructs region/grade scopes from official location fields and explicit role titles, without a model call. Missing fields remain unknown; ambiguous retained identities stop scoring. New employers use the posting host as an identity lead and the posting URL as a research seed.
 One Codex CLI task researches all missing company/culture/compensation scopes together, using
 `gpt-6-astra`, low reasoning and live web search, with a 900-second process deadline.
 The CLI must be installed and authenticated with `codex login` under the scheduler's user.
@@ -179,5 +179,4 @@ usage is retained separately and is not an internal model-request count or a mon
 
 Initial recommendations use four scores: each must be at least 4 for `focus`; missing/lower scores
 are `deprioritize`, and confirmed hard failures remain `discard`. Confidence and sufficiency are
-informational and never trigger automatic review or fallback. Full scoring also includes scope
-planning, direction and report generation; the 900-second cap applies to each Codex research task.
+informational and never trigger automatic review or fallback. Full scoring also includes employer lookup, direction and report generation; the 900-second cap applies to each Codex research task.
