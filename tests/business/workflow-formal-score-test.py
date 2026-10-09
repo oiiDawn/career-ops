@@ -118,4 +118,7 @@ with tempfile.TemporaryDirectory() as temp:
         third=g.run_score(values,root/'workflow-drafts',root)
         assert len(jev_calls)==6 and len(research_calls)==9
         assert third['artifact']['company_profiles']==first['artifact']['company_profiles']
+with tempfile.TemporaryDirectory() as temp, patch.object(model,'call_agent',lambda phase,prompt: ({'identity_url':'https://www.microsoft.com/', 'scopes':{**scopes,'compensation':{**scopes['compensation'],'level':'2'}}},'plan')):
+    bundle=g.public_bundle({**jd,'company':'Microsoft','role':'Software Engineer 2--M365 UIPilot team'},Path(temp),'2026-10-11')
+    assert bundle['companies'][0]['scopes'][2]['scope']['level']=='Software Engineer 2'
 print('formal score: cold four requests, shared company cache, raw metadata and resume without repeated calls passed')

@@ -43,7 +43,7 @@ level:explicit role grade or "unknown", role_family:software_engineering or actu
 currency:expected research currency (CNY for China, HKD for Hong Kong, otherwise ISO code or "unknown"), basis:annual_total or annual_guaranteed_base}}}.
 Use China, Hong Kong, and globally consistent English geography names. For China multi-city use
 China:Beijing|Shanghai|Suzhou in alphabetical order; for a single city China:Suzhou, for country only China.
-Software Engineer 2 / II may be labelled SDE2; do not infer corporate IC levels from Senior or experience years.
+Software Engineer 2 / II must retain the full public title Software Engineer 2, not the ambiguous numeric grade 2; do not infer corporate IC levels from Senior or experience years.
 If grade absent use unknown; unknown scopes cannot borrow known-grade ratings. Do not choose one city from a multi-city JD.
 Culture country scope is shared unless explicit different policy region. China salary is annual_total; Hong Kong salary annual_guaranteed_base.
 Identify only the stated employer, not a hiring agency or inferred subsidiary. URL identifies the stated employer;
@@ -71,7 +71,10 @@ def public_bundle(jd: dict, directory: Path, valid_until: str) -> dict:
     scopes = plan['scopes']
     if jd['company'].strip().casefold() == 'microsoft' and isinstance(scopes, dict):
         compensation = scopes.get('compensation', {})
-        if compensation.get('level', '').strip().casefold() in ('sde2', 'sde ii', 'software engineer 2', 'software engineer ii'):
+        level = compensation.get('level', '').strip().casefold()
+        role = jd['role'].casefold()
+        if (level in ('sde2', 'sde ii', 'software engineer 2', 'software engineer ii')
+                or level in ('2', 'ii') and ('software engineer 2' in role or 'software engineer ii' in role)):
             compensation['level'] = 'Software Engineer 2'
     if not isinstance(scopes, dict) or set(scopes) != set(pipeline.SHARED):
         raise ValueError('Three explicit company scope dimensions required')

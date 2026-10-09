@@ -31,6 +31,9 @@ conflicts contain actual differing source claims with scope/date, not unsupporte
 EVIDENCE_RULES = """Only assert that an employer lacks a policy, benefit or practice when a source explicitly states that.
 Unsuccessful searches, omitted fields, inaccessible pages and empty extracted tables never establish nonexistence.
 Exclude empty denials such as "no evidence shows X", "X cannot be confirmed" or "the source does not disclose X" as facts.
+The same rule applies to unavailable data, grade mappings and eligibility: no absence claim without an explicit source statement.
+Do not append unsupported negative or missing-information sentences to otherwise useful claims; omit those clauses entirely.
+Do not turn a region-specific benchmark into an unqualified country-wide bonus/equity policy.
 Keep relevant explicitly documented negative policies/events. Limitations describe actual scope, age, sampling and conditions;
 they must not add unsupported absence claims. Unresolved information belongs only in specific forward research questions.
 Do not turn global policy into local execution, statutory minima into employer practice, or benchmarks into offers.
