@@ -186,6 +186,8 @@ class Research:
                 'calls': result['calls'], 'summary_directory': str(directory.resolve())})
             if result['status'] == 'summarized':
                 source['facts'] = result['answer']['profiles']
+                source['document_scope'] = result.get('document_scope')
+                source['fragments_skipped'] = result.get('fragments_skipped', 0)
             self.checkpoint()
             if result['status'] != 'summarized':
                 raise RuntimeError('Document fact summary failed; body retained for retry')

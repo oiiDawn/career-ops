@@ -198,3 +198,5 @@ Tavily credits per dimension, with no cumulative token or aggregate-time cap.
 Every formal score attempt retains actual LLM request counts, per-attempt latency and reported
 usage in its draft `model-calls/`; dimension ledgers count `collect_facts` invocations separately
 from source-summary LLMs, Tavily and Jev requests. Missing provider usage remains unknown.
+
+单篇长文分片摘要时，摘要 Agent 可基于明确文档标题声明其制度或年报属于其他雇主；首片没有目标公司相关事实时不再摘要该文剩余片段，完整 provider 正文仍保留供审阅。混合或未知归属、仅首片无事实均不触发此处理。该判断只辨认来源主体，不是制度不存在的事实，不新增搜索或评分自主性。

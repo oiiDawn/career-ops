@@ -4,6 +4,7 @@ from __future__ import annotations
 import hashlib
 import fcntl
 import json
+import re
 import sqlite3
 from contextlib import closing
 from pathlib import Path
@@ -74,7 +75,7 @@ def public_bundle(jd: dict, directory: Path, valid_until: str) -> dict:
         level = compensation.get('level', '').strip().casefold()
         role = jd['role'].casefold()
         if (level in ('sde2', 'sde ii', 'software engineer 2', 'software engineer ii')
-                or level in ('2', 'ii') and ('software engineer 2' in role or 'software engineer ii' in role)):
+                or level in ('2', 'ii') and re.search(r'\bsoftware engineer (?:2|ii)\b', role)):
             compensation['level'] = 'Software Engineer 2'
     if not isinstance(scopes, dict) or set(scopes) != set(pipeline.SHARED):
         raise ValueError('Three explicit company scope dimensions required')

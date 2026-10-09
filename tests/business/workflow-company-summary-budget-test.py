@@ -128,6 +128,26 @@ with tempfile.TemporaryDirectory() as temp:
     assert all((root/'batched'/f'call-{call["index"]}.request.json').exists() and
                (root/'batched'/f'call-{call["index"]}.response.json').exists() for call in result['calls'])
 
+    def empty_document(messages, n, unrelated=False):
+        reply=answer(messages)
+        value=json.loads(reply.content)
+        for profile in value['profiles']: profile['facts']=[]
+        if unrelated:
+            value['document_scope']={'status':'unrelated_employer','entity':'Other Employer',
+                                     'basis':'Annual report heading explicitly names Other Employer'}
+        reply.content=json.dumps(value)
+        return reply
+    behavior=lambda messages,n: empty_document(messages,n,unrelated=True)
+    result=run('other-employer', [large])
+    assert result['status']=='summarized' and len(result['calls'])==1 and result['fragments_skipped']>0
+    assert result['answer']['profiles'][0]['facts']==[]
+    behavior=lambda messages,n: empty_document(messages,n)
+    result=run('unknown-empty-document', [large])
+    assert result['status']=='summarized' and result['fragments_skipped']==0 and len(result['calls'])>1
+    batches=[json.loads(messages[1].content)['sources'] for messages in dispatched
+             if 'sources' in json.loads(messages[1].content)]
+    assert ''.join(s['text'] for group in batches for s in group)==body
+
     def expensive(messages, n):
         reply = answer(messages)
         reply.usage_metadata = {'input_tokens': 200000, 'output_tokens': 20, 'total_tokens': 200020}
