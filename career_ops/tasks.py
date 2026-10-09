@@ -125,9 +125,9 @@ class Runtime:
         if call_limit is not None and calls_before >= call_limit:
             raise TimeoutError("tool_budget_exhausted")
         remaining = ATTEMPT_SECONDS - task["attempt_elapsed_seconds"] - (time.monotonic() - self.started_at)
-        if remaining <= 0:
+        if phase != "evaluate" and remaining <= 0:
             raise TimeoutError("time_budget_exhausted")
-        deadline = time.monotonic() + remaining
+        deadline = None if phase == "evaluate" else time.monotonic() + remaining
         draft_root = Path(os.environ.get("CAREER_OPS_DRAFT_ROOT", self.store.path.parent / "workflow-drafts"))
         stub = load_stub("CAREER_OPS_MODEL_STUB")
         phases = {
@@ -142,7 +142,7 @@ class Runtime:
         except Exception as error:
             task = self.store.add_usage(state["task_id"], time.monotonic() - self.started_at, 0)
             self.started_at = time.monotonic()
-            if time.monotonic() >= deadline:
+            if deadline is not None and time.monotonic() >= deadline:
                 raise TimeoutError("time_budget_exhausted") from error
             if call_limit is not None and task["attempt_tool_calls"] >= call_limit:
                 raise TimeoutError("tool_budget_exhausted") from error
@@ -151,7 +151,7 @@ class Runtime:
             DEADLINE.reset(deadline_token)
             USAGE.reset(usage_token)
         try:
-            if time.monotonic() >= deadline:
+            if deadline is not None and time.monotonic() >= deadline:
                 raise TimeoutError("time_budget_exhausted")
             if not isinstance(value, dict):
                 raise ValueError("Model phase response must be an object")

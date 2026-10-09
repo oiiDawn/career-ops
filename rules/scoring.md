@@ -69,7 +69,7 @@ input fingerprints still match.
 
 LangGraph scoring uses the four-dimension policy in `rules/evaluation/four-dimension.md`.
 Three independent company/culture/compensation agents collect and summarize public
-company facts, each within its own 200K token allowance. Each dimension is scored
+company facts through independent Deep Agents, without cumulative token or score-stage time caps. Each dimension is scored
 by its own Jev request as soon as its summary is ready; valid exact company scopes
 reuse persistent evidence and ratings. Job direction is scored separately.
 Current JD, candidate and policy inputs bind each report version. Invalid or absent
@@ -126,19 +126,19 @@ record “I don't know”; never promote a guess to a verified fact.
 
 ### 正式公司研究与发布
 
-研究与摘要仅发公开公司资料，不发送候选经历、CV 或私人薪资偏好；私人标准仅用于授权 Jev 评分。每维度采集最多150K token，为摘要至少预留50K，未用额度可流入摘要，多个薪酬范围共享同 agent 200K。每 agent 保留20保守credits和既有时间边界；读取完整provider返回正文、保存实际查询/读取/失败/停止原因，按缺口探索，不将更多网页等同充分证据。
+研究与摘要仅发公开公司资料，不发送候选经历、CV 或私人薪资偏好；私人标准仅用于授权 Jev 评分。每维度使用独立 Deep Agent，不设累计 token 或评分阶段总时长硬上限，多个薪酬范围共用同一 agent。每 agent 使用60保守 Tavily credits；单次请求保留超时和有限重试，采集、压缩及摘要均计账；读取完整provider返回正文、保存实际查询/读取/失败/停止原因，按缺口探索，不将更多网页等同充分证据。
 
-有效公司scope复用，新增scope只补对应维度；摘要规则变更用已留存来源重新摘要，评分规则变更只重新评分。SQLite保存四维原始值与评估产物，旧结果保留。发布检查当前输入、结构、数值范围及报告身份；摘要语义仍须审阅，缺证不能自动推荐。
+有效公司scope复用，新增scope只补对应维度；摘要规则变更用已留存来源重新摘要，评分规则变更只重新评分。SQLite保存四维原始值与评估产物，旧结果保留。发布检查当前输入、结构、数值范围及报告身份；摘要语义仍须审阅；推荐仅按四维分数，缺口展示但不设充分性门槛。
 
 ### Hermes 定时评分
 
-- 固定 score cron 每二十分钟触发一次，使用 `scripts/career-ops-score.sh` 调用 Python `cron-score`，每次只推进一个岗位。单次任务预算900秒，870秒后不再启动新阶段；硬截止终止模型子进程树，调度间隔不能代替互斥。
+- 固定 score cron 每二十分钟触发一次，`scripts/career-ops-score.sh` 调用 Python `system advance` 推进一个持久任务，再调用 `system notify cron`。评分不设阶段总时长硬截止，单次请求仍有超时；持久任务与公司锁防止重复研究，调度间隔不能代替互斥。
 - `data/opportunities.db` 是机会与任务的权威队列；任务行记录尝试次数、模型调用与耗时。首次失败排在未尝试岗位后，第二次失败留待人工处理，不再自动重试。手动处理或候选资料/规则更新后可重评。
 - scan 在筛选、去重后保留来源抓取证据；失败保留原因，不能写 complete_jd=true。score 使用 scan 正式交接的完整 JD 和来源有效性证据；历史快照不代表岗位此刻仍开放，申请前重新核验。
 - 任务锁防止同一岗位并发执行；SQLite 短事务维护业务归属，网络和模型调用不占用业务事务。
 - 初始上下文由程序组装：当前评分规则、候选主来源、本岗位 JD 与冻结研究。定时任务不预载全功能 skill、上轮自然语言输出或全池报告。
 - 预筛中明确未知的相关年限保留待确认并继续评分；不能把“尚未证明满足年限”写成零年并淘汰。
 - 模型提供事实和判断；Python/LangGraph 负责来源冻结、结构化校验、哈希、报告及业务发布。同一输入仅发布一次；证据或报告不合格则修订或等待，不越过确定性门禁。
-- 三维公司 agent 各自保存采集及摘要原始产物与资源记录；正文保留 provider 实际完整返回，查询/读取按证据缺口进行并受独立预算限制，重复及访问失败记录停止原因。有效公司范围复用，无需按岗位重复研究。
+- 三维公司 agent 各自保存采集及摘要原始产物与资源记录；正文保留 provider 实际完整返回，查询/读取按证据缺口进行，网络调用受每维独立 credits 限制，重复及访问失败记录停止原因。有效公司范围复用，无需按岗位重复研究。
 - 检查点绑定输入和产物哈希；候选事实、评分规则或 JD 变化使受影响阶段失效。来源有效性不足则等待补证；每岗通过确定性校验后立即发布，历史报告保留原格式和原始证据。
 - 单次发布率、超时率、尝试次数和累计耗时分别记录；恢复运行的耗时不得称为从头完成的耗时。CV详细改写和面试准备在用户选岗后执行。

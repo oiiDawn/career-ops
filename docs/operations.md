@@ -128,10 +128,16 @@ Reports and Dashboard preserve four raw fractional scores, confidence and indepe
 Initial recommendations use scores only: all four dimensions must have scores of at least 4 for `focus`.
 Lower or missing scores are `deprioritize`; confirmed hard failures remain `discard`. Confidence and
 evidence sufficiency remain visible but do not block recommendations or trigger extra model review.
-Score research has no shared 20-call ceiling; each agent retains its own 200K tokens and 20 Tavily credits.
-Large inputs are batched and summarized by their own dimension agent, then merged; low reasoning and an
-configured model output ceiling (currently 32768) include reasoning tokens. All batches, merges and at most one JSON/length repair share
-the remaining allowance. Parent task deadlines remain binding.
+Three independent Deep Agents perform research with checkpointed state, readable offloaded tool results,
+and rolling context summaries. Cumulative model tokens and score-stage elapsed time have no hard cap;
+all research, compaction, retries and final summary calls retain usage. Each dimension has 60 conservative
+Tavily credits; exhausted search allowance stops further network dispatch and preserves findings for summary.
+Single model/Tavily requests retain timeouts and finite transient retries. Context compaction triggers at
+12K approximate input tokens and keeps 3K recent tokens; tool results above 2K approximate tokens are offloaded.
+The persisted full provider bodies remain the evidence source. These context thresholds are not resource budgets.
+Large summary inputs use 16K batches/32K merges and at most one JSON/length repair, with the configured native
+output ceiling (currently 32768). A failed researcher is resumable from its own checkpoint without repeating
+successful searches; existing unexpired company archives remain reusable.
 
 The following isolated CLI uses the same implementation with an experiment-only store:
 
@@ -156,14 +162,10 @@ responses and bodies; text equality, offsets and hash integrity are not acceptan
 Invalid summaries remain pending. A later CLI attempt can retry summary generation from
 retained material, with one bounded summary stage per scope group and no fallback scoring.
 
-Each dimension agent has its own 200K token allowance: research uses at most 150K,
-reserving at least 50K for its summaries. Any unused collection allowance remains
-available to that same agent's summaries, including multiple compensation regions. No shared
-company token cap is imposed; 600K is the sum of three independent allowances.
-Each agent keeps its own tool cache, ledger and clock, with 20 conservative Tavily
-credits, a 570-second collection dispatch limit and a 900-second model deadline.
-The CLI also has a 900-second overall hard deadline, which is tighter for multiple
-companies processed sequentially. Token estimates are proxies, not exact provider guarantees.
+Each dimension runs its own Deep Agent and summary pipeline with cumulative model tokens and score-stage
+time uncapped. The 60-credit Tavily allowance is per dimension, including multiple compensation scopes.
+Search exhaustion prevents new network dispatch but leaves local source reads and final summary available.
+All retries, compactions and summaries retain usage; unknown usage is reserved conservatively and is not a bill.
 Source headers accompany retained sections so publication dates are available to summaries.
 Full provider-returned bodies, raw messages, summary responses and usage remain in
 the isolated store. Valid exact scopes reuse archived summaries and ratings, including

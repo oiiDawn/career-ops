@@ -2,6 +2,7 @@
 import importlib.util
 import json
 from pathlib import Path
+from concurrent.futures import ThreadPoolExecutor
 import tempfile
 
 root = Path(__file__).resolve().parents[2]
@@ -50,17 +51,14 @@ with tempfile.TemporaryDirectory() as temp:
     r.credits = a.CREDIT_BUDGET - 1
     response = json.loads(tools['web_extract'].invoke({'urls': ['https://a.test', 'https://b.test'], 'terms': []}))
     assert not response['dispatched'] and len(calls) == 10
-    r.started -= a.DISPATCH_SECONDS
-    try:
-        r.provider('search', {'query':'x'}, 1)
-    except a.BudgetStop:
-        pass
-    else:
-        raise AssertionError('expired deadline dispatched')
-    assert len(calls) == 10
-    r.messages = [a.ToolMessage(content=json.dumps(read), tool_call_id='read-test')]
+    a.tavily = lambda endpoint,payload: calls.append((endpoint,payload)) or {'results': [], 'usage': {'credits': 1}}
+    with ThreadPoolExecutor(max_workers=2) as workers:
+        results = list(workers.map(lambda query: tools['web_search'].invoke({'query':query}), ['last credit one','last credit two']))
+    assert len(calls) == 11 and r.credits == a.CREDIT_BUDGET
+    assert sum('dispatched' in value for value in results) == 1
+    assert json.loads((r.output/'ledger.json').read_text())['credit_budget'] == 60
     handed = r.retrieved_evidence()
-    assert handed['retrieved_sources'][0]['sections'][0]['text'] == body[start:start+35]
+    assert any('Annual leave 20 days' in s['text'] for s in handed['retrieved_sources'][0]['sections'])
     assert handed['research_status'] == 'partial'
     r.stop = 'model_finished'
     (r.output / 'answer.txt').write_text('{"sources":[],"gaps":["unknown"]}')

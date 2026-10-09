@@ -36,7 +36,7 @@ ready_check = False
 score_failed_dimension = None
 culture_scored = threading.Event()
 summary_dimensions = []
-summary_allowances = []
+summary_groups = []
 
 
 class Model:
@@ -44,6 +44,18 @@ class Model:
     def bind(self, **kwargs):
         bindings.append(kwargs)
         return self
+
+
+from langchain_core.language_models import BaseChatModel
+from langchain_core.outputs import ChatResult, ChatGeneration
+class ResearchModel(BaseChatModel):
+    model_name: str = 'offline-research'
+    @property
+    def _llm_type(self): return 'openai'
+    def _generate(self, messages, stop=None, run_manager=None, **kwargs):
+        reply = invoke(lambda _: Model(), messages, 'isolated-adaptive-research')
+        return ChatResult(generations=[ChatGeneration(message=reply)])
+    def bind_tools(self, tools, **kwargs): return self.bind(tools=[t.name for t in tools])
 
 
 def invoke(prepare, messages, name):
@@ -105,12 +117,12 @@ def score(name, request, output, key):
 
 original_summary = c.summarize_company
 
-def summary_with_budget(public, sources, output, started, remaining):
-    summary_allowances.append((public['scopes'][0]['dimension'], remaining))
-    return original_summary(public, sources, output, started, remaining)
+def summary_with_tracking(public, sources, output):
+    summary_groups.append(public['scopes'][0]['dimension'])
+    return original_summary(public, sources, output)
 
-c.summarize_company = summary_with_budget
-a.llm.invoke, a.tavily, c.jev.call = invoke, tavily, score
+c.summarize_company = summary_with_tracking
+a.llm.invoke, a.llm.chat_model, a.tavily, c.jev.call = invoke, ResearchModel, tavily, score
 rubric = c.jev.RUBRIC.read_text()
 with tempfile.TemporaryDirectory() as temp:
     root = Path(temp)
@@ -122,14 +134,14 @@ with tempfile.TemporaryDirectory() as temp:
     cold = run('cold')
     assert len(network_calls) == 3 and model_calls.count('isolated-company-summary') == 3
     assert set(summary_dimensions) == set(c.SHARED) and summary_dimensions.count('compensation') == 1
-    assert all(remaining > 50000 for _, remaining in summary_allowances)
+    assert set(summary_groups) == set(c.SHARED)
     assert any(b.get('reasoning_effort') == 'low' and b.get('response_format') == {'type': 'json_object'} for b in bindings)
     assert len(scores) == 5 and len(cold['companies']['sample']['profiles']) == 4
     captures = list((root/'store/sample/evidence').glob('capture-*/ledger.json'))
     assert len(captures) == 3
     ledger = json.loads(captures[0].read_text())
-    assert all(json.loads(p.read_text())['token_budget'] == 150000 for p in captures)
-    assert ledger['token_budget'] == 150000 and ledger['dispatch_deadline_seconds'] == 570
+    assert all(json.loads(p.read_text())['token_budget'] is None for p in captures)
+    assert ledger['engine'] == 'deepagents' and ledger['credit_budget'] == 60
     assert ledger['sources'][0]['characters'] > 4000
     before = len(model_calls), len(network_calls), len(scores)
     warm = run('warm')
@@ -155,13 +167,11 @@ with tempfile.TemporaryDirectory() as temp:
         'scope':{**scopes['compensation'], 'region':'Beijing'}})
     run('comp-scope', expanded)
     c.SUMMARY_SYSTEM += '\nNew public organization rule.'
-    summary_allowances.clear()
+    summary_groups.clear()
     count = len(network_calls)
     run('summary-rule-change', expanded)
     assert len(network_calls) == count
-    comp_allowances = [n for d,n in summary_allowances if d=='compensation']
-    assert len(comp_allowances) == 2 and comp_allowances[0] == 200000
-    assert comp_allowances[1] < comp_allowances[0], 'One compensation agent must share allowance across archive groups'
+    assert summary_groups.count('compensation') == 2
     rubric += '\nChanged scoring standard.'
     count = len(model_calls)
     run('scoring-rule-change')

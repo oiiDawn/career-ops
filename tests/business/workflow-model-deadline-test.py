@@ -1,4 +1,4 @@
-"""Keep in-process model phases inside the task time and tool budgets."""
+"""Keep scan/application phases bounded while long score research retains per-request timeouts."""
 
 import os
 from pathlib import Path
@@ -49,6 +49,12 @@ with tempfile.TemporaryDirectory(prefix="career-ops-model-deadline-") as tempora
         result = Runtime(store, directory).run_model("metered", {}, {"task_id": task["task_id"]})
         assert 0 < result["remaining"] <= llm.CALL_TIMEOUT_SECONDS
         assert store.task(task["task_id"])["attempt_tool_calls"] == 1
+        score_task = store.start('job-score-uncapped', 'score', '{}')
+        store.db.execute('UPDATE tasks SET attempt_elapsed_seconds=10000 WHERE task_id=?', (score_task['task_id'],))
+        with patch('career_ops.tasks.ATTEMPT_SECONDS', 1):
+            result = Runtime(store, directory).run_model('evaluate', {}, {'task_id': score_task['task_id']})
+        assert result['remaining'] == llm.CALL_TIMEOUT_SECONDS
+        assert store.task(score_task['task_id'])['attempt_tool_calls'] == 1
     assert llm.DEADLINE.get() is None
     record_call()  # outside a task the budget context is cleared
     store.close()

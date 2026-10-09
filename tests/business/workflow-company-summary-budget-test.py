@@ -1,4 +1,4 @@
-"""Check summary token sharing, lossless input batching and retained failure attempts offline."""
+"""Check uncapped summary accounting, lossless input batching and retained failure attempts offline."""
 import json
 import math
 from pathlib import Path
@@ -54,10 +54,10 @@ class Model:
 adaptive.llm.chat_model = Model
 with tempfile.TemporaryDirectory() as temp:
     root = Path(temp)
-    def run(name, sources=None, remaining=120_000):
+    def run(name, sources=None):
         bindings.clear()
         dispatched.clear()
-        return c.summarize_company(public, sources or [source], root/name, time.monotonic(), remaining)
+        return c.summarize_company(public, sources or [source], root/name)
 
     behavior = lambda messages,n: answer(messages, finish='length' if n == 1 else 'stop')
     expected_deadline = time.monotonic()+100
@@ -99,18 +99,12 @@ with tempfile.TemporaryDirectory() as temp:
     assert result['calls'][0]['status'] == 'failed_usage_unknown'
     assert result['tokens_accounted'] == result['calls'][0]['tokens_reserved']+100
     assert (root/'transient/call-1.failure.json').exists()
-    # A transient retry cannot reset the allowance even if the first call has no reported usage.
-    allowance = result['calls'][0]['tokens_reserved']+1
-    result = run('exhausted', remaining=allowance)
-    assert result['status'] == 'failed' and len(result['calls']) == 1 and len(dispatched) == 1
-    assert result['tokens_accounted'] <= allowance and not result['repair_used']
-
     unit = '本地员工制度与实际工作时长不同。Scope and date remain explicit.\n'
     body = unit*(60_000//len(encoder.encode(unit)))
     large = {**source, 'text': body}
     behavior = lambda messages,n: answer(messages, realistic_usage=True)
     result = run('batched', [large])
-    assert result['status'] == 'summarized' and 50_000 < result['tokens_accounted'] <= 120_000
+    assert result['status'] == 'summarized' and result['tokens_accounted'] > 50_000
     batches = [json.loads(messages[1].content)['sources'] for messages in dispatched
                if 'sources' in json.loads(messages[1].content)]
     assert len(batches) > 1 and ''.join(s['text'] for group in batches for s in group) == body
@@ -119,7 +113,15 @@ with tempfile.TemporaryDirectory() as temp:
     assert all((root/'batched'/f'call-{call["index"]}.request.json').exists() and
                (root/'batched'/f'call-{call["index"]}.response.json').exists() for call in result['calls'])
 
+    def expensive(messages, n):
+        reply = answer(messages)
+        reply.usage_metadata = {'input_tokens': 200000, 'output_tokens': 20, 'total_tokens': 200020}
+        return reply
+    behavior = expensive
+    result = run('uncapped', [large])
+    assert result['status'] == 'summarized' and result['tokens_accounted'] > 200000
+
     behavior = lambda messages,n: answer(messages, finish='length' if n in (1,3) else 'stop')
     result = run('single-repair-across-batches', [large])
     assert result['status'] == 'failed' and len(result['calls']) == 3 and result['repair_used']
-print('summary batching, shared budget, length/JSON repair and transient accounting checks passed')
+print('summary batching, uncapped accounting, length/JSON repair and transient checks passed')

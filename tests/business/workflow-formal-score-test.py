@@ -21,6 +21,18 @@ class Model:
     def bind(self, **kwargs): return self
 
 
+from langchain_core.language_models import BaseChatModel
+from langchain_core.outputs import ChatResult, ChatGeneration
+class ResearchModel(BaseChatModel):
+    model_name: str = 'offline-research'
+    @property
+    def _llm_type(self): return 'openai'
+    def _generate(self, messages, stop=None, run_manager=None, **kwargs):
+        reply = invoke(lambda _: Model(), messages, 'isolated-adaptive-research')
+        return ChatResult(generations=[ChatGeneration(message=reply)])
+    def bind_tools(self, tools, **kwargs): return self.bind(tools=[t.name for t in tools])
+
+
 def invoke(prepare, messages, name):
     prepare(Model())
     research_calls.append(name)
@@ -71,7 +83,7 @@ with tempfile.TemporaryDirectory() as temp:
         'liveness':'active','prescreen':{'status':'pass'}}
     values={'jd_report':jd,'cv':'secret CV','profile':'language: {output: zh-CN}', 'targeting':'Agent work',
             'rules':'Current rules','rubric':c.jev.RUBRIC.read_text()}
-    with patch.object(model,'call_agent',agent),patch.object(a.llm,'invoke',invoke),patch.object(a,'tavily',provider),\
+    with patch.object(model,'call_agent',agent),patch.object(a.llm,'invoke',invoke),patch.object(a.llm,'chat_model',ResearchModel),patch.object(a,'tavily',provider),\
          patch.object(c.jev,'call',jev),patch.object(c.jev,'dotenv_values',lambda _: {'TYPESAFE_API_KEY':'key'}):
         store=BusinessStore(root/'opportunities.db')
         usage=model.USAGE.set((str(store.path),'test',None))

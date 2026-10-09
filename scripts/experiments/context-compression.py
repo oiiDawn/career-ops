@@ -275,8 +275,7 @@ class Experiment:
         if result_path.exists():
             result = json.loads(result_path.read_text())
         else:
-            remaining = BUDGET - self.used('c')
-            result = pipeline.summarize_company(public, filtered, summary_dir, time.monotonic(), remaining)
+            result = pipeline.summarize_company(public, filtered, summary_dir)
             self.events.append({'name': 'c-summary', 'tokens_accounted': result['tokens_accounted'],
                                 'status': result['status'], 'seconds': time.perf_counter() - started,
                                 'calls': result['calls']})
