@@ -91,6 +91,9 @@ def public_bundle(jd: dict, directory: Path, valid_until: str) -> dict:
         else:
             continue
         country = aliases.get(country, country)
+        if not country and isinstance(location, str) and location.strip() in {
+                'Beijing', 'Shanghai', 'Suzhou', 'Chengdu', 'Shenzhen', 'Guangzhou', "Xi'an"}:
+            country, city = 'China', location.strip()
         if country:
             countries.add(country)
             if city:
