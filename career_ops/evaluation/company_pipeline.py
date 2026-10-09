@@ -49,6 +49,7 @@ Use status="unrelated_employer" only when the supplied document heading explicit
 as the subject of its policies/report, with no relevant target-company facts. Quote the identified employer in entity
 and describe the explicit heading in basis. An empty excerpt does not prove the entire document is unrelated;
 uncertain, mixed-employer or potentially relevant contractual relationships must not use this status.
+When this status applies, return empty facts for every requested profile; other employers' facts do not belong there.
 This describes the source's subject, never absence of a target-company policy. It is not a research plan or a score.
 """)
 
