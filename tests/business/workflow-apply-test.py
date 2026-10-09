@@ -78,6 +78,8 @@ with tempfile.TemporaryDirectory(prefix="career-ops-apply-") as temporary:
     (inputs / "targeting.md").write_text("Target AI roles")
     (inputs.parent / "rules").mkdir(parents=True, exist_ok=True)
     (inputs.parent / "rules" / "scoring.md").write_text("Never invent claims")
+    (inputs.parent / "rules" / "evaluation").mkdir()
+    (inputs.parent / "rules" / "evaluation" / "four-dimension.md").write_text((ROOT / "rules/evaluation/four-dimension.md").read_text())
     (inputs.parent / "rules" / "shared" / "contract.md").write_text("Candidate claims require evidence")
     (inputs.parent / "rules" / "applications" / "workflow.md").write_text("Prepare resume and application materials; never submit.")
     (inputs / "article-digest.md").write_text("Approved article evidence")

@@ -8,6 +8,8 @@ import json
 import os
 from pathlib import Path
 import re
+import sqlite3
+from contextlib import closing
 import sys
 import time
 from typing import TypedDict
@@ -16,7 +18,7 @@ from langgraph.checkpoint.sqlite import SqliteSaver
 from langgraph.graph import END, START, StateGraph
 from openai import APITimeoutError
 
-from career_ops.input_contracts import digest as text_digest, score_inputs
+from career_ops.input_contracts import digest as text_digest, score_is_current
 from career_ops.interviews.context import INPUT_ROOT, load_context
 from career_ops.interviews.evidence import match_stories
 from career_ops.evaluation.preparation import build_preparation_plan
@@ -62,7 +64,9 @@ def current_context(directory: Path, opportunity_id: str) -> dict:
     if (str(report.get("opportunity_id")) != str(opportunity["id"])
             or any(report.get(key) != opportunity[key] for key in ("url", "company", "role"))):
         raise ValueError("Interview scan does not match the canonical opportunity")
-    if score.get("input_hash") != text_digest(score_inputs(scan["artifact"])):
+    with closing(sqlite3.connect(f"file:{directory / 'opportunities.db'}?mode=ro", uri=True)) as connection:
+        current_score = score_is_current(connection, score.get("input_hash"), scan["artifact"])
+    if not current_score:
         raise ValueError("Interview score is stale for current candidate or JD inputs")
     artifact = score["artifact"]
     if artifact.get("report_sha256") != text_digest(artifact.get("report", "")):

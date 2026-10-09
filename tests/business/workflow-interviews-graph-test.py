@@ -142,7 +142,7 @@ bound_context = {
     },
 }
 with patch("career_ops.interviews.workflow.load_context", return_value=bound_context), \
-     patch("career_ops.interviews.workflow.score_inputs", return_value="score-input"):
+     patch("career_ops.interviews.workflow.score_is_current", return_value=True):
     try:
         current_context(Path("unused"), "7")
     except ValueError as error:

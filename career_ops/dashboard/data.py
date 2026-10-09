@@ -7,7 +7,7 @@ from pathlib import Path
 import sqlite3
 
 from career_ops.evaluation.decisions import classify, valid_scores
-from career_ops.input_contracts import digest, score_inputs
+from career_ops.input_contracts import score_is_current
 
 
 MATERIAL_LABELS = {
@@ -55,12 +55,12 @@ def _apply_tasks(db: sqlite3.Connection) -> dict[str, dict]:
     return latest
 
 
-def _score_current(score_result: dict | None, scan: dict | None) -> bool | None:
+def _score_current(db: sqlite3.Connection, score_result: dict | None, scan: dict | None) -> bool | None:
     """Mirror the apply guard: a score is current only for today's JD, candidate and policy inputs."""
     if not score_result or not scan or scan.get("outcome") != "jd_report":
         return None
     try:
-        return digest(score_inputs(scan["artifact"])) == score_result.get("input_hash")
+        return score_is_current(db, score_result.get("input_hash"), scan["artifact"])
     except (KeyError, OSError, ValueError):
         return False
 
@@ -114,8 +114,8 @@ def list_jobs(db: sqlite3.Connection) -> list[dict]:
             "dimensions": artifact.get("dimensions", {}),
             "company_profiles": artifact.get("company_profiles", {}),
             "company_research": artifact.get("company_research", {}),
-            "action": _action(score, scan) if _score_current(score_result, scan) else None,
-            "score_current": _score_current(score_result, scan),
+            "action": _action(score, scan) if _score_current(db, score_result, scan) else None,
+            "score_current": _score_current(db, score_result, scan),
             "scored_at": evaluation.get("created_at"),
             "application_status": application["status"] if application else None,
             "application_updated_at": application["updated_at"] if application else None,

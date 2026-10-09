@@ -16,7 +16,7 @@ from langgraph.checkpoint.sqlite import SqliteSaver
 from langgraph.graph import END, START, StateGraph
 
 from career_ops.db import BusinessStore
-from career_ops.input_contracts import digest, score_inputs
+from career_ops.input_contracts import digest, score_is_current
 from career_ops.evaluation.decisions import worth_attention
 from career_ops.tracing import traced
 
@@ -46,8 +46,7 @@ def eligible_report(store: BusinessStore, opportunity_id: str) -> dict | None:
         artifact = result.get("artifact", {})
         if result.get("outcome") != "score" or row["eligibility"] == "fail":
             return None
-        current = score_inputs(scan["artifact"])
-        if digest(current) != row["input_hash"] or digest(row["input_payload"]) != row["input_hash"]:
+        if not score_is_current(store.db, row["input_hash"], scan["artifact"]) or digest(row["input_payload"]) != row["input_hash"]:
             return None
         score = artifact["score"]
         report = artifact["report"]

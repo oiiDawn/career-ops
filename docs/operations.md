@@ -177,6 +177,8 @@ SQLite company ratings and per-result references, input checks, report publicati
 remain on the existing workflow. Research dispatches count once in task usage; CLI aggregate token
 usage is retained separately and is not an internal model-request count or a monetary bill.
 
-Initial recommendations use four scores: each must be at least 4 for `focus`; missing/lower scores
+Initial recommendations use four scores: all must be strictly above 3 and at least two strictly above 4 for `focus`; other/missing scores
 are `deprioritize`, and confirmed hard failures remain `discard`. Confidence and sufficiency are
 informational and never trigger automatic review or fallback. Full scoring also includes employer lookup, direction and report generation; the 900-second cap applies to each Codex research task.
+
+Recommendation-only policy edits do not invalidate numeric scores. Stored scoring inputs remain byte-hash verified; freshness compares the scoring rubric independently of its two recommendation paragraphs. Historical reports retain their original recommendations; current decisions and Dashboard derive the current policy from retained scores.

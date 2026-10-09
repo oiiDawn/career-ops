@@ -1,6 +1,8 @@
 """Check score-based attention, confirmed failures and deterministic ordering."""
 
 import sys
+import json
+
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
@@ -42,6 +44,27 @@ assert classify({k: 5.0 for k in v4}, {"status": "pass"}) == "focus"
 assert classify(v4, {"status": "fail"}) == "discard"
 assert not valid_scores({**v4, "culture": float("nan")})
 
-assert worth_attention({k: 4.0 for k in v4})
-assert not worth_attention({**{k: 4.0 for k in v4}, "culture": 3.99})
-assert not worth_attention({**{k: 4.0 for k in v4}, "company": None})
+assert not worth_attention({k: 4.0 for k in v4})
+assert worth_attention({'direction':4.1, 'company':3.1, 'culture':3.01, 'compensation':4.01})
+assert not worth_attention({'direction':4.1, 'company':3.1, 'culture':3.0, 'compensation':4.01})
+assert not worth_attention({'direction':4.1, 'company':3.1, 'culture':3.01, 'compensation':4.0})
+assert not worth_attention({**{k: 4.1 for k in v4}, "company": None})
+
+# Recommendation changes preserve scores; evidence and numeric rubric changes invalidate them.
+import sqlite3
+from unittest.mock import patch
+from career_ops.input_contracts import digest, score_is_current
+
+with sqlite3.connect(':memory:') as connection:
+    connection.execute('CREATE TABLE tasks (module TEXT, opportunity_id TEXT, input_hash TEXT, input_payload TEXT)')
+    frozen = {'rubric': 'numeric grading\n正式推荐按四维分数执行 old', 'rules': '初期四维均有分数且各自≥4才推荐；', 'cv': 'candidate', 'jd_report': {'opportunity_id': '7'}}
+    payload = json.dumps(frozen)
+    connection.execute('INSERT INTO tasks VALUES (?, ?, ?, ?)', ('score', '7', digest(payload), payload))
+    updated = dict(frozen, rubric='numeric grading\n正式推荐按四维分数执行 new', rules='推荐阈值见 rules/evaluation/four-dimension.md；')
+    with patch('career_ops.input_contracts.score_inputs', return_value=json.dumps(updated)):
+        assert score_is_current(connection, digest(payload), frozen['jd_report'])
+    for updated in (dict(frozen, rubric='changed grading'), dict(frozen, cv='changed candidate'), dict(frozen, jd_report={'opportunity_id': '7', 'jd': 'changed'})):
+        with patch('career_ops.input_contracts.score_inputs', return_value=json.dumps(updated)):
+            assert not score_is_current(connection, digest(payload), frozen['jd_report'])
+    connection.execute('UPDATE tasks SET input_payload=?', (json.dumps(dict(frozen, cv='tampered')),))
+    assert not score_is_current(connection, digest(payload), frozen['jd_report'])

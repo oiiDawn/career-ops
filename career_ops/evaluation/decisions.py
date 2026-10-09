@@ -19,7 +19,7 @@ def worth_attention(score: dict) -> bool:
     if not valid_scores(score):
         raise ValueError("invalid dimension scores")
     if "culture" in score:
-        return all(value is not None and value >= 4 for value in score.values())
+        return all(value is not None and value > 3 for value in score.values()) and sum(value > 4 for value in score.values()) >= 2
     known = [value for value in score.values() if value is not None]
     return len(known) >= 2 and all(value >= 4 for value in known)
 

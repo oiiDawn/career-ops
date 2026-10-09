@@ -89,6 +89,7 @@ with tempfile.TemporaryDirectory() as temporary:
         scan = {"outcome": "jd_report", "input_hash": "h", "artifact": jd_report(opportunity)}
         db.execute("INSERT INTO results VALUES(?,?,?,?,?,?)", (f"scan-{opportunity}", f"scan-{opportunity}", opportunity, "scan", "h", json.dumps(scan)))
     for opportunity, input_hash in score_hashes.items():
+        db.execute("INSERT INTO tasks VALUES(?,?,?,?,?,?,?,?,?)", (f"score-{opportunity}", opportunity, "score", "completed", input_hash, 1, None, "v", score_inputs(jd_report(opportunity))))
         scored = {"outcome": "score", "input_hash": input_hash, "artifact": {"report": "## A. 岗位概览\n\nGood fit", "score": score, "scoring_model": "attractiveness-v4", "dimensions": {"culture": {"score": None, "status": "pending"}}}}
         db.execute("INSERT INTO results VALUES(?,?,?,?,?,?)", (f"score-{opportunity}", f"score-{opportunity}", opportunity, "score", input_hash, json.dumps(scored)))
     db.execute("INSERT INTO tasks VALUES('apply-3','3','apply','waiting','h',1,'user_review','v','{}')")

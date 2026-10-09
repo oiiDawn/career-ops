@@ -107,7 +107,7 @@ record “I don't know”; never promote a guess to a verified fact.
 
 唯一四维标准为 `rules/evaluation/four-dimension.md`：direction、company、culture、compensation 独立小数期望分（1–5）、原始 confidence 和独立 evidence_sufficiency；无总分、权重或覆盖率。缺失评分保留 null/pending。公司事实按实体与精确适用范围维护，未知职级或城市不猜定。
 
-报告保持 A/B/C/D/E/G、Risk Summary、Evaluation Checklist、Machine Summary 的原顺序。正文由模型提供，能力竞争力、门槛和真实性单列。Machine Summary 使用 scoring-v3、attractiveness-v4，保留 sources/advertised_comp，保存 dimensions、company_profiles、company_research 和按四维分数计算的 recommendation。初期四维均有分数且各自≥4才推荐；confidence与充分性仅作提示，不设置准入阈值；原始分数不截断取整，阅读显示保留两位小数。摘要按结构与适用范围接收，来源及原始响应留存供审阅，不要求逐字引文匹配或摘要 hash 完整性门禁。不得改写历史报告或从旧总分换算四维。
+报告保持 A/B/C/D/E/G、Risk Summary、Evaluation Checklist、Machine Summary 的原顺序。正文由模型提供，能力竞争力、门槛和真实性单列。Machine Summary 使用 scoring-v3、attractiveness-v4，保留 sources/advertised_comp，保存 dimensions、company_profiles、company_research 和按四维分数计算的 recommendation。推荐阈值见 rules/evaluation/four-dimension.md；confidence与充分性仅作提示，不设置准入阈值；原始分数不截断取整，阅读显示保留两位小数。摘要按结构与适用范围接收，来源及原始响应留存供审阅，不要求逐字引文匹配或摘要 hash 完整性门禁。不得改写历史报告或从旧总分换算四维。
 
 <!-- How you like results formatted. Examples:
      - Reports: lead with the score and the one-line verdict.

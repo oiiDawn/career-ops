@@ -46,6 +46,27 @@ def score_inputs(report: dict) -> str:
     return json.dumps(inputs, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
 
 
+def score_is_current(connection, input_hash: str, report: dict) -> bool:
+    """Verify frozen input integrity and scoring freshness independently of recommendation prose."""
+    if not isinstance(report, dict) or not report.get("opportunity_id"):
+        return False
+    row = connection.execute(
+        "SELECT input_payload FROM tasks WHERE module='score' AND opportunity_id=? AND input_hash=? ORDER BY rowid DESC LIMIT 1",
+        (str(report['opportunity_id']), input_hash),
+    ).fetchone()
+    if not row or digest(row[0]) != input_hash:
+        return False
+    stored, current = json.loads(row[0]), json.loads(score_inputs(report))
+    if not all(isinstance(value.get("rubric"), str) for value in (stored, current)):
+        return False
+    for value in (stored, current):
+        if "rules" in value:
+            value["rules"] = value["rules"].replace("初期四维均有分数且各自≥4才推荐；", "推荐阈值见 rules/evaluation/four-dimension.md；")
+        value['rubric'] = '\n'.join(line for line in value['rubric'].splitlines() if not line.startswith(
+            ('历史评分不改写。初期推荐', '正式推荐按四维分数执行')))
+    return stored == current
+
+
 def canonical_score_input(value: str) -> str:
     try:
         report = json.loads(value) if value.lstrip().startswith("{") else json.loads(Path(value).read_text())

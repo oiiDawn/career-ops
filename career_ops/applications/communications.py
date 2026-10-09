@@ -21,7 +21,7 @@ import yaml
 
 from career_ops.db import BusinessStore
 from career_ops.context import RULES_ROOT, INPUT_ROOT, ROOT
-from career_ops.input_contracts import digest, score_inputs
+from career_ops.input_contracts import digest, score_inputs, score_is_current
 from career_ops.llm import DEADLINE, complete_json, load_stub
 from career_ops.model import parse_object
 from career_ops.tracing import traced
@@ -52,6 +52,7 @@ def source_context(directory: Path, opportunity_id: str, statement: str | None =
         artifacts = ([dict(row) for row in store.db.execute(
             "SELECT kind,path,sha256 FROM artifacts WHERE opportunity_id=? ORDER BY id", (opportunity_id,)
         )] if "artifacts" in tables else [])
+        current_score = bool(scan and score and scan.get("outcome") == "jd_report" and score_is_current(store.db, score["input_hash"], scan["artifact"]))
     finally:
         store.close()
     if (not opportunity or not scan or scan.get("outcome") != "jd_report"
@@ -59,7 +60,7 @@ def source_context(directory: Path, opportunity_id: str, statement: str | None =
         raise ValueError("Drafts require one canonical opportunity and its published scan and score results")
     report = scan["artifact"]
     current_score_input = score_inputs(report)
-    if (report["opportunity_id"] != opportunity_id or score["input_hash"] != digest(current_score_input)
+    if (report["opportunity_id"] != opportunity_id or not current_score
             or any(report[key] != opportunity[key] for key in ("url", "company", "role"))):
         raise ValueError("The published score is stale for the JD or candidate inputs")
     artifact = score["artifact"]

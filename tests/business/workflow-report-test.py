@@ -97,7 +97,7 @@ with tempfile.TemporaryDirectory(prefix="career-ops-report-") as temporary:
     independent_reader.close()
     store.retain_company_ratings(store.db, [{**rating, "score": 5, "valid_until": "2099-10-15"}])
     assert json.loads(store.db.execute("SELECT payload_json FROM company_ratings").fetchone()[0]) == rating
-    with patch("career_ops.db.score_inputs", return_value=json.dumps({"jd_report": {"prescreen": {"status": "uncertain"}}})):
+    with patch("career_ops.db.score_is_current", return_value=True):
         for opportunity in ("job1", "job2"):
             task = store.start(opportunity, "score", json.dumps({"jd_report": {"prescreen": {"status": "uncertain"}}}))
             state = {"task_id": task["task_id"], "input_hash": store.task(task["task_id"])["input_hash"], "outcome": "score",

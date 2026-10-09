@@ -142,7 +142,7 @@ def _complete_sections(assessment: dict, jd: dict, sources: dict, research: dict
         "Ground claims only in the supplied JD, candidate sources, frozen research, and existing Jev dimension results. "
         "Structured location_evidence is official location evidence; do not claim the city is undisclosed when present. "
         "A browser_snapshot liveness_reason records a page capture; do not claim no snapshot exists. "
-        "Do not repeat existing sections, change dimension scores, or infer any score. Generic market salary statistics or other employers in candidate materials cannot replace applicable company pay evidence. Initial recommendations use only the four dimension scores (all >=4); confidence and sufficiency are informational, not gates. Explain missing and uncertain facts without blocking recommendations on sufficiency.\n"
+        "Do not repeat existing sections, change dimension scores, or infer any score. Generic market salary statistics or other employers in candidate materials cannot replace applicable company pay evidence. Initial recommendations use only the four dimension scores (all >3 and at least two >4); confidence and sufficiency are informational, not gates. Explain missing and uncertain facts without blocking recommendations on sufficiency.\n"
         + pipeline.research.EVIDENCE_RULES + "\n"
         + json.dumps({"jd_report": jd, "candidate_sources": sources, "research": research,
                       "dimensions": assessment["dimensions"],

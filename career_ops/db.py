@@ -9,7 +9,7 @@ from pathlib import Path
 from career_ops.evaluation.decisions import classify as classify_decision, order as order_decisions, valid_scores
 from career_ops.evaluation.report import dimension_scores
 from career_ops.context import WORKFLOW_VERSION
-from career_ops.input_contracts import canonical_scan_input, digest, score_inputs, verify_package_files
+from career_ops.input_contracts import canonical_scan_input, digest, score_inputs, score_is_current, verify_package_files
 from career_ops.task_state import WorkflowState
 
 
@@ -462,8 +462,7 @@ class BusinessStore:
             self.wait(state["task_id"], "input_changed")
             raise ValueError("Input changed before business commit")
         if task["module"] == "score":
-            current = score_inputs(json.loads(task["input_payload"])["jd_report"])
-            if digest(current) != task["input_hash"]:
+            if not score_is_current(self.db, task["input_hash"], json.loads(task["input_payload"])["jd_report"]):
                 self.wait(state["task_id"], "input_changed")
                 raise ValueError("Score inputs changed before business commit")
         if task["module"] == "scan":
@@ -630,8 +629,7 @@ class BusinessStore:
             if score and source_task:
                 try:
                     report = scan["artifact"] if scan else json.loads(source_task["input_payload"])["jd_report"]
-                    current = score_inputs(report)
-                    valid = digest(current) == row["input_hash"]
+                    valid = score_is_current(self.db, row["input_hash"], report)
                     reason = None if valid else "candidate_or_policy_inputs_changed"
                 except (KeyError, OSError, ValueError):
                     reason = "stored_input_invalid"

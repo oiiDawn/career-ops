@@ -25,7 +25,7 @@ from career_ops.applications.apply_graph import apply_evaluate as run_apply
 from career_ops.context import ATTEMPT_CALLS, ATTEMPT_SECONDS, INPUT_ROOT, ROOT, WORKFLOW_VERSION
 from career_ops.evaluation.scan_graph import run_scan
 from career_ops.evaluation.score_graph import run_score
-from career_ops.input_contracts import apply_inputs, canonical_scan_input, canonical_score_input, digest, score_inputs, validate_resume_payload, verify_package_files
+from career_ops.input_contracts import apply_inputs, canonical_scan_input, canonical_score_input, digest, score_inputs, score_is_current, validate_resume_payload, verify_package_files
 from career_ops.task_state import WorkflowState
 from career_ops.db import BusinessStore
 from career_ops.llm import DEADLINE, load_stub
@@ -426,7 +426,7 @@ def start_and_run(directory: Path, opportunity: str, module: str, input_text: st
         if not scan or scan["outcome"] != "jd_report" or not score or score["outcome"] != "score":
             store.close()
             raise ValueError("Missing current completed scan and score results")
-        if score["input_hash"] != digest(score_inputs(scan["artifact"])):
+        if not score_is_current(store.db, score["input_hash"], scan["artifact"]):
             store.close()
             raise ValueError("Current score is stale for the scan or candidate inputs")
         input_text = apply_inputs(scan["artifact"], score, [])
