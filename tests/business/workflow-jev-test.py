@@ -1,12 +1,11 @@
 """Check the isolated Jev rubric, native result preservation and bounded failure evidence."""
 
 from copy import deepcopy
-import importlib.util
-import io
 import json
 from pathlib import Path
 import tempfile
-from urllib.error import HTTPError
+from unittest.mock import patch
+import httpx2
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -41,6 +40,7 @@ response = {"model": jev.MODEL, "answers": {}, "usage": {"input_tokens": 120, "o
 for name, question in request["questions"].items():
     response["answers"][name] = ({"type": "noul", "noul": .12} if question["type"] == "noul" else
                                 {"type": "score", "score": 2.37, "confidence": .93,
+                                 "legend": {str(i): text for i, text in enumerate(question['criteria'])},
                                  "probabilities": {"0": 0, "1": 0, "2": .63, "3": .37, "4": 0}})
 jev.validate(request, response)
 raw = jev.dimensions(response)["culture"]
@@ -56,28 +56,35 @@ for value in (float("nan"), float("inf"), True, -1, 5):
     else:
         raise AssertionError("Invalid service score accepted")
 
-with tempfile.TemporaryDirectory() as directory:
+http_client = httpx2.Client
+status, body = 200, b'{"model":"invalid"}'
+transport_error = None
+calls = []
+
+def dispatch(http):
+    calls.append(http)
+    assert str(http.url) == 'https://api.typesafe.ai/v1/systemone'
+    assert json.loads(http.content) == request
+    assert http.headers['authorization'] == 'Bearer test-key'
+    if transport_error:
+        raise transport_error('transport unavailable', request=http)
+    return httpx2.Response(status, content=body)
+
+def mock_client(**kwargs):
+    return http_client(transport=httpx2.MockTransport(dispatch), **kwargs)
+
+with tempfile.TemporaryDirectory() as directory, patch.object(jev.httpx2, 'Client', side_effect=mock_client):
     output = Path(directory)
-    calls = []
-
-    def invalid_reply(http, timeout):
-        calls.append(1)
-        return io.BytesIO(b'{"model":"invalid"}')
-
-    jev.urlopen = invalid_reply
     recorder = Recorder()
     evaluate = RunnableLambda(lambda _: jev.call("case", request, output, "test-key"))
     config = {'callbacks': [recorder], 'run_name': 'score'}
     assert evaluate.invoke({}, config)["status"] == "failed"
     assert len(calls) == 2 and not (output / "case.json").exists()
-    assert len(recorder.calls) == 2 and recorder.errors == ['ValueError', 'ValueError']
+    assert len(recorder.calls) == 2 and recorder.errors == ['TypeSafeAPIResponseValidationError'] * 2
     assert all(c['parent_run_id'] is not None for c in recorder.calls)
     before = (output / "case.attempt-1.raw.txt").read_bytes()
 
-    def valid_reply(http, timeout):
-        return io.BytesIO(json.dumps(response).encode())
-
-    jev.urlopen = valid_reply
+    body = json.dumps(response).encode()
     result = evaluate.invoke({}, config)
     assert result["status"] == "scored" and len(result["attempts"]) == 3
     assert (output / "case.attempt-1.raw.txt").read_bytes() == before
@@ -95,12 +102,20 @@ with tempfile.TemporaryDirectory() as directory:
     else:
         raise AssertionError("Changed request reused")
 
-    def unavailable(http, timeout):
-        raise HTTPError(http.full_url, 529, "Unavailable", {}, io.BytesIO(b"service unavailable"))
-
-    jev.urlopen = unavailable
+    status, body = 529, b'service unavailable'
+    before_calls = len(calls)
     failure = jev.call("unavailable", request, output, "test-key")
     assert failure["status"] == "failed" and len(failure["attempts"]) == 2
     assert (output / "unavailable.attempt-1.raw.txt").read_bytes() == b"service unavailable"
+    assert len(calls) == before_calls + 2
+    status, body = 401, b'unauthorized'
+    failure = jev.call('unauthorized', request, output, 'test-key')
+    assert len(failure['attempts']) == 1 and failure['attempts'][0]['http_status'] == 401
+    transport_error = httpx2.ReadTimeout
+    before_calls = len(calls)
+    failure = jev.call('timeout', request, output, 'test-key')
+    assert len(calls) == before_calls + 2 and len(failure['attempts']) == 2
+    assert failure['attempts'][0]['error'] == 'TypeSafeAPITimeoutError'
+    assert not (output / 'timeout.json').exists()
 
 print("PASS: four independent rubric questions, raw decimals/confidence, finite validation, bounded retries and retained failures")

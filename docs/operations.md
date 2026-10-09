@@ -100,7 +100,7 @@ are removed without an archive.
 Run `.venv/bin/python -B -m career_ops task start score ID scan:ID --re-evaluate`
 for a retained active JD. A public-only planning node declares employer and region/grade scopes.
 One Codex CLI task researches all missing company/culture/compensation scopes together, using
-`gpt-6-astra`, medium reasoning and live web search, with a 900-second process deadline.
+`gpt-6-astra`, low reasoning and live web search, with a 900-second process deadline.
 The CLI must be installed and authenticated with `codex login` under the scheduler's user.
 `system doctor` checks CLI availability and login status. PATH discovery also supports the bundled
 macOS desktop CLI when the scheduler has a smaller PATH.
@@ -129,7 +129,9 @@ attempt starts a new isolated Codex task; completed evidence and Jev ratings are
 
 Local Langfuse records the Codex task as one aggregate generation with its public prompt, final output
 and reported token usage. Each dispatched Jev HTTP attempt has its own generation with the request,
-validated response or error, and provider-reported input/output token usage. Codex cache reads and
+validated response or error, and provider-reported input/output token usage. Jev requests use the
+official TypeSafe Python SDK with its internal retries disabled; the retained workflow owns the
+single retry and captures every raw HTTP response through the SDK's HTTP client. Codex cache reads and
 writes are separate input categories; its multi-turn aggregate cannot establish per-request long-context
 pricing, so its cost is a Standard API equivalent estimate, not a subscription charge. These inherit the owning score graph's
 trace. Cached results create no model generation. The callback requires the explicit `langchain`

@@ -9,8 +9,9 @@ import math
 from pathlib import Path
 import re
 import time
-from urllib.error import HTTPError, URLError
-from urllib.request import Request, urlopen
+import httpx2
+from typesafe_sdk import (RetryPolicy, TypeSafeClient, TypeSafeError,
+                          TypeSafeAPIConnectionError, TypeSafeAPIResponseValidationError)
 
 from dotenv import dotenv_values
 from career_ops.model import record_call
@@ -106,14 +107,14 @@ def call(name: str, request: dict, output: Path, key: str) -> dict:
         t0 = time.perf_counter()
         raw_path = output / f"{name}.attempt-{len(attempts) + 1}.raw.txt"
         try:
-            http = Request("https://api.typesafe.ai/v1/systemone", data=json.dumps(request, ensure_ascii=False).encode(),
-                           headers={"Authorization": f"Bearer {key}", "Content-Type": "application/json"})
             record_call()
             names = sorted({n.split('-')[0] for n in request['questions'] if not n.endswith('_evidence')})
             with model_generation('jev-' + '-'.join(names), MODEL, json.dumps(request, ensure_ascii=False)) as observation:
-                with urlopen(http, timeout=60) as reply:
-                    raw = reply.read()
-                raw_path.write_bytes(raw)
+                with TypeSafeClient(api_key=key, base_url="https://api.typesafe.ai", timeout=60,
+                        retry=RetryPolicy(max_retries=0), http_client=httpx2.Client(event_hooks={
+                            'response': [lambda reply: raw_path.write_bytes(reply.read())]})) as client:
+                    reply = client.system_one(state=request['state'], questions=request['questions'], model=request['model'])
+                    raw = reply.raw_http_response.content
                 response = json.loads(raw)
                 validate(request, response)
                 observation['output'] = response
@@ -121,17 +122,16 @@ def call(name: str, request: dict, output: Path, key: str) -> dict:
                 if usage:
                     observation['usage'] = {'prompt_tokens': usage['input_tokens'],
                                             'completion_tokens': usage['output_tokens']}
-        except (HTTPError, URLError, TimeoutError, ValueError) as error:
-            status = getattr(error, "code", None)
-            if isinstance(error, HTTPError):
-                raw_path.write_bytes(error.read())
+        except (TypeSafeError, ValueError) as error:
+            status = getattr(error, "status", None)
             attempts.append({"error": type(error).__name__, "http_status": status,
-                             "reason_type": type(error.reason).__name__ if isinstance(error, URLError) else None,
+                             "reason_type": type(error.__cause__).__name__ if error.__cause__ else None,
                              "seconds": time.perf_counter() - t0})
             save(failure_path, {"request_sha256": digest(request), "attempts": attempts,
                                 "status": "failed", "next_step": "retry_later"})
-            if attempt == 0 and (isinstance(error, (ValueError, URLError, TimeoutError))
-                                 and not isinstance(error, HTTPError) or status in (429, 529, 500, 502, 503, 504)):
+            if attempt == 0 and (isinstance(error, (ValueError, TypeSafeAPIConnectionError,
+                                                    TypeSafeAPIResponseValidationError))
+                                 or status in (429, 529, 500, 502, 503, 504)):
                 continue
             return {"status": "failed", "attempts": attempts, "elapsed_seconds": time.perf_counter() - started}
         attempts.append({"http_status": 200, "seconds": time.perf_counter() - t0})

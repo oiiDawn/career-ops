@@ -51,6 +51,7 @@ with tempfile.TemporaryDirectory() as directory:
         assert 'CAREER_OPS_LLM_API_KEY' not in kwargs['env'] and 'TYPESAFE_API_KEY' not in kwargs['env']
         assert 'LANGFUSE_SECRET_KEY' not in kwargs['env']
         assert '--ignore-user-config' in command and '--search' in command and '--sandbox' not in command
+        assert 'model_reasoning_effort="low"' in command
         assert 'default_permissions="company-research"' in command
         permissions = next(v for v in command if v.startswith('permissions.company-research='))
         assert '":root"="deny"' in permissions and '":workspace_roots"={"."="read"}' in permissions

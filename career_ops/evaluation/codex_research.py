@@ -50,7 +50,7 @@ DIMENSION_TOPICS = {
 
 
 MODEL = 'gpt-6-astra'
-REASONING = 'medium'
+REASONING = 'low'
 TIMEOUT_SECONDS = 900
 
 

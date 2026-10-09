@@ -59,6 +59,7 @@ dependencies = [
     { name = "python-dotenv" },
     { name = "pyyaml" },
     { name = "socksio" },
+    { name = "typesafe-sdk" },
 ]
 
 [package.metadata]
@@ -71,6 +72,7 @@ requires-dist = [
     { name = "python-dotenv", specifier = "==1.2.3" },
     { name = "pyyaml", specifier = "==6.0.3" },
     { name = "socksio", specifier = "==1.0.0" },
+    { name = "typesafe-sdk", specifier = "==0.7.3" },
 ]
 
 [[package]]
@@ -1347,6 +1349,24 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/53/a3/1585216310e344e8102c22482f6060c7a6ea0322b63e026372e6dcefcfd6/truststore-0.10.4.tar.gz", hash = "sha256:9d91bd436463ad5e4ee4aba766628dd6cd7010cf3e2461756b3303710eebc301", size = 26169, upload-time = "2025-08-12T18:49:02.73Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/19/97/56608b2249fe206a67cd573bc93cd9896e1efb9e98bce9c163bcdc704b88/truststore-0.10.4-py3-none-any.whl", hash = "sha256:adaeaecf1cbb5f4de3b1959b42d41f6fab57b2b1666adb59e89cb0b53361d981", size = 18660, upload-time = "2025-08-12T18:49:01.46Z" },
+]
+
+[[package]]
+name = "typesafe-sdk"
+version = "0.7.3"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "httpx2" },
+    { name = "packaging" },
+    { name = "pydantic" },
+    { name = "pydantic-core" },
+    { name = "tenacity" },
+    { name = "truststore", marker = "sys_platform != 'emscripten'" },
+    { name = "typing-extensions" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/15/c5/f659e9b60d239d88a5e0c0ae6ecdde478aadb9db9b962cac1075b55df5c1/typesafe_sdk-0.7.3.tar.gz", hash = "sha256:7c3efa360bfe34a0017047ddb89ab254b8e1b45f4c5a16c6533059307f925748", size = 24325, upload-time = "2026-10-09T09:43:58.41Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/4c/f2/8c091d0e259fa5e07b25fea1e3baced59e74bd08a4a9965395885a6ffbe3/typesafe_sdk-0.7.3-py3-none-any.whl", hash = "sha256:27449bdcfba4a2580a669637e925541e7ba491671d5a52509220546b41c9ea3d", size = 37633, upload-time = "2026-10-09T09:43:57.155Z" },
 ]
 
 [[package]]
