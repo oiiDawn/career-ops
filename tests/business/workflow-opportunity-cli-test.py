@@ -19,7 +19,7 @@ with tempfile.TemporaryDirectory() as temporary:
     inputs.mkdir()
     for name, value in {"cv.md": "# Skills\nPython\n\nVerified candidate facts", "profile.yml": "language:\n  output: zh-CN\n", "targeting.md": "AI roles"}.items():
         (inputs / name).write_text(value)
-    for name in ["scoring.md", "shared/contract.md", "applications/workflow.md", "markets/cn/employment.md", "markets/hk/employment.md", "markets/remote/employment.md"]:
+    for name in ["scoring.md", "evaluation/four-dimension.md", "shared/contract.md", "applications/workflow.md", "markets/cn/employment.md", "markets/hk/employment.md", "markets/remote/employment.md"]:
         path = root / "rules" / name
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text("Use sourced facts only.")
