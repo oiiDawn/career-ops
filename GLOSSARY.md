@@ -13,6 +13,12 @@ Source material that supports a claim about the relevant employer, role, locatio
 **Research finding**:
 A sourced statement that distinguishes supported facts, inferences, and unresolved questions. An unsupported inference is not a verified fact.
 
+**Decision reference**:
+Relevant sourced information that can inform screening even when applicability to the exact role is uncertain. Same-employer group policies, other-team experiences and salary reference levels retain their scope and limitations; they are not confirmed job conditions.
+
+**Evidence sufficiency**:
+Whether the available evidence supports a bounded screening reference in the declared dimension. It does not measure completeness of internal company information or verification of a future offer.
+
 **Research quality**:
 The correctness, applicability, and coverage of findings, including their treatment of uncertainty. Fluency and agreement with an expected score do not establish research quality.
 

@@ -52,6 +52,19 @@ repeated['profiles'][1]['evidence']['sources'] = repeated['profiles'][0]['eviden
 request = c.company_request(repeated, rubric)
 assert len(request['state']['evidence']['sources']) == 2
 assert len({tuple(p['evidence']['source_refs']) for p in request['state']['evidence']['profiles'].values()}) == 2
+reference_scope = {'dimension': 'compensation', 'scope': {**scope['compensation'], 'level': 'unknown'}}
+reference_fact = {'claim': 'Sample Shanghai Senior benchmark: CNY 400K annual base.', 'date': '2026-10-09',
+                  'kind': 'salary_benchmark', 'applicability': 'Shanghai Senior software engineers; target grade unknown',
+                  'limitations': 'Self-reported benchmark, not a target-role offer', 'source_url': 'https://sample.test/pay'}
+reference_profiles = c.summary_profiles({'profiles': [{
+    'profile_id': c.scope_key('compensation', reference_scope['scope']),
+    'facts': [reference_fact], 'gaps': [], 'conflicts': []}]}, [reference_scope])
+reference_request = c.company_request({**company, 'profiles': reference_profiles}, rubric)
+passed = next(iter(reference_request['state']['evidence']['profiles'].values()))
+assert passed['scope']['level'] == 'unknown'
+assert passed['evidence']['facts'] == [reference_fact]
+assert reference_request['state']['evidence']['sources'][passed['evidence']['source_refs'][0]] == {
+    'source_url': reference_fact['source_url']}
 with tempfile.TemporaryDirectory() as temp:
     root = Path(temp)
     def run(name, value=bundle, today=date(2026,10,8)):

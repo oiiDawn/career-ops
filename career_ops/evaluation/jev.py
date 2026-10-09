@@ -46,14 +46,16 @@ def request_for(evidence: dict, rubric: str) -> dict:
             "type": "score",
             "instructions": BASE + f"Rate {dimension} using state.standards and state.evidence. "
             "The five ordered criteria are ratings 1–5. Fractional scores are allowed. "
-            "Evidence sufficiency is assessed separately; missing evidence is not negative or neutral evidence.",
+            "Evidence sufficiency is assessed separately; missing evidence is not negative or neutral evidence. "
+            "For company, culture and compensation, same-employer reference evidence may inform provisional attractiveness despite uncertain role applicability; "
+            "preserve its scope and do not present it as confirmed job conditions.",
             "criteria": [text for _, text in criteria],
         }
         questions[dimension + "_evidence"] = {
             "type": "noul",
-            "instructions": BASE + sufficiency + " 判断证据是否支持该维度的事实与适用范围，不判断吸引力，也不判断模型能否输出数字。可靠负面证据也可以充分。",
-            "criteria": {"true": "现有证据足以支持本维度判断，满足其独立充分性问题。",
-                         "false": "本维度存在实质缺口、错用来源或未解决冲突，不能支持该判断。"},
+            "instructions": BASE + sufficiency + " 判断现有资料是否能为初筛提供有边界的决策参考，不判断吸引力，也不要求确认岗位最终条件。可靠负面证据也可以充分。",
+            "criteria": {"true": "有可追溯且相关的事实足以形成初筛参考；岗位适用性未完全确认或非关键细节缺失不自动否定参考价值。",
+                         "false": "没有足以形成初筛参考的相关事实，或核心事实的来源、含义或矛盾使参考判断无法成立；不因缺少内部资料或具体 offer 条款判否。"},
         }
     return {"model": MODEL, "state": {"standards": rubric, "evidence": deepcopy(evidence)}, "questions": questions}
 
