@@ -95,112 +95,49 @@ Retained source evidence belongs to the business store and referenced artifacts.
 Unreferenced acceptance output, expired captures and old tracker-import batches
 are removed without an archive.
 
-The isolated four-dimension Jev entrypoint reads
-`rules/evaluation/four-dimension.md` directly:
+## Company research and scoring
 
-```bash
-.venv/bin/python -B scripts/experiments/jev-score.py --input FROZEN_CASES.json --output NEW_EXPERIMENT_DIR --check
-.venv/bin/python -B scripts/experiments/jev-score.py --input FROZEN_CASES.json --output NEW_EXPERIMENT_DIR
-```
+Run `.venv/bin/python -B -m career_ops task start score ID scan:ID --re-evaluate`
+for a retained active JD. A public-only planning node declares employer and region/grade scopes.
+One Codex CLI task researches all missing company/culture/compensation scopes together, using
+`gpt-6-astra`, medium reasoning and live web search, with a 900-second process deadline.
+The CLI must be installed and authenticated with `codex login` under the scheduler's user.
+`system doctor` checks CLI availability and login status. PATH discovery also supports the bundled
+macOS desktop CLI when the scheduler has a smaller PATH.
 
-Cases contain a safe unique `id`, `sample_type` (`real_retained` or
-`controlled_probe`), and frozen `evidence`; source selection and baseline
-metadata may be retained locally. The API receives only the rubric, evidence,
-and eight questions. Exclude generic-market compensation from the evidence
-before calling. `--check` freezes requests without network access. The live run
-uses the existing `.env` `TYPESAFE_API_KEY` and Jev 1.13.0 API protocol, keeps
-raw responses and failed attempts, and resumes only identical inputs. Results
-preserve decimal scores, original confidence and independent sufficiency;
-recommendation uses the four dimension scores. This does not change production
-evaluation, notifications, the business store or scheduling.
+Research uses an ephemeral read-only working directory, ignores user configuration and receives
+only public employer information and retained public job descriptions. Project API keys, private
+candidate sources and the scoring rubric are excluded from its environment and prompt. Instructions
+forbid outside-file access, skills, shell commands and subagents; the read-only sandbox is not a
+separate user-account filesystem isolation boundary. Shared topics and evidence rules live in
+`career_ops/evaluation/codex_research.py`. No personal preferences enter research.
 
-Company reuse is tested through a separate isolated entrypoint:
+Codex returns sourced fact arrays. JSON structure, exact requested profile IDs and HTTP source URLs
+are validated before Jev receives anything. Empty facts remain unscored. Same-employer policies,
+other-team experiences and salary reference levels can inform screening with their actual scope
+and limitations; they never become guaranteed job conditions. Only plausible public research
+questions remain in gaps. Unknown is not evidence of absence.
 
-Formal scoring uses the same `career_ops/evaluation/company_pipeline.py`, `adaptive_research.py`
-and `jev.py` modules. Run `.venv/bin/python -B -m career_ops task start score ID scan:ID --re-evaluate`
-to score a retained active JD through the complete pipeline. A public-only planning node declares exact employer,
-region and grade scopes; absent grade remains unknown. Invalid scope formatting gets one model repair,
-with every attempt retained; invalid plans never dispatch company research. Three main Agents research in parallel,
-then each calls Jev as soon as its organized facts are ready. Only direction is evaluated per job.
-Formal source/response archives live in `data/company-profiles`; SQLite persists reusable company ratings and
-per-result job references in the publication transaction. Archives expire by Sunday (at most seven days),
-and that same window is part of input validity. Existing results remain historical.
-Reports and Dashboard preserve four raw fractional scores, confidence and independent sufficiency.
-Initial recommendations use scores only: all four dimensions must have scores of at least 4 for `focus`.
-Lower or missing scores are `deprioritize`; confirmed hard failures remain `discard`. Confidence and
-evidence sufficiency remain visible but do not block recommendations or trigger extra model review.
-Three independent owned tool loops perform research with retained model history, tool caches and full provider bodies.
-Cumulative model tokens and score-stage elapsed time have no hard cap. Research, retries and document-summary calls
-retain usage. Each dimension has 60 conservative Tavily credits; exhausted allowance stops new network dispatch
-and preserves facts for main-Agent organization. Single requests retain timeouts and finite transient retries.
-Each retrieved document is frozen and immediately summarized by its dimension's model into a few useful facts,
-each one or two sentences. Only facts, source pointers and operational status enter subsequent research turns. Successful document
-summaries are reused on duplicate retrieval and resume; original bodies remain archived for review. The main Agent
-organizes these facts directly for its independent Jev request. All document-summary calls count toward usage.
-The stateless reader may stop a document whose explicit heading identifies another employer as its subject.
-The target company cannot be filtered as another employer; uncertain or mixed documents continue. Source-subject
-labels are model judgments, and original bodies remain available to inspect possible relevance mistakes.
-Prompts prioritize applicable recent evidence, independent source families and unresolved gaps, skipping unrelated seeds.
-Large summary inputs use 16K batches/32K merges and at most one JSON/length repair, with the configured native
-output ceiling (currently 32768). Failed owned research resumes from saved messages and caches without repeating
-successful network calls. Existing unexpired company archives remain reusable.
+`data/company-profiles` retains the public prompt, schema, command, CLI events, stderr, original
+fact output, elapsed time, available token usage and immutable scoped archives/ratings. Tool events
+and citations are source references, not guaranteed complete webpage-body captures. Failed or timed-out
+runs retain diagnostics, produce no new fact archive and have no model fallback. A later workflow
+attempt starts a new isolated Codex task; completed evidence and Jev ratings are reused.
 
-The following isolated CLI uses the same implementation with an experiment-only store:
+Company archives expire by Sunday (at most seven days). Exact scopes and unchanged research rules
+reuse facts, including empty results; new scopes collect only missing ranges. Changed research rules
+or expiry require new research. Scoring-rule changes only rerun Jev. Existing archived evidence is
+historical and does not become current merely because the caller extends a date.
 
-```bash
-.venv/bin/python -B scripts/experiments/company-score.py --input COMPANY_JOB_BUNDLE.json --store data/experiments/company-profiles --output NEW_RUN_DIR --check
-.venv/bin/python -B scripts/experiments/company-score.py --input COMPANY_JOB_BUNDLE.json --store data/experiments/company-profiles --output NEW_RUN_DIR
-.venv/bin/python -B scripts/experiments/adaptive-research.py --company-input PUBLIC_COMPANY_SCOPES.json --output NEW_COMPANY_RESEARCH_DIR
-```
+Each nonempty dimension then receives one Jev request (multiple salary scopes share a request).
+The existing `.env` `TYPESAFE_API_KEY` authorizes Jev 1.13.0; only this scoring stage receives
+private thresholds. Raw requests/responses, finite transport retries, native decimals, confidence
+and independent screening-reference sufficiency are retained. Direction is evaluated per job.
+SQLite company ratings and per-result references, input checks, report publication and Dashboard
+remain on the existing workflow. Research dispatches count once in task usage; CLI aggregate token
+usage is retained separately and is not an internal model-request count or a monetary bill.
 
-The input has `companies` and `jobs`. Each company declares `company_id`, `name`,
-`identity_url`, `scopes` (dimension/scope pairs), `seed_urls` and `valid_until`;
-jobs declare their public posting and exact company/scope references. No prepared
-profiles or manual factual summaries are required. `--check` validates this public
-input without running research or scoring. A live run collects missing company
-scopes through three parallel independent dimension agents. Each agent collects
-only its own company, culture or compensation topics and produces its own JSON-mode
-LLM summary; the main process merges their profiles without another LLM summary. Summary-stage reasoning
-is fixed to `low` (collection keeps its configured effort). Usable JSON, declared
-company/profile scope and factual-field structure are checked before programs build
-Jev profiles. Summaries retain source URLs or IDs for review alongside frozen original
-responses and bodies; text equality, offsets and hash integrity are not acceptance gates.
-Invalid fact profiles remain pending. A later CLI attempt resumes main-Agent research and document
-summaries from retained material without fallback scoring.
-
-Each dimension runs its own owned research loop and summary pipeline with cumulative model tokens and score-stage
-time uncapped. The 60-credit Tavily allowance is per dimension, including multiple compensation scopes.
-Search exhaustion prevents new network dispatch but leaves facts available for the main Agent to organize.
-All research calls, retries and summaries retain usage; unknown usage is reserved conservatively and is not a bill.
-Document summaries retain publication dates, applicability, source IDs and URLs.
-Full provider-returned bodies, raw messages, summary responses and usage remain in
-the isolated store. Valid exact scopes reuse archived summaries and ratings, including
-for new jobs. New scopes collect only missing ranges; expiry or `--refresh` triggers
-collection. Scoring rubric changes reevaluate Jev only; summary-rule changes reuse
-frozen sources for renewed main-Agent research and organization. Old archives and failed summaries remain visible.
-No effective per-scope validity can be silently extended by changing an input date.
-
-Each dimension invokes its own Jev request as soon as its summary is ready; multiple
-compensation scopes stay in one request with separate score/Noul questions. One failed
-dimension does not delay scoring the others. Cache and raw failures are independent,
-and final aggregation does not retry failed company requests. Company requests contain no JD; job requests evaluate direction, plus compensation
-only for an explicit job quotation. Every rating retains its original request/response
-and summary provenance. Unknown scopes remain pending. Each output directory is new.
-`--company-input` is a standalone public collection check accepting identity, scopes and seed URLs;
-it researches one company across the requested scopes without a job or candidate
-payload or personal salary thresholds. Only the public research checklist is sent
-to research providers; the scoring rubric remains in the authorized Jev scoring
-requests. The validity dates are experiment inputs, not a production refresh policy.
-
-Company research uses three parallel main Agents, one per shared dimension. Each has only
-`collect_facts(query, urls)`: a fixed retrieval Agent executes the specified Tavily query/URLs,
-then a stateless source-summary Agent extracts brief scoped facts without scoring instructions.
-Only the main Agent decides follow-up research, consolidates facts and stops. Its final fact
-profiles go directly to the dimension's Jev request. Unsuccessful searches do not establish
-absence; unsupported denials are excluded. The shared allowance remains 60 conservative
-Tavily credits per dimension, with no cumulative token or aggregate-time cap.
-Every formal score attempt retains actual LLM request counts, per-attempt latency and reported
-usage in its draft `model-calls/`; dimension ledgers count `collect_facts` invocations separately
-from source-summary LLMs, Tavily and Jev requests. Missing provider usage remains unknown.
-
-单篇长文分片摘要时，摘要 Agent 可基于明确文档标题声明其制度或年报属于其他雇主；首片没有目标公司相关事实时不再摘要该文剩余片段，完整 provider 正文仍保留供审阅。混合或未知归属、仅首片无事实均不触发此处理。该判断只辨认来源主体，不是制度不存在的事实，不新增搜索或评分自主性。
+Initial recommendations use four scores: each must be at least 4 for `focus`; missing/lower scores
+are `deprioritize`, and confirmed hard failures remain `discard`. Confidence and sufficiency are
+informational and never trigger automatic review or fallback. Full scoring also includes scope
+planning, direction and report generation; the 900-second cap applies to each Codex research task.

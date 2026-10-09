@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import argparse
 from copy import deepcopy
 import hashlib
 import json
@@ -15,7 +14,6 @@ from urllib.request import Request, urlopen
 
 from dotenv import dotenv_values
 from career_ops.model import record_call
-from career_ops.evaluation.decisions import classify
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -142,55 +140,3 @@ def dimensions(response: dict) -> dict:
                    "evidence_sufficiency": answers[name + "_evidence"]["noul"],
                    "evidence_status": "assessed", "probabilities": answers[name]["probabilities"]}
             for name in DIMENSIONS}
-
-
-def main() -> None:
-    parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--input", required=True, type=Path, help="Frozen cases with id, sample_type and evidence")
-    parser.add_argument("--output", required=True, type=Path, help="New isolated artifact directory; resume identical requests only")
-    parser.add_argument("--check", action="store_true", help="Validate and freeze requests without API calls")
-    args = parser.parse_args()
-    cases = json.loads(args.input.read_text())
-    if (not isinstance(cases, list) or not cases or len({str(case["id"]) for case in cases}) != len(cases)
-            or any(not re.fullmatch(r"[A-Za-z0-9_-]+", str(case["id"]))
-                   or case.get("sample_type") not in ("real_retained", "controlled_probe")
-                   or not isinstance(case.get("evidence"), dict) for case in cases)):
-        raise ValueError("Unique safe case IDs, explicit sample types and evidence required")
-    rubric = RUBRIC.read_text()
-    args.output.mkdir(parents=True, exist_ok=True)
-    manifest = {"scoring_model": "attractiveness-v4-experiment", "jev_model": MODEL,
-                "rubric_path": str(RUBRIC.relative_to(ROOT)), "rubric_sha256": hashlib.sha256(rubric.encode()).hexdigest(),
-                "cases_sha256": hashlib.sha256(args.input.read_bytes()).hexdigest(),
-                "recommendation_policy": "four_dimension_scores", "production_writes": False}
-    manifest_path = args.output / "manifest.json"
-    if manifest_path.exists() and json.loads(manifest_path.read_text()) != manifest:
-        raise ValueError("Refuse changed experiment manifest; use a new output directory")
-    save(manifest_path, manifest)
-    (args.output / "rubric.md").write_text(rubric)
-    save(args.output / "cases.json", cases)
-    requests = [(case, request_for(case["evidence"], rubric)) for case in cases]
-    if args.check:
-        for case, request in requests:
-            save(args.output / f"{case['id']}.request.json", request)
-        print(f"PASS: {len(cases)} frozen cases, four independent scores and sufficiency questions")
-        return
-    key = dotenv_values(ROOT / ".env").get("TYPESAFE_API_KEY")
-    if not key:
-        raise ValueError("Missing TYPESAFE_API_KEY")
-    results = []
-    for case, request in requests:
-        result = call(str(case["id"]), request, args.output, key)
-        row = {"id": case["id"], "sample_type": case["sample_type"], "status": result["status"],
-               "elapsed_seconds": result["elapsed_seconds"], "attempts": result["attempts"],
-               "recommendation": None}
-        if result["status"] == "scored":
-            row["dimensions"] = dimensions(result["response"])
-            row["recommendation"] = classify({d: value["score"] for d, value in row["dimensions"].items()},
-                                             {"status": "uncertain"})
-        results.append(row)
-        save(args.output / "results.json", results)
-        print(json.dumps({"completed": len(results), "total": len(cases), "id": case["id"], "status": row["status"]}), flush=True)
-
-
-if __name__ == "__main__":
-    main()

@@ -15,6 +15,7 @@ import yaml
 from career_ops import tracing
 from career_ops.context import INPUT_ROOT, ROOT
 from career_ops.web_search import tavily_keys
+from career_ops.evaluation.codex_research import executable
 
 
 def checks() -> dict[str, bool]:
@@ -26,11 +27,17 @@ def checks() -> dict[str, bool]:
         tavily_configured = True
     except RuntimeError:
         tavily_configured = False
+    try:
+        codex = subprocess.run([executable(), '--no-daemon', 'login', 'status'], capture_output=True, timeout=15)
+        codex_ready = codex.returncode == 0
+    except (RuntimeError, OSError, subprocess.TimeoutExpired):
+        codex_ready = False
     result = {
         "python": sys.version_info >= (3, 11),
         "python_dependencies": all(find_spec(name) for name in ("langgraph", "langgraph.checkpoint.sqlite", "langchain_openai", "dotenv", "yaml")),
         "node": bool(shutil.which("node")),
         "hermes": bool(shutil.which("hermes")),
+        "codex_authenticated": codex_ready,
         "model_settings": tavily_configured and all(os.environ.get(name) for name in ("CAREER_OPS_MODEL", "CAREER_OPS_LLM_BASE_URL", "CAREER_OPS_LLM_API_KEY")),
         "profile": profile_path.is_file(),
         "cv": (INPUT_ROOT / "cv.md").is_file(),
