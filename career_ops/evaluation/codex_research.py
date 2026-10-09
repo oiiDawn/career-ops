@@ -12,6 +12,7 @@ from urllib.parse import urlsplit
 
 from career_ops.evaluation import jev
 from career_ops.model import record_call
+from career_ops.tracing import model_generation
 
 FACT_FORMAT = """Return {profiles:[{profile_id,facts:[{claim,date,kind,applicability,limitations,source_url}],
 gaps:[string],conflicts:[string]}]}. Copy supplied profile_id strings; include every requested profile.
@@ -51,6 +52,18 @@ DIMENSION_TOPICS = {
 MODEL = 'gpt-6-astra'
 REASONING = 'medium'
 TIMEOUT_SECONDS = 900
+
+
+def runtime_options():
+    """Restrict local tools to public scratch inputs; hosted web search remains available."""
+    options = ['--strict-config', '-c', 'default_permissions="company-research"', '-c',
+               'permissions.company-research={filesystem={":root"="deny",":minimal"="read",'
+               '":workspace_roots"={"."="read"},":tmpdir"="deny",":slash_tmp"="deny"},network={enabled=false}}',
+               '-c', 'project_doc_max_bytes=0', '-c', 'allow_login_shell=false']
+    for feature in ('shell_tool', 'unified_exec', 'shell_snapshot', 'apps', 'plugins',
+                    'multi_agent', 'browser_use', 'browser_use_external', 'hooks', 'memories', 'view_image'):
+        options.extend(['--disable', feature])
+    return options
 
 
 def executable():
@@ -120,18 +133,33 @@ def instructions():
 
 def rule_digest():
     return jev.digest({'instructions': instructions(), 'schema': schema(), 'model': MODEL,
-                       'reasoning_effort': REASONING, 'deadline_seconds': TIMEOUT_SECONDS})
+                       'reasoning_effort': REASONING, 'deadline_seconds': TIMEOUT_SECONDS,
+                       'runtime_options': runtime_options()})
 
 
 def run(company, postings, output):
-    """Retain failures and terminate the whole CLI process group on deadline or cancellation."""
-    from career_ops.evaluation.company_pipeline import scope_key, summary_profiles
+    """Trace one public research task without forwarding tracing credentials to the CLI."""
+    from career_ops.evaluation.company_pipeline import scope_key
     validate_public(company)
     payload = {'public_company': company, 'profiles': [
         {'profile_id': scope_key(p['dimension'], p['scope']), **p} for p in company['scopes']],
         'public_postings': [{k: p[k] for k in ('url', 'company', 'role', 'jd', 'captured_at')
                              if isinstance(p.get(k), str)} for p in postings]}
     prompt = 'Research date: ' + date.today().isoformat() + '\n' + instructions() + '\nPUBLIC INPUT:\n' + json.dumps(payload, ensure_ascii=False)
+    with model_generation('codex-company-research', MODEL, prompt) as observation:
+        answer = _run(company, output, payload, prompt)
+        metrics = json.loads((output / 'result.json').read_text())
+        usage = metrics['usage']
+        observation['output'] = {'profiles': answer['profiles'], 'research': metrics}
+        if usage:
+            observation['usage'] = {'prompt_tokens': sum(u.get('input_tokens', 0) for u in usage),
+                                    'completion_tokens': sum(u.get('output_tokens', 0) for u in usage)}
+        return answer
+
+
+def _run(company, output, payload, prompt):
+    """Retain failures and terminate the whole CLI process group on deadline or cancellation."""
+    from career_ops.evaluation.company_pipeline import summary_profiles
     output.mkdir(parents=True, exist_ok=False)
     jev.save(output / 'input.json', payload)
     jev.save(output / 'schema.json', schema())
@@ -144,8 +172,8 @@ def run(company, postings, output):
             work = Path(workdir)
             for name in ('input.json', 'schema.json', 'prompt.txt'):
                 shutil.copy2(output / name, work / name)
-            command = [executable(), '--no-daemon', '--search', '-a', 'never', 'exec', '--ignore-user-config',
-                       '--ephemeral', '--skip-git-repo-check', '--sandbox', 'read-only', '-m', MODEL,
+            command = [executable(), '--no-daemon', '--search', '-a', 'never', *runtime_options(), 'exec', '--ignore-user-config',
+                       '--ephemeral', '--skip-git-repo-check', '-m', MODEL,
                        '-c', 'model_reasoning_effort="' + REASONING + '"', '-C', str(work),
                        '--output-schema', str(work / 'schema.json'), '--json', '-o', str(work / 'facts.json'), '-']
             jev.save(output / 'command.json', command)

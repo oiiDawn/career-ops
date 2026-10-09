@@ -14,6 +14,7 @@ from urllib.request import Request, urlopen
 
 from dotenv import dotenv_values
 from career_ops.model import record_call
+from career_ops.tracing import model_generation
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -108,11 +109,14 @@ def call(name: str, request: dict, output: Path, key: str) -> dict:
             http = Request("https://api.typesafe.ai/v1/systemone", data=json.dumps(request, ensure_ascii=False).encode(),
                            headers={"Authorization": f"Bearer {key}", "Content-Type": "application/json"})
             record_call()
-            with urlopen(http, timeout=60) as reply:
-                raw = reply.read()
-            raw_path.write_bytes(raw)
-            response = json.loads(raw)
-            validate(request, response)
+            names = sorted({n.split('-')[0] for n in request['questions'] if not n.endswith('_evidence')})
+            with model_generation('jev-' + '-'.join(names), MODEL, json.dumps(request, ensure_ascii=False)) as observation:
+                with urlopen(http, timeout=60) as reply:
+                    raw = reply.read()
+                raw_path.write_bytes(raw)
+                response = json.loads(raw)
+                validate(request, response)
+                observation['output'] = response
         except (HTTPError, URLError, TimeoutError, ValueError) as error:
             status = getattr(error, "code", None)
             if isinstance(error, HTTPError):

@@ -108,8 +108,11 @@ macOS desktop CLI when the scheduler has a smaller PATH.
 Research uses an ephemeral read-only working directory, ignores user configuration and receives
 only public employer information and retained public job descriptions. Project API keys, private
 candidate sources and the scoring rubric are excluded from its environment and prompt. Instructions
-forbid outside-file access, skills, shell commands and subagents; the read-only sandbox is not a
-separate user-account filesystem isolation boundary. Shared topics and evidence rules live in
+forbid skills and non-research actions. A native `company-research` permission profile denies filesystem
+reads outside the working directory except minimal OS runtime paths, denies writes and command network
+access, and keeps hosted live web search available. Shell tools, connectors, plugins, browser control,
+hooks, memories and subagents are disabled; project instructions are not loaded. Saved CLI authentication
+remains accessible to the CLI harness, not sandboxed commands. Shared topics and evidence rules live in
 `career_ops/evaluation/codex_research.py`. No personal preferences enter research.
 
 Codex returns sourced fact arrays. JSON structure, exact requested profile IDs and HTTP source URLs
@@ -123,6 +126,19 @@ fact output, elapsed time, available token usage and immutable scoped archives/r
 and citations are source references, not guaranteed complete webpage-body captures. Failed or timed-out
 runs retain diagnostics, produce no new fact archive and have no model fallback. A later workflow
 attempt starts a new isolated Codex task; completed evidence and Jev ratings are reused.
+
+Local Langfuse records the Codex task as one aggregate generation with its public prompt, final output
+and reported token usage. Each dispatched Jev HTTP attempt has its own generation with the request,
+validated response or error; Jev token usage is unavailable. These inherit the owning score graph's
+trace. Cached results create no model generation. The callback requires the explicit `langchain`
+dependency; `system doctor` checks its import as well as local server health. Codex's individual web
+tool calls remain in the retained CLI events rather than separate Langfuse observations.
+
+Run `.venv/bin/python -B scripts/eval-company-research.py --output /tmp/company-research-eval`
+to exercise the actual macOS sandbox with synthetic files. Add `--live` to research Microsoft and
+GitLab with synthetic prompt-injection fixtures. This writes no business data. `results.json` records
+permission/tool/leakage checks and facts for manual source-support and applicability review;
+passing structural checks does not mark claims as semantically verified.
 
 Company archives expire by Sunday (at most seven days). Exact scopes and unchanged research rules
 reuse facts, including empty results; new scopes collect only missing ranges. Changed research rules

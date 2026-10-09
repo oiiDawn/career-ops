@@ -9,6 +9,24 @@ from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from career_ops.evaluation import codex_research as r, company_pipeline as c
+from langchain_core.callbacks import BaseCallbackHandler
+from langchain_core.runnables import RunnableLambda
+
+
+class Recorder(BaseCallbackHandler):
+    def __init__(self):
+        self.generations = []
+        self.responses = []
+        self.errors = []
+
+    def on_llm_start(self, serialized, prompts, **kwargs):
+        self.generations.append(kwargs)
+
+    def on_llm_end(self, response, **kwargs):
+        self.responses.append(response)
+
+    def on_llm_error(self, error, **kwargs):
+        self.errors.append(type(error).__name__)
 
 public = {'company_id':'sample','name':'Sample','identity_url':'https://sample.test/',
           'scopes':[{'dimension':'culture','scope':{'region':'China'}}], 'seed_urls':[]}
@@ -31,24 +49,36 @@ with tempfile.TemporaryDirectory() as directory:
         prompt = kwargs['stdin'].read()
         assert 'Public duties' in prompt and 'PRIVATE-CV' not in prompt and 'PRIVATE-PREFERENCE' not in prompt
         assert 'CAREER_OPS_LLM_API_KEY' not in kwargs['env'] and 'TYPESAFE_API_KEY' not in kwargs['env']
-        assert '--ignore-user-config' in command and '--search' in command and 'read-only' in command
+        assert 'LANGFUSE_SECRET_KEY' not in kwargs['env']
+        assert '--ignore-user-config' in command and '--search' in command and '--sandbox' not in command
+        assert 'default_permissions="company-research"' in command
+        permissions = next(v for v in command if v.startswith('permissions.company-research='))
+        assert '":root"="deny"' in permissions and '":workspace_roots"={"."="read"}' in permissions
+        assert 'network={enabled=false}' in permissions
+        for feature in ('shell_tool', 'unified_exec', 'apps', 'plugins', 'multi_agent', 'browser_use', 'hooks'):
+            assert any(command[i:i+2] == ['--disable', feature] for i in range(len(command)-1))
         if timeout:
             return real_popen([sys.executable,'-c','import time; time.sleep(60)'],**kwargs)
         return real_popen([sys.executable,str(fake),command[command.index('-o')+1],
                            '{"profiles":[]}' if invalid else json.dumps(answer)],**kwargs)
     with patch.object(r,'executable',return_value='codex'), patch.object(r.subprocess,'Popen',spawn), \
          patch.dict(os.environ,{'TYPESAFE_API_KEY':'PRIVATE-KEY','CAREER_OPS_LLM_API_KEY':'PRIVATE-KEY'}):
-        result = r.run(public,[posting],root/'success')
+        recorder = Recorder()
+        result = RunnableLambda(lambda _: r.run(public,[posting],root/'success')).invoke(
+            {}, {'callbacks': [recorder], 'run_name': 'score'})
         assert result==answer and not workdirs[-1].exists()
+        assert len(recorder.generations)==1 and recorder.generations[0]['parent_run_id'] is not None
+        assert recorder.responses[0].llm_output['token_usage']=={'prompt_tokens':10,'completion_tokens':5}
         metrics=json.loads((root/'success/result.json').read_text())
         assert metrics['status']=='researched' and metrics['usage'][0]['output_tokens']==5
         assert json.loads((root/'success/facts.json').read_text())==answer
         invalid=True
-        try:r.run(public,[posting],root/'invalid')
+        try:RunnableLambda(lambda _: r.run(public,[posting],root/'invalid')).invoke({}, {'callbacks': [recorder]})
         except ValueError:pass
         else:raise AssertionError('Invalid profile accepted')
         assert json.loads((root/'invalid/result.json').read_text())['status']=='failed'
         assert (root/'invalid/facts.json').exists()
+        assert recorder.errors==['ValueError']
         timeout=True
         with patch.object(r,'TIMEOUT_SECONDS',.1):
             try:r.run(public,[posting],root/'timeout')

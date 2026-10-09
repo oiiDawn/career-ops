@@ -1,14 +1,17 @@
-"""Attach optional local Langfuse tracing to top-level LangGraph runs."""
+"""Attach local Langfuse traces to workflows and external model calls."""
 
 from __future__ import annotations
 
 from functools import cache
+from contextlib import contextmanager
+import json
 import logging
 import os
 import subprocess
 from urllib.parse import urlsplit
 
-from langchain_core.runnables.config import var_child_runnable_config
+from langchain_core.outputs import Generation, LLMResult
+from langchain_core.runnables.config import ensure_config, get_callback_manager_for_config, var_child_runnable_config
 
 from career_ops.context import ROOT
 
@@ -58,3 +61,25 @@ def traced(config: dict, name: str, session_id: str) -> dict:
     return {**config, "callbacks": [handler], "metadata": {
         "langfuse_session_id": session_id, "langfuse_tags": [name], "git_sha": git_sha(),
     }}
+
+
+@contextmanager
+def model_generation(name: str, model: str, prompt: str):
+    """Report a dispatched external model call through the owning graph's callbacks.
+
+    Callers supply the actual output and any reported token usage. Cache reads never
+    enter this context, and a CLI agent is one aggregate generation, not individual turns.
+    """
+    config = ensure_config()
+    manager = get_callback_manager_for_config(config)
+    run = manager.on_llm_start({"name": name}, [prompt], name=name,
+                               invocation_params={"model": model})[0]
+    result = {}
+    try:
+        yield result
+    except BaseException as error:
+        run.on_llm_error(error)
+        raise
+    else:
+        run.on_llm_end(LLMResult(generations=[[Generation(text=json.dumps(result.get("output"), ensure_ascii=False))]],
+                                llm_output={"model_name": model, "token_usage": result.get("usage", {})}))

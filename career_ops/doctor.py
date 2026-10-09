@@ -58,9 +58,11 @@ def optional_checks() -> dict[str, bool]:
     if not tracing.enabled():
         return {}
     try:
+        from langfuse.langchain import CallbackHandler
+
         with urlopen(f"{os.environ['LANGFUSE_HOST'].rstrip('/')}/api/public/health", timeout=3) as response:
             return {"langfuse": response.status == 200}
-    except OSError:
+    except (ImportError, OSError):
         return {"langfuse": False}
 
 

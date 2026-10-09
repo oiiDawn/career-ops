@@ -13,6 +13,25 @@ ROOT = Path(__file__).resolve().parents[2]
 import sys
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from career_ops.evaluation import jev as jev
+from langchain_core.callbacks import BaseCallbackHandler
+from langchain_core.runnables import RunnableLambda
+
+
+class Recorder(BaseCallbackHandler):
+    def __init__(self):
+        self.calls = []
+        self.results = []
+        self.errors = []
+
+    def on_llm_start(self, serialized, prompts, **kwargs):
+        self.calls.append(kwargs)
+        assert 'test-key' not in prompts[0]
+
+    def on_llm_end(self, response, **kwargs):
+        self.results.append(response)
+
+    def on_llm_error(self, error, **kwargs):
+        self.errors.append(type(error).__name__)
 request = jev.request_for({"posting": {"jd": "A retained job"}}, jev.RUBRIC.read_text())
 assert len(request["questions"]) == 8
 assert all(len(request["questions"][d]["criteria"]) == 5 for d in jev.DIMENSIONS)
@@ -46,19 +65,27 @@ with tempfile.TemporaryDirectory() as directory:
         return io.BytesIO(b'{"model":"invalid"}')
 
     jev.urlopen = invalid_reply
-    assert jev.call("case", request, output, "test-key")["status"] == "failed"
+    recorder = Recorder()
+    evaluate = RunnableLambda(lambda _: jev.call("case", request, output, "test-key"))
+    config = {'callbacks': [recorder], 'run_name': 'score'}
+    assert evaluate.invoke({}, config)["status"] == "failed"
     assert len(calls) == 2 and not (output / "case.json").exists()
+    assert len(recorder.calls) == 2 and recorder.errors == ['ValueError', 'ValueError']
+    assert all(c['parent_run_id'] is not None for c in recorder.calls)
     before = (output / "case.attempt-1.raw.txt").read_bytes()
 
     def valid_reply(http, timeout):
         return io.BytesIO(json.dumps(response).encode())
 
     jev.urlopen = valid_reply
-    result = jev.call("case", request, output, "test-key")
+    result = evaluate.invoke({}, config)
     assert result["status"] == "scored" and len(result["attempts"]) == 3
     assert (output / "case.attempt-1.raw.txt").read_bytes() == before
     assert (output / "case.attempt-3.raw.txt").exists()
-    assert jev.call("case", request, output, "test-key") == result
+    assert evaluate.invoke({}, config) == result
+    assert len(recorder.calls) == 3 and len(recorder.results) == 1
+    assert json.loads(recorder.results[0].generations[0][0].text) == response
+    assert recorder.results[0].llm_output['token_usage'] == {}
     changed = deepcopy(request)
     changed["state"]["evidence"]["different"] = True
     try:
