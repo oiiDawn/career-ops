@@ -129,6 +129,7 @@ def render_report(packet: dict, evidence: dict, assessment: dict) -> dict:
         for name in DIMENSIONS
     )
     research_status = "公司档案、摘要与原始来源记录见 Machine Summary；初期推荐仅按四维评分，置信度与充分性供参考"
+    sections = {name: re.sub(r"(?m)^#{1,2}(?=[ \t])", "###", body) for name, body in sections.items()}
     bodies = {
         "A. 岗位概览": sections["overview"], "B. 能力竞争力": sections["capabilities"],
         "C. 入职吸引力": f"**入职吸引力分项：**\n\n{table}",

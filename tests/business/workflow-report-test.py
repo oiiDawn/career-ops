@@ -45,6 +45,11 @@ with tempfile.TemporaryDirectory(prefix="career-ops-report-") as temporary:
     assert machine["sources"] and "advertised_comp" in machine
     assert "| culture |" in rendered["report"] and "总分" not in rendered["report"]
     assert "company" not in assessment["dimensions"]
+    headed = render_report(packet, evidence, {**assessment, "sections": {
+        **assessment["sections"], "overview": "## Overview\nComplete evidence mapping, unknowns and specific next actions."}})
+    assert "### Overview" in headed["report"]
+    assert headed["scores"] == rendered["scores"]
+    assert "\n## Overview" not in headed["report"]
     for invalid in (True, float("nan"), float("inf"), .9, 5.1):
         broken = {**assessment, "dimensions": {"direction": {**raw, "score": invalid}}}
         try:
