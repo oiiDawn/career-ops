@@ -75,6 +75,11 @@ def invoke(prepare: Callable[[ChatOpenAI], Runnable], messages: list[BaseMessage
             return response
         except Exception as error:
             record.update(status='failed', error_type=type(error).__name__)
+            completion = getattr(error, 'completion', None)
+            usage = getattr(completion, 'usage', None)
+            if usage and usage.total_tokens is not None:
+                record['usage'] = {'input_tokens': usage.prompt_tokens,
+                                   'output_tokens': usage.completion_tokens, 'total_tokens': usage.total_tokens}
             if not isinstance(error, RETRYABLE) or attempt == MODEL_ATTEMPTS-1:
                 raise
         finally:
