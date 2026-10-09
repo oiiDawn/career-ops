@@ -81,7 +81,11 @@ def public_bundle(jd: dict, directory: Path, valid_until: str) -> dict:
         elif isinstance(location, str):
             parts = [part.strip() for part in location.split(',')]
             country = next((aliases[part] for part in parts if part in aliases), '')
-            city = (parts[-1] if parts[0] in aliases else parts[0]) if len(parts) > 1 else ''
+            if not country:
+                prefix = parts[0].split('-', 1)[0]
+                country = aliases.get(prefix, '')
+            city = (parts[-1] if parts[0] in aliases or parts[0].split('-', 1)[0] in aliases
+                    else parts[0]) if len(parts) > 1 else ''
             if city in aliases:
                 city = ''
         else:
@@ -151,7 +155,7 @@ def _complete_sections(assessment: dict, jd: dict, sources: dict, research: dict
 def run_score(inputs: dict, draft_root: Path, root: Path) -> dict:
     """Resume completed nodes; share current scoped company archives between all retained jobs."""
     draft_root = draft_root.resolve()
-    key = hashlib.sha256(json.dumps({'scope_contract': 2, 'inputs': inputs}, ensure_ascii=False, sort_keys=True).encode()).hexdigest()
+    key = hashlib.sha256(json.dumps(inputs, ensure_ascii=False, sort_keys=True).encode()).hexdigest()
     directory = draft_root / key
     directory.mkdir(parents=True, exist_ok=True)
     company_store = draft_root.parent / 'company-profiles'

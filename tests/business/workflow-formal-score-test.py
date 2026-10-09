@@ -124,4 +124,6 @@ with tempfile.TemporaryDirectory() as temp:
         unknown = g.public_bundle({**jd, 'location_evidence':None, 'role':'Engineer'}, directory, '2026-10-11')
         assert unknown['jobs'][0]['scopes']['culture']['region'] == 'unknown'
         assert unknown['jobs'][0]['scopes']['compensation']['level'] == 'unknown'
+        coded = g.public_bundle({**jd, 'location_evidence':'CN-Jiaozi Financial Center, Chengdu'}, directory, '2026-10-11')
+        assert coded['jobs'][0]['scopes']['compensation']['region'] == 'China:Chengdu'
 print('formal score: deterministic scopes, retained identity, company reuse and checkpoint recovery passed')
