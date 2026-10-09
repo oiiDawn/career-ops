@@ -21,7 +21,7 @@ TRANSITIONS = {
     "interview": {"offer", "rejected", "discarded"},
     "offer": {"hired", "discarded"},
 }
-ACTIVITIES = {"followup_sent", "reply_suggested", "outcome_recorded", "offer_prepared"}
+ACTIVITIES = {"followup_sent", "reply_suggested", "offer_prepared"}
 OUTCOMES = {
     "interview_progress": "interview",
     "offer_received": "offer",
@@ -294,12 +294,6 @@ class ApplicationStore:
                     (state["idempotency_key"], opportunity_id, current, target, state["action"], state["source"],
                      json.dumps(payload, ensure_ascii=False, sort_keys=True), package_result_key),
                 )
-                if state["action"] == "outcome":
-                    self.db.execute(
-                        "INSERT INTO application_activity(operation_id,opportunity_id,type,source,payload) VALUES(?,?,?,?,?)",
-                        (state["idempotency_key"], opportunity_id, "outcome_recorded", state["source"],
-                         json.dumps(payload, ensure_ascii=False, sort_keys=True)),
-                    )
                 result = {"status": target, "reused": False}
             self.db.execute("COMMIT")
             return result

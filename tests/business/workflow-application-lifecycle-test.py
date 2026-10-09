@@ -113,7 +113,7 @@ with tempfile.TemporaryDirectory() as temporary:
     assert offer_activity["source"] == "candidate-confirmed"
     assert [event["toStatus"] for event in view["events"]] == ["applied", "interview", "offer", "hired"]
     database = sqlite3.connect(directory / "opportunities.db")
-    assert database.execute("SELECT operation_id FROM application_activity WHERE type='outcome_recorded' ORDER BY id").fetchall() == [("offer-42",), ("hired-42",)]
+    assert database.execute("SELECT COUNT(*) FROM application_activity WHERE operation_id IN ('offer-42','hired-42')").fetchone()[0] == 0, "outcomes live only in application_events"
     database.close()
     assert call(directory, "followups")["entries"] == []
     assert call(directory, "view")[0]["company"] == "Example"

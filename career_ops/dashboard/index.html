@@ -574,7 +574,6 @@ const STATUS_TEXT = {
   offer_declined: "拒绝 offer", rejected: "被拒", no_response: "无回应，不再跟进", interview_only: "面试后无下文",
 };
 const URGENCY_TEXT = { urgent: "紧急", overdue: "已到跟进时间", waiting: "等待中", cold: "已冷却" };
-const VIA = ["官网", "Boss直聘", "LinkedIn", "内推", "邮件"];
 const today = () => new Date().toLocaleDateString("sv-SE");
 
 function recordForm(kind, label, fields) {
@@ -585,7 +584,6 @@ function recordForm(kind, label, fields) {
 }
 const dateInput = (value = today(), max = today()) =>
   `<input type="date" name="date" required value="${value}"${max ? ` max="${max}"` : ""}>`;
-const channelInput = name => `<input name="${name}" list="viaList" placeholder="渠道（可选）" maxlength="200">`;
 
 function followupSummary(d) {
   if (d.followup === undefined) loadFollowup(d.id);
@@ -598,15 +596,14 @@ function followupSummary(d) {
 }
 
 function recordPanel(d) {
-  const datalist = `<datalist id="viaList">${VIA.map(v => `<option value="${v}">`).join("")}</datalist>`;
   if (!d.application_status) {
     const linked = d.confirmed_package ? `<span class="sub">将关联已确认材料包 ${esc(d.confirmed_package)}</span>` : "";
-    return datalist + recordForm("submit", `标记已投递 ${linked}`, dateInput() + channelInput("via"));
+    return recordForm("submit", `标记已投递 ${linked}`, dateInput());
   }
   const options = d.status_options.map(v => `<option value="${v}">${esc(STATUS_TEXT[v] || v)}</option>`).join("");
-  return datalist + followupSummary(d)
+  return followupSummary(d)
     + (options ? recordForm("status", "更新投递状态", `<select name="value" required>${options}</select>`) : "")
-    + recordForm("followup", "记录已发跟进", dateInput() + channelInput("channel"))
+    + recordForm("followup", "记录已发跟进", dateInput())
     + recordForm("schedule", "设定下次跟进日期", dateInput("", ""));
 }
 

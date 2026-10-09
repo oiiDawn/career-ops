@@ -67,14 +67,14 @@ def record_command(opportunity_id: int, body: dict, status_options: list[str], p
     value = ""
     if kind == "submit":
         action = "submit"
-        payload = {"submitted_at": day("date"), "via": text("via"), "package_result_key": package_key}
+        payload = {"submitted_at": day("date"), "package_result_key": package_key}
     elif kind == "status":
         value = text("value")
         if value not in status_options:
             raise ValueError(f"当前状态下不能记录：{value or '空'}")
         action, payload = ("transition" if value == "responded" else "outcome"), {}
     elif kind == "followup":
-        action, value, payload = "activity", "followup_sent", {"sent_at": day("date"), "channel": text("channel")}
+        action, value, payload = "activity", "followup_sent", {"sent_at": day("date")}
     else:
         action, value, payload = "schedule", day("date", required=True), {}
     payload = {name: item for name, item in {**payload, "notes": text("notes")}.items() if item}

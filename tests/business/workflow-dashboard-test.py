@@ -179,7 +179,7 @@ with tempfile.TemporaryDirectory() as temporary:
     try:
         assert fetch(base, "/api/jobs/2")["status_options"] == []
         assert fetch(base, "/api/jobs/3")["status_options"][0] == "responded"
-        submit = {"kind": "submit", "key": "dashboard-key-1", "date": "2026-10-01", "via": "内推", "notes": "via friend"}
+        submit = {"kind": "submit", "key": "dashboard-key-1", "date": "2026-10-01", "notes": "via friend"}
         fetch(base, record, 403, "POST", {"Content-Type": "application/json"}, submit)
         assert fetch(base, record, 200, "POST", action, submit)["result"]["status"] == "applied"
         assert fetch(base, record, 200, "POST", action, submit)["result"]["reused"] is True
@@ -187,16 +187,20 @@ with tempfile.TemporaryDirectory() as temporary:
         assert "YYYY-MM-DD" in fetch(base, record, 409, "POST", action, {**submit, "key": "dashboard-key-3", "date": "soon"})["error"]
         assert "不能记录" in fetch(base, record, 409, "POST", action, {"kind": "status", "key": "dashboard-key-4", "value": "hired"})["error"]
         fetch(base, record, 200, "POST", action, {"kind": "status", "key": "dashboard-key-5", "value": "responded"})
-        fetch(base, record, 200, "POST", action, {"kind": "followup", "key": "dashboard-key-6", "date": "2026-10-05", "channel": "邮件"})
+        fetch(base, record, 200, "POST", action, {"kind": "followup", "key": "dashboard-key-6", "date": "2026-10-05"})
         fetch(base, record, 200, "POST", action, {"kind": "schedule", "key": "dashboard-key-7", "date": "2099-01-01"})
         followup = fetch(base, "/api/jobs/2/followup")["followup"]
         assert followup["status"] == "responded" and followup["nextFollowupDate"] == "2099-01-01", followup
-        assert followup["lastFollowupAt"] == "2026-10-05" and followup["via"] == "内推", followup
+        assert followup["lastFollowupAt"] == "2026-10-05", followup
         detail = fetch(base, "/api/jobs/2")
         assert detail["application_status"] == "responded" and "rejected" in detail["status_options"]
-        assert detail["application_events"][0]["payload"] == {"submitted_at": "2026-10-01", "via": "内推", "notes": "via friend"}
+        assert detail["application_events"][0]["payload"] == {"submitted_at": "2026-10-01", "notes": "via friend"}
         assert {event["source"] for event in detail["application_events"]} == {"dashboard"}
         assert fetch(base, "/api/jobs/1/followup")["followup"] is None
+        fetch(base, record, 200, "POST", action, {"kind": "status", "key": "dashboard-key-8", "value": "rejected"})
+        detail = fetch(base, "/api/jobs/2")
+        assert [event["to_status"] for event in detail["application_events"]].count("rejected") == 1
+        assert [item["type"] for item in detail["application_activity"]] == ["followup_sent"], "an outcome is one timeline entry"
     finally:
         server.shutdown()
         server.server_close()
