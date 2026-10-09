@@ -68,9 +68,9 @@ input fingerprints still match.
 ### Score and action queue
 
 LangGraph scoring uses the four-dimension policy in `rules/evaluation/four-dimension.md`.
-Three independent company/culture/compensation agents collect and summarize public
-company facts through independent owned tool loops, without cumulative token or score-stage time caps. Each dimension is scored
-by its own Jev request as soon as its summary is ready; valid exact company scopes
+Three parallel company/culture/compensation main Agents research public facts through one
+fixed retrieval tool and stateless document summaries, without cumulative token or score-stage time caps. Each main Agent organizes
+facts directly for its own Jev request as soon as ready; valid exact company scopes
 reuse persistent evidence and ratings. Job direction is scored separately.
 Current JD, candidate and policy inputs bind each report version. Invalid or absent
 summaries and failed ratings remain pending; other dimensions retain their results.
