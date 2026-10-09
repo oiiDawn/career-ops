@@ -21,22 +21,12 @@ class Model:
     def bind(self, **kwargs): return self
 
 
-from langchain_core.language_models import BaseChatModel
-from langchain_core.outputs import ChatResult, ChatGeneration
-class ResearchModel(BaseChatModel):
-    model_name: str = 'offline-research'
-    @property
-    def _llm_type(self): return 'openai'
-    def _generate(self, messages, stop=None, run_manager=None, **kwargs):
-        reply = invoke(lambda _: Model(), messages, 'isolated-adaptive-research')
-        return ChatResult(generations=[ChatGeneration(message=reply)])
-    def bind_tools(self, tools, **kwargs): return self.bind(tools=[t.name for t in tools])
 
 
 def invoke(prepare, messages, name):
     prepare(Model())
     research_calls.append(name)
-    if name == 'isolated-company-summary':
+    if name in ('isolated-company-summary', 'isolated-source-summary'):
         data = json.loads(messages[1].content)
         assert 'cv' not in data and 'standards' not in data
         source = data['sources'][0]
@@ -45,8 +35,7 @@ def invoke(prepare, messages, name):
             'limitations': 'Execution unknown', 'source_ids': [source['source_id'], 'second-public-source']}], 'gaps':['Offer and team unknown'],
             'conflicts':[]} for p in data['profiles']]}
         return AIMessage(content=json.dumps(answer), usage_metadata={'input_tokens':20,'output_tokens':20,'total_tokens':40})
-    calls = [] if len(messages)>2 else [{'name':'web_extract','args':{'urls':['https://sample.test/policy'],
-        'terms':['Public']},'id':'read','type':'tool_call'}]
+    calls = [] if len(messages)>2 else [{'name':'web_extract','args':{'urls':['https://sample.test/policy']},'id':'read','type':'tool_call'}]
     return AIMessage(content='' if calls else '{"sources":[],"gaps":[]}', tool_calls=calls,
                      usage_metadata={'input_tokens':20,'output_tokens':20,'total_tokens':40})
 
@@ -83,7 +72,7 @@ with tempfile.TemporaryDirectory() as temp:
         'liveness':'active','prescreen':{'status':'pass'}}
     values={'jd_report':jd,'cv':'secret CV','profile':'language: {output: zh-CN}', 'targeting':'Agent work',
             'rules':'Current rules','rubric':c.jev.RUBRIC.read_text()}
-    with patch.object(model,'call_agent',agent),patch.object(a.llm,'invoke',invoke),patch.object(a.llm,'chat_model',ResearchModel),patch.object(a,'tavily',provider),\
+    with patch.object(model,'call_agent',agent),patch.object(a.llm,'invoke',invoke),patch.object(a,'tavily',provider),\
          patch.object(c.jev,'call',jev),patch.object(c.jev,'dotenv_values',lambda _: {'TYPESAFE_API_KEY':'key'}):
         store=BusinessStore(root/'opportunities.db')
         usage=model.USAGE.set((str(store.path),'test',None))
@@ -97,7 +86,7 @@ with tempfile.TemporaryDirectory() as temp:
             store.close()
         assert set(first['artifact']['score']) == {'direction','company','culture','compensation'}
         assert first['artifact']['score']['culture']==3.37 and first['artifact']['recommendation']=='deprioritize'
-        assert len(jev_calls)==4 and len(research_calls)==9
+        assert len(jev_calls)==4 and len(research_calls)==12
         before=(len(jev_calls),len(research_calls),len(model_calls))
         assert g.run_score(values,root/'workflow-drafts',root)==first
         assert before==(len(jev_calls),len(research_calls),len(model_calls))
@@ -110,7 +99,7 @@ with tempfile.TemporaryDirectory() as temp:
         before=(len(jev_calls),len(research_calls),len(model_calls))
         second=g.run_score(values,root/'workflow-drafts',root)
         assert before==(len(jev_calls),len(research_calls),len(model_calls))
-        assert len(jev_calls)==5 and len(research_calls)==9
+        assert len(jev_calls)==5 and len(research_calls)==12
         assert first['artifact']['company_profiles']==second['artifact']['company_profiles']
         assert len(second['artifact']['company_ratings'])==3
         assert 'attractiveness-v4' in second['artifact']['report']
@@ -124,6 +113,6 @@ with tempfile.TemporaryDirectory() as temp:
             else:raise AssertionError('Concurrent company research was duplicated')
             assert before==(len(jev_calls),len(research_calls))
         third=g.run_score(values,root/'workflow-drafts',root)
-        assert len(jev_calls)==6 and len(research_calls)==9
+        assert len(jev_calls)==6 and len(research_calls)==12
         assert third['artifact']['company_profiles']==first['artifact']['company_profiles']
 print('formal score: cold four requests, shared company cache, raw metadata and resume without repeated calls passed')

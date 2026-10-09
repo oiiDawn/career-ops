@@ -46,32 +46,22 @@ class Model:
         return self
 
 
-from langchain_core.language_models import BaseChatModel
-from langchain_core.outputs import ChatResult, ChatGeneration
-class ResearchModel(BaseChatModel):
-    model_name: str = 'offline-research'
-    @property
-    def _llm_type(self): return 'openai'
-    def _generate(self, messages, stop=None, run_manager=None, **kwargs):
-        reply = invoke(lambda _: Model(), messages, 'isolated-adaptive-research')
-        return ChatResult(generations=[ChatGeneration(message=reply)])
-    def bind_tools(self, tools, **kwargs): return self.bind(tools=[t.name for t in tools])
 
 
 def invoke(prepare, messages, name):
     prepare(Model())
     model_calls.append(name)
-    if name == 'isolated-company-summary':
+    if name in ('isolated-company-summary', 'isolated-source-summary'):
         data = json.loads(messages[1].content)
         assert 'standards' not in data and 'posting' not in data and '350000' not in messages[0].content
         dimension = data['profiles'][0]['dimension']
         assert all(p['dimension'] == dimension for p in data['profiles'])
         assert 'Organize only '+dimension in messages[0].content
-        summary_dimensions.append(dimension)
-        if ready_check and dimension == 'company':
+        if name == 'isolated-company-summary': summary_dimensions.append(dimension)
+        if ready_check and dimension == 'company' and name == 'isolated-company-summary':
             assert culture_scored.wait(3), 'Company summary blocked culture independent scoring'
         source = data['sources'][0]
-        assert '2026-10-08' in source['source_header']
+        assert '2026-10-08' in source['source_header'] or source.get('material_kind') == 'document_fact_cards'
         answer = {'profiles': [{'profile_id': item['profile_id'], 'facts': [{'claim': 'Sample public fact',
             'source_id': source['source_id'], 'source_url': source['url'], 'date': '2026-10-08',
             'kind': 'official promise', 'applicability': 'Declared scope; execution unknown',
@@ -85,8 +75,7 @@ def invoke(prepare, messages, name):
         assert 'Research only the '+dimension in messages[0].content
         assert 'quotation offsets' in messages[0].content and 'exact contiguous' not in messages[0].content
         text = ''
-        calls = [{'name': 'web_extract', 'args': {'urls': ['https://sample.test/facts'],
-                  'terms': ['Operating', 'annual']}, 'id': 'extract', 'type': 'tool_call'}]
+        calls = [{'name': 'web_extract', 'args': {'urls': ['https://sample.test/facts']}, 'id': 'extract', 'type': 'tool_call'}]
     else:
         text = '{"facts":[],"gaps":"Research output is not the separate summary"}'
         calls = []
@@ -117,12 +106,12 @@ def score(name, request, output, key):
 
 original_summary = c.summarize_company
 
-def summary_with_tracking(public, sources, output):
-    summary_groups.append(public['scopes'][0]['dimension'])
-    return original_summary(public, sources, output)
+def summary_with_tracking(public, sources, output, **kwargs):
+    if not kwargs.get('document'): summary_groups.append(public['scopes'][0]['dimension'])
+    return original_summary(public, sources, output, **kwargs)
 
 c.summarize_company = summary_with_tracking
-a.llm.invoke, a.llm.chat_model, a.tavily, c.jev.call = invoke, ResearchModel, tavily, score
+a.llm.invoke, a.tavily, c.jev.call = invoke, tavily, score
 rubric = c.jev.RUBRIC.read_text()
 with tempfile.TemporaryDirectory() as temp:
     root = Path(temp)
@@ -141,7 +130,7 @@ with tempfile.TemporaryDirectory() as temp:
     assert len(captures) == 3
     ledger = json.loads(captures[0].read_text())
     assert all(json.loads(p.read_text())['token_budget'] is None for p in captures)
-    assert ledger['engine'] == 'deepagents' and ledger['credit_budget'] == 60
+    assert ledger['engine'] == a.ENGINE and ledger['credit_budget'] == 60
     assert ledger['sources'][0]['characters'] > 4000
     before = len(model_calls), len(network_calls), len(scores)
     warm = run('warm')

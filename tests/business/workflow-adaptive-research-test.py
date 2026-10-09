@@ -27,29 +27,24 @@ with tempfile.TemporaryDirectory() as temp:
     body = 'Menu\n\n' + 'x' * 4500 + '\n\n## Paid leave\nAnnual leave 20 days\n\n' + 'z' * 22000
     sid, frozen = r.freeze({'url': 'https://example.test/benefits', 'raw_content': body})
     assert frozen == body and (r.output / 'bodies' / (sid + '.txt')).read_text() == body
-    section = r.sections(sid, ['annual leave'])
-    assert any(s['start'] > 4000 and '20 days' in s['text'] for s in section['sections'])
     assert r.sources[sid]['sha256'] == a.sha(body)
     tools = {t.name: t for t in r.tools()}
-    start = body.index('## Paid leave')
-    read = json.loads(tools['read_sections'].invoke({'source_id': sid, 'start': start, 'end': start+35}))
-    assert read['text'] == body[start:start+35]
     calls = []
     a.tavily = lambda endpoint,payload: calls.append((endpoint,payload)) or {'results': [], 'usage': {'credits': 1}}
     for i in range(7):
         tools['web_search'].invoke({'query': 'company fact ' + str(i)})
     for i in range(2):
-        tools['web_extract'].invoke({'urls': ['https://example.test/' + str(i)], 'terms': ['leave']})
+        tools['web_extract'].invoke({'urls': ['https://example.test/' + str(i)]})
     assert len(calls) == 9 and r.credits == 9
     tools['web_search'].invoke({'query': 'COMPANY  fact 0'})
-    tools['web_extract'].invoke({'urls': ['https://example.test/0'], 'terms': ['leave']})
+    tools['web_extract'].invoke({'urls': ['https://example.test/0']})
     assert len(calls) == 9 and r.credits == 9
     a.tavily = lambda endpoint,payload: calls.append((endpoint,payload)) or {'failed_results': [{'url':u,'error':'403'} for u in payload['urls']]}
     for _ in range(2):
-        tools['web_extract'].invoke({'urls': ['https://blocked.test'], 'terms': ['leave']})
+        tools['web_extract'].invoke({'urls': ['https://blocked.test']})
     assert len(calls) == 10 and r.credits == 10
     r.credits = a.CREDIT_BUDGET - 1
-    response = json.loads(tools['web_extract'].invoke({'urls': ['https://a.test', 'https://b.test'], 'terms': []}))
+    response = json.loads(tools['web_extract'].invoke({'urls': ['https://a.test', 'https://b.test']}))
     assert not response['dispatched'] and len(calls) == 10
     a.tavily = lambda endpoint,payload: calls.append((endpoint,payload)) or {'results': [], 'usage': {'credits': 1}}
     with ThreadPoolExecutor(max_workers=2) as workers:
@@ -58,7 +53,7 @@ with tempfile.TemporaryDirectory() as temp:
     assert sum('dispatched' in value for value in results) == 1
     assert json.loads((r.output/'ledger.json').read_text())['credit_budget'] == 60
     handed = r.retrieved_evidence()
-    assert any('Annual leave 20 days' in s['text'] for s in handed['retrieved_sources'][0]['sections'])
+    assert not handed['retrieved_sources']
     assert handed['research_status'] == 'partial'
     r.stop = 'model_finished'
     (r.output / 'answer.txt').write_text('{"sources":[],"gaps":["unknown"]}')

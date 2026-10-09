@@ -69,7 +69,7 @@ input fingerprints still match.
 
 LangGraph scoring uses the four-dimension policy in `rules/evaluation/four-dimension.md`.
 Three independent company/culture/compensation agents collect and summarize public
-company facts through independent Deep Agents, without cumulative token or score-stage time caps. Each dimension is scored
+company facts through independent owned tool loops, without cumulative token or score-stage time caps. Each dimension is scored
 by its own Jev request as soon as its summary is ready; valid exact company scopes
 reuse persistent evidence and ratings. Job direction is scored separately.
 Current JD, candidate and policy inputs bind each report version. Invalid or absent
@@ -126,7 +126,7 @@ record “I don't know”; never promote a guess to a verified fact.
 
 ### 正式公司研究与发布
 
-研究与摘要仅发公开公司资料，不发送候选经历、CV 或私人薪资偏好；私人标准仅用于授权 Jev 评分。每维度使用独立 Deep Agent，不设累计 token 或评分阶段总时长硬上限，多个薪酬范围共用同一 agent。每 agent 使用60保守 Tavily credits；单次请求保留超时和有限重试，采集、压缩及摘要均计账；读取完整provider返回正文、保存实际查询/读取/失败/停止原因，按缺口探索，不将更多网页等同充分证据。
+研究与摘要仅发公开公司资料，不发送候选经历、CV 或私人薪资偏好；私人标准仅用于授权 Jev 评分。每维度使用独立自研工具循环，不设累计 token 或评分阶段总时长硬上限，多个薪酬范围共用同一 agent。每 agent 使用60保守 Tavily credits；单次请求保留超时和有限重试，采集及摘要均计账；每篇provider正文保存后立即由对应维度模型压缩为少量事实，每条一两句话，研究循环只携带事实、来源及缺口，最终维度摘要汇总事实；保存实际查询/读取/失败/停止原因，按缺口探索，不将更多网页等同充分证据。
 
 有效公司scope复用，新增scope只补对应维度；摘要规则变更用已留存来源重新摘要，评分规则变更只重新评分。SQLite保存四维原始值与评估产物，旧结果保留。发布检查当前输入、结构、数值范围及报告身份；摘要语义仍须审阅；推荐仅按四维分数，缺口展示但不设充分性门槛。
 

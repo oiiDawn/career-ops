@@ -128,16 +128,18 @@ Reports and Dashboard preserve four raw fractional scores, confidence and indepe
 Initial recommendations use scores only: all four dimensions must have scores of at least 4 for `focus`.
 Lower or missing scores are `deprioritize`; confirmed hard failures remain `discard`. Confidence and
 evidence sufficiency remain visible but do not block recommendations or trigger extra model review.
-Three independent Deep Agents perform research with checkpointed state, readable offloaded tool results,
-and rolling context summaries. Cumulative model tokens and score-stage elapsed time have no hard cap;
-all research, compaction, retries and final summary calls retain usage. Each dimension has 60 conservative
-Tavily credits; exhausted search allowance stops further network dispatch and preserves findings for summary.
-Single model/Tavily requests retain timeouts and finite transient retries. Context compaction triggers at
-12K approximate input tokens and keeps 3K recent tokens; tool results above 2K approximate tokens are offloaded.
-The persisted full provider bodies remain the evidence source. These context thresholds are not resource budgets.
+Three independent owned tool loops perform research with retained model history, tool caches and full provider bodies.
+Cumulative model tokens and score-stage elapsed time have no hard cap. Research, retries and final summary calls
+retain usage. Each dimension has 60 conservative Tavily credits; exhausted allowance stops new network dispatch
+and preserves findings for summary. Single requests retain timeouts and finite transient retries.
+Each retrieved document is frozen and immediately summarized by its dimension's model into a few useful facts,
+each one or two sentences. Only fact cards, sources and gaps enter subsequent research turns. Successful document
+summaries are reused on duplicate retrieval and resume; original bodies remain archived for review. The final
+dimension summary aggregates these cards before its independent Jev request. All document-summary calls count toward usage.
+Prompts prioritize applicable recent evidence, independent source families and unresolved gaps, skipping unrelated seeds.
 Large summary inputs use 16K batches/32K merges and at most one JSON/length repair, with the configured native
-output ceiling (currently 32768). A failed researcher is resumable from its own checkpoint without repeating
-successful searches; existing unexpired company archives remain reusable.
+output ceiling (currently 32768). Failed owned research resumes from saved messages and caches without repeating
+successful network calls. Existing unexpired company archives remain reusable.
 
 The following isolated CLI uses the same implementation with an experiment-only store:
 
@@ -162,11 +164,11 @@ responses and bodies; text equality, offsets and hash integrity are not acceptan
 Invalid summaries remain pending. A later CLI attempt can retry summary generation from
 retained material, with one bounded summary stage per scope group and no fallback scoring.
 
-Each dimension runs its own Deep Agent and summary pipeline with cumulative model tokens and score-stage
+Each dimension runs its own owned research loop and summary pipeline with cumulative model tokens and score-stage
 time uncapped. The 60-credit Tavily allowance is per dimension, including multiple compensation scopes.
-Search exhaustion prevents new network dispatch but leaves local source reads and final summary available.
-All retries, compactions and summaries retain usage; unknown usage is reserved conservatively and is not a bill.
-Source headers accompany retained sections so publication dates are available to summaries.
+Search exhaustion prevents new network dispatch but leaves document facts and final summary available.
+All research calls, retries and summaries retain usage; unknown usage is reserved conservatively and is not a bill.
+Document summaries retain publication dates, applicability, source IDs and URLs.
 Full provider-returned bodies, raw messages, summary responses and usage remain in
 the isolated store. Valid exact scopes reuse archived summaries and ratings, including
 for new jobs. New scopes collect only missing ranges; expiry or `--refresh` triggers

@@ -3,8 +3,6 @@ name = "career-ops-workflow"
 version = "0.1.0"
 requires-python = ">=3.11"
 dependencies = [
-  "langchain==1.4.4",
-  "deepagents==0.7.23",
   "langchain-openai==1.6.7",
   "langfuse==4.16.0",
   "langgraph==1.2.11",
