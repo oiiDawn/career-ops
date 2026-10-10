@@ -425,13 +425,9 @@ def start(directory: Path, opportunity_id: str, session_key: str, kind: str, req
                     context["story_bank"], request["question"], context["results"]["scan"]["artifact"]["jd"], top=3,
                 )
             if kind == "prepare":
-                scan, score = (context["results"][name]["artifact"] for name in ("scan", "score"))
-                candidate = context["candidate_sources"]
                 payload["preparation_plan"] = build_preparation_plan(
                     company=context["opportunity"]["company"], role=context["opportunity"]["role"],
-                    jd=scan["jd"], cv=candidate["cv.md"],
-                    profile=candidate["config/profile.yml"], report=score["report"],
-                    sources={"jd": "published-scan", "cv": "cv.md", "profile": "config/profile.yml", "report": "published-score"},
+                    scan=context["results"]["scan"]["artifact"],
                 )
             task = store.start(opportunity_id, session_key, kind, payload)
             task_id, status = task["task_id"], task["status"]

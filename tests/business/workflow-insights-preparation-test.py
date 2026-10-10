@@ -1,39 +1,30 @@
-"""Check source-backed preparation classification and its Python CLI."""
+"""Check the preparation plan built from the scan's capability matches."""
 
-import json
-import os
 from pathlib import Path
-import subprocess
 import sys
-import tempfile
 
-ROOT = Path(__file__).resolve().parents[2]
-sys.path.insert(0, str(ROOT))
-from career_ops.evaluation.preparation import build_preparation_plan, parse_report_classifications, validate_preparation_plan
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+from career_ops.evaluation.preparation import build_preparation_plan, validate_preparation_plan
 
-JD = "# Role\n\n## Requirements\n- Python, Kubernetes, Rust\n"
-CV = "# Skills\nPython\n\n# Experience\nDeployed Kubernetes services.\n"
-REPORT = "| Requirement | Match | Evidence |\n|---|---|---|\n| Rust | Adjacent | Systems work, scope unverified |\n| Security clearance | Unverified | Recruiter question |"
-plan = build_preparation_plan("Acme", "Engineer", JD, CV, report=REPORT, generated_at="2026-01-01T00:00:00.000Z")
-by_requirement = {row["requirement"]: row["classification"] for row in plan["requirements"]}
-assert by_requirement == {"Python": "evidenced", "Kubernetes": "evidence_gap", "Rust": "adjacent",
-                          "Security clearance": "unverified"}
-assert len(parse_report_classifications(REPORT)) == 2
-assert plan["pre_application"] and plan["interview_preparation"]
+SCAN = {
+    "url": "https://acme.example/jobs/1", "jd": "Build services in Python on Kubernetes.",
+    "years": {"required": 3, "verified": None, "evidence": "CV dates unclear"},
+    "credentials": [{"name": "Security clearance", "mandatory": False, "status": "absent", "evidence": "Not held"}],
+    "capabilities": [
+        {"name": "Rust", "core": False, "mandatory": False, "match": "adjacent", "evidence": "Systems work in C++"},
+        {"name": "Python", "core": True, "mandatory": True, "match": "proven", "evidence": "Production services"},
+    ],
+}
+plan = build_preparation_plan("Acme", "Engineer", SCAN, generated_at="2026-01-01T00:00:00.000Z")
+# One row per judged requirement, core mandatory first; nothing is re-judged here.
+assert [(row["requirement"], row["classification"]) for row in plan["requirements"]] == [
+    ("Python", "evidenced"), ("相关经验 ≥ 3 年", "unverified"), ("Rust", "adjacent"), ("Security clearance", "actual_gap")]
+assert plan["requirements"][0]["evidence"] == "Production services" and plan["requirements"][0]["source"] == "scan"
 assert validate_preparation_plan(plan)["valid"]
-assert all(row["classification"] != "evidenced" for row in plan["pre_application"])
-assert build_preparation_plan("Acme", "Engineer", "No headings", CV)["requirements"][0]["classification"] == "unverified"
-
-with tempfile.TemporaryDirectory() as temp:
-    root = Path(temp)
-    (root / "config").mkdir()
-    (root / "cv.md").write_text(CV)
-    (root / "profile.yml").write_text("")
-    (root / "jd.md").write_text(JD)
-    output = root / "output" / "plan.json"
-    env = {**os.environ, "CAREER_OPS_INPUT_ROOT": str(root)}
-    run = subprocess.run([sys.executable, "-m", "career_ops", "interview", "preparation-plan",
-                          "--jd", str(root / "jd.md"), "--company", "Acme", "--role", "Engineer",
-                          "--output", str(output)], cwd=ROOT, env=env, capture_output=True, text=True)
-    assert run.returncode == 0, run.stderr
-    assert json.loads(output.read_text())["schema"] == "career-ops/preparation-plan"
+for checklist in (plan["pre_application"], plan["interview_preparation"]):
+    assert [row["requirement"] for row in checklist] == ["相关经验 ≥ 3 年", "Rust", "Security clearance"]
+assert plan["metadata"]["source_hash"] == build_preparation_plan("Acme", "Engineer", SCAN)["metadata"]["source_hash"]
+changed = {**SCAN, "capabilities": [{**SCAN["capabilities"][0], "match": "gap"}, SCAN["capabilities"][1]]}
+assert plan["metadata"]["source_hash"] != build_preparation_plan("Acme", "Engineer", changed)["metadata"]["source_hash"]
+assert build_preparation_plan("Acme", "Engineer", {"jd": "Nothing listed"})["requirements"] == []
+print("preparation plan: scan capability matches passed")

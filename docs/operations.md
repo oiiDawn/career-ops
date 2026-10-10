@@ -9,7 +9,7 @@ is the Career Ops Python environment. Run `.venv/bin/python -B -m career_ops
 | `discover [global]` | Collect configured sources or sweep public ATS directories |
 | `evaluate ID` | Scan and score a retained opportunity |
 | `apply` | Prepare materials; record confirmed events, replies and salary; communication and prefill |
-| `interview` | Preparation plans, skill gaps, stories and durable sessions |
+| `interview` | Preparation plans, stories and durable sessions |
 | `cv` | Preview, confirm, recover and check candidate facts |
 | `show ID` | Show an opportunity and its retained results |
 | `list --view VIEW` | Opportunities (default), scores, decisions, applications or followups |
@@ -25,7 +25,6 @@ Daily commands derive inputs from the opportunity ID:
 .venv/bin/python -B -m career_ops evaluate 123
 .venv/bin/python -B -m career_ops apply prepare 123
 .venv/bin/python -B -m career_ops interview preparation-plan 123
-.venv/bin/python -B -m career_ops interview jd-skill-gap 123
 .venv/bin/python -B -m career_ops task show TASK_ID
 .venv/bin/python -B -m career_ops task resume TASK_ID --decision confirm
 ```

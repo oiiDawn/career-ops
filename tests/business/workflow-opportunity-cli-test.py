@@ -52,8 +52,6 @@ with tempfile.TemporaryDirectory() as temporary:
     assert set(prepared["allowed_actions"]) == {"feedback", "confirm", "defer", "cancel"}
     plan = run("interview", "preparation-plan", "1")
     assert plan["role"] == {"company": "Example", "title": "AI Engineer"}
-    gap = run("interview", "jd-skill-gap", "1")
-    assert "Python" in gap["existing"] and "Rust" in gap["gap"]
     assert "require --view followups" in run("list", "--overdue-only", expected=2)
     assert "put global immediately" in run("discover", "--dry-run", "global", expected=2)
     assert "not allowed with argument" in run("system", "resolve-company", "Example", "--write", "--dry-run", expected=2)

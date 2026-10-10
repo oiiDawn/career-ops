@@ -56,7 +56,9 @@ context = {
     "candidate_sources": {"cv.md": "Experience in Python", "config/profile.yml": "language: zh-CN"},
     "story_bank": "### [Engineering] Python Delivery\n**Action:** Built a Python service.\n**Result:** Delivered a Python release.\n**Best for questions about:** Python, delivery\n",
     "results": {
-        "scan": {"artifact": {"jd": "## Requirements\n- Python, FastAPI\n"}},
+        "scan": {"artifact": {"jd": "## Requirements\n- Python, FastAPI\n", "capabilities": [
+            {"name": "FastAPI", "core": True, "mandatory": True, "match": "unverified", "evidence": "Not in CV"},
+            {"name": "Python", "core": True, "mandatory": True, "match": "proven", "evidence": "CV skills"}]}},
         "score": {"artifact": {"report": "| Python | Proven | CV |\n| FastAPI | Unverified | Ask recruiter |"}},
     },
 }

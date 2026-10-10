@@ -8,6 +8,6 @@ a role, include YAML frontmatter with `company`, `role`, and an optional `date`.
 `career_ops interview context` combines an opportunity, published evidence,
 candidate sources, and relevant retained notes. `interview start` and its
 show/resume/confirm/history commands manage persisted preparation and review;
-read-only tools include match-star, story-provenance, preparation-plan, and
-jd-skill-gap. These commands do not promise automatic transcript capture or
+read-only tools include match-star, story-provenance and preparation-plan.
+These commands do not promise automatic transcript capture or
 write session files. Run them through `.venv/bin/python -B -m career_ops`.

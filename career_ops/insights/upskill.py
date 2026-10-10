@@ -1,4 +1,4 @@
-"""Classify one JD and aggregate reviewed capability gaps for learning strategy."""
+"""Aggregate judged capability gaps across evaluated opportunities for learning strategy."""
 
 from __future__ import annotations
 
@@ -8,45 +8,11 @@ from pathlib import Path
 import re
 import sqlite3
 
-from career_ops.skills import extract_skills
-from career_ops.evaluation.skill_gap import scan_jd, classify_skill_gaps, split_skills_section
-
-
-LOW_CONFIDENCE = {
-    "empty-jd": "The JD file is empty, so nothing was checked.",
-    "no-requirements-section": "No requirements section was recognized in this JD, so no text was scanned for skills. "
-                               "This is not the same as \"no gaps\": the check did not run. Read the JD yourself before drafting.",
-    "no-skill-candidates": "A requirements section was found and scanned, but no skill candidates were extracted from it. "
-                           "This is not the same as \"no gaps\": nothing was classified. Read the JD yourself before drafting.",
-}
-
-
-
-def targeted_skill_gap(jd: str, cv: str) -> dict:
-    """Preserve Node's named/prose/gap split and explicit inconclusive results."""
-    candidates, saw_section = scan_jd(jd)
-    buckets = classify_skill_gaps(candidates, cv)
-    reason = None if candidates else "empty-jd" if not jd.strip() else "no-requirements-section" if not saw_section else "no-skill-candidates"
-    return {"status": "classified" if candidates else "inconclusive", "reason": reason,
-            "lowConfidence": {"reason": reason, "message": LOW_CONFIDENCE[reason]} if reason else None,
-            "candidates": candidates, **buckets}
-
-
-def _report_gaps(report: str) -> tuple[list[str], bool]:
-    section = re.search(r"^## B\. 能力竞争力\s*\n(.*?)(?=^## |\Z)", report, re.M | re.S)
-    if not section:
-        return [], False
-    covered = any("判定" in line and "|" in line for line in section[1].splitlines())
-    gaps = []
-    for line in section[1].splitlines():
-        cells = [cell.strip() for cell in line.strip().strip("|").split("|")]
-        if len(cells) >= 2 and cells[1].lower() == "gap" and cells[0]:
-            gaps.append(cells[0])
-    return gaps, covered
+from career_ops.skills import extract_skills, split_skills_section
 
 
 def upskill_view(db: sqlite3.Connection, cv: Path, *, min_reports: int = 5) -> dict:
-    """Aggregate actual evaluated gaps; no scalar fit is inferred from attractiveness."""
+    """Aggregate the scan capability gaps of scored opportunities; no scalar fit is inferred from attractiveness."""
     if min_reports < 1:
         raise ValueError("Minimum reports must be positive")
     if not cv.is_file():
@@ -57,28 +23,20 @@ def upskill_view(db: sqlite3.Connection, cv: Path, *, min_reports: int = 5) -> d
     for row in db.execute("SELECT opportunity_id,module,payload FROM results WHERE module IN ('score','scan') ORDER BY rowid DESC"):
         reports.setdefault((str(row["opportunity_id"]), row["module"]), json.loads(row["payload"]))
     reviewed = []
-    unparsed = limited = 0
+    unjudged = 0
     for (key, module), payload in reports.items():
         if module != "score" or payload.get("outcome") != "score":
             continue
-        report = payload.get("artifact", {}).get("report", "")
-        gaps, covered = _report_gaps(report)
         scan = reports.get((key, "scan"), {})
-        core = scan.get("artifact", {}).get("capabilities") if scan.get("outcome") == "jd_report" else None
-        if isinstance(core, list):
-            for item in core:
-                if isinstance(item, dict) and item.get("match") == "gap" and item.get("name"):
-                    gaps.append(item["name"])
-        if not covered and not isinstance(core, list):
-            unparsed += 1
+        judged = scan.get("artifact", {}).get("capabilities") if scan.get("outcome") == "jd_report" else None
+        if not isinstance(judged, list):
+            unjudged += 1
             continue
-        if not covered:
-            limited += 1
-        reviewed.append({"opportunity_id": key, "gaps": list(dict.fromkeys(gaps))})
+        reviewed.append({"opportunity_id": key, "gaps": list(dict.fromkeys(
+            item["name"] for item in judged if item.get("match") == "gap" and item.get("name")))})
     if len(reviewed) < min_reports:
         return {"status": "insufficient_data", "reports": len(reviewed), "minimum": min_reports,
-                "unparsed_reports": unparsed, "mandatory_only_reports": limited,
-                "gap_source": "reviewed score capability Gap rows and scan core capability gaps", "gaps": None}
+                "unjudged_reports": unjudged, "gap_source": "scan capability matches", "gaps": None}
     named, _ = split_skills_section(re.sub(r"<!--[\s\S]*?-->", "", cv.read_text()))
     known = extract_skills(named)
     grouped = defaultdict(lambda: {"reports": set(), "topics": set()})
@@ -104,7 +62,7 @@ def upskill_view(db: sqlite3.Connection, cv: Path, *, min_reports: int = 5) -> d
     topic_rows = [{"topic": topic, "reports": len(keys), "sources": sorted(keys)} for topic, keys in topics.items()]
     topic_rows.sort(key=lambda item: (-item["reports"], item["topic"]))
     return {"status": "observed", "reports": len(reviewed), "minimum": min_reports,
-            "unparsed_reports": unparsed, "mandatory_only_reports": limited,
+            "unjudged_reports": unjudged,
             "priority_basis": "gap prevalence among evaluated reports; scalar fit was retired",
             "topics": topic_rows, "gaps": gaps,
             "excludedAsKnown": [{"skill": skill, "reports": len(keys)} for skill, keys in sorted(excluded.items())],

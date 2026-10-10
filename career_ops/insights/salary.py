@@ -165,30 +165,14 @@ def salary_view(db: sqlite3.Connection, profile_path: Path) -> dict:
         for row in db.execute("SELECT opportunity_id,payload FROM results WHERE module='score' ORDER BY rowid DESC"):
             latest_scores.setdefault(str(row["opportunity_id"]), json.loads(row["payload"]))
         for opportunity_id, result in latest_scores.items():
-            report = result.get("artifact", {}).get("report", "")
-            match = re.search(r"^## Machine Summary\s*\n```(?:yaml|yml)\s*\n(.*?)\n```", report, re.M | re.S)
-            if not match:
+            artifact = result.get("artifact", {})
+            advertised = artifact.get("advertised_comp")
+            if not isinstance(advertised, dict):
                 continue
-            try:
-                summary = yaml.safe_load(match[1])
-            except yaml.YAMLError:
-                continue
-            if not isinstance(summary, dict) or not summary.get("advertised_comp"):
-                continue
-            advertised = summary["advertised_comp"]
-            amount = advertised.get("amount") if isinstance(advertised, dict) else advertised
-            currency = advertised.get("currency") if isinstance(advertised, dict) else None
-            if not isinstance(amount, str):
-                continue
-            if not currency:
-                currency = re.search(r"\b[A-Z]{3}\b", amount)
-                currency = currency.group() if currency else "UNKNOWN"
-            captured = summary.get("captured_at")
-            observations.append({"opportunity_id": opportunity_id, "date": str(captured)[:10] if captured else "",
-                                 "type": "advertised", "amount": amount, "currency": currency, "source": "jd",
-                                 "note": advertised.get("quote", "") if isinstance(advertised, dict) else "from retained score report",
-                                 "report_sha256": result.get("artifact", {}).get("report_sha256"),
-                                 "round": "", "interviewer": ""})
+            observations.append({"opportunity_id": opportunity_id, "date": str(artifact.get("captured_at") or "")[:10],
+                                 "type": "advertised", "amount": advertised["amount"], "currency": advertised["currency"],
+                                 "source": "jd", "note": advertised["quote"],
+                                 "report_sha256": artifact.get("report_sha256"), "round": "", "interviewer": ""})
     try:
         profile = yaml.safe_load(profile_path.read_text()) if profile_path.is_file() else {}
     except (OSError, yaml.YAMLError):

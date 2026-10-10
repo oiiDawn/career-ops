@@ -56,9 +56,9 @@ with tempfile.TemporaryDirectory() as temp:
     assert view["sources"]["salary_observations"] is False
     assert view["result"]["quality"]["unparseable"][0]["raw"] == "competitive"
     db.execute("CREATE TABLE results(opportunity_id TEXT,module TEXT,payload TEXT)")
-    report = "## Machine Summary\n```yaml\ncaptured_at: 2026-01-01\nadvertised_comp:\n  amount: 300k-400k\n  currency: CNY\n  quote: Annual salary CNY 300k-400k\n```\n"
     db.execute("INSERT INTO results VALUES(?,?,?)", ("1", "score", json.dumps({
-        "outcome": "score", "artifact": {"report": report}
+        "outcome": "score", "artifact": {"captured_at": "2026-01-01", "advertised_comp": {
+            "amount": "300k-400k", "currency": "CNY", "quote": "Annual salary CNY 300k-400k"}}
     })))
     paid = salary_view(db, profile)
     assert paid["result"]["applications"][0]["advertised"]["value"] == 350000

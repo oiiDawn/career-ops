@@ -117,7 +117,7 @@ def list_jobs(db: sqlite3.Connection) -> list[dict]:
             "liveness": scan_artifact.get("liveness"),
             "captured_at": scan_artifact.get("captured_at"),
             "prescreen": (scan_artifact.get("prescreen") or {}).get("status"),
-            "capability_counts": core_counts(scan_artifact) if isinstance(scan_artifact.get("capabilities"), list) else None,
+            "capability_counts": core_counts(scan_artifact) if capability_rows(scan_artifact) else None,
             "eligibility": eligibility.get(key),
             "scores": score if isinstance(score, dict) else None,
             "dimensions": artifact.get("dimensions", {}),

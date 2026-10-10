@@ -33,11 +33,9 @@ with tempfile.TemporaryDirectory() as temporary:
     (configured / "cv.md").write_text("# Skills\nPython\n")
     (inherited / "cv.md").write_text("# Skills\nRust\n")
     (root / ".env").write_text(f"CAREER_OPS_INPUT_ROOT={configured}\n")
-    jd = root / "jd.md"
-    jd.write_text("## Requirements\n- Python\n")
     env = {key: value for key, value in os.environ.items() if key != "CAREER_OPS_INPUT_ROOT"}
-    command = [sys.executable, "-B", "-m", "career_ops", "interview", "jd-skill-gap", "--jd", str(jd)]
+    command = [sys.executable, "-B", "-m", "career_ops", "interview", "story-provenance"]
     result = subprocess.run(command, cwd=root, env=env, capture_output=True, text=True, check=True)
-    assert json.loads(result.stdout)["existing"] == ["Python"]
+    assert str(configured) in json.loads(result.stdout)["lowConfidence"]["message"]
     result = subprocess.run(command, cwd=root, env={**env, "CAREER_OPS_INPUT_ROOT": str(inherited)}, capture_output=True, text=True, check=True)
-    assert json.loads(result.stdout)["gap"] == ["Python"]
+    assert str(inherited) in json.loads(result.stdout)["lowConfidence"]["message"]

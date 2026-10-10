@@ -8,21 +8,15 @@ import argparse
 import json
 from pathlib import Path
 import sys
-import tempfile
 
 from career_ops.interviews.context import load_context
 from career_ops.interviews.evidence import (
     classify_numeric_claims, format_ats, match_stories, provenance_diagnosis, stories,
 )
 from career_ops.evaluation.preparation import build_preparation_plan
-from career_ops.evaluation.skill_gap import classify_skill_gaps, diagnose_extraction, scan_jd
-from career_ops.discovery.configured import capture_jd
 
 
 DIAGNOSES = {
-    "empty-jd": "The JD file is empty, so nothing was checked.",
-    "no-requirements-section": 'No requirements section was recognized in this JD, so no text was scanned for skills. This is not the same as "no gaps": the check did not run. Read the JD yourself before drafting.',
-    "no-skill-candidates": 'A requirements section was found and scanned, but no skill candidates were extracted from it. This is not the same as "no gaps": nothing was classified. Read the JD yourself before drafting.',
     "no-stories-parsed": "story-bank.md exists but no `### ` story blocks were parsed from it.",
     "no-numeric-claims-found": 'Stories were parsed but no numeric claims matched the covered patterns. This is not the same as "no risk" — see the pattern-coverage note in this script\'s header for what is not scanned.',
 }
@@ -140,70 +134,16 @@ def provenance(args: argparse.Namespace) -> None:
         print(f"\n  🚨 LOW CONFIDENCE: this is not a clean result.\n     {diagnosis['message']}\n     (reason: {diagnosis['reason']})")
 
 
-def role_inputs(args: argparse.Namespace) -> dict:
-    """Use a retained JD by opportunity ID, or an explicitly supplied local JD."""
-    if sum(bool(value) for value in (args.opportunity, args.jd, args.jd_url)) != 1:
-        raise ValueError("Supply exactly one opportunity ID, --jd or --jd-url")
-    if args.opportunity:
-        context = load_context(args.directory, args.opportunity, require_candidate_sources=False)
-        scan = context["results"].get("scan")
-        if not scan or scan["outcome"] != "jd_report":
-            raise ValueError("Opportunity has no retained JD report; evaluate it first")
-        jd = scan["artifact"]
-        score = context["results"].get("score") or {}
-        return {"company": jd["company"], "role": jd["role"], "jd": jd["jd"],
-                "report": score.get("artifact", {}).get("report", ""),
-                "sources": {"opportunity": args.opportunity, "jd": jd["url"]}}
-    if args.jd_url:
-        with tempfile.TemporaryDirectory(prefix="career-ops-jd-") as temporary:
-            capture = capture_jd(Path(temporary), args.jd_url)
-        if not capture:
-            raise ValueError("JD URL capture failed or was blocked")
-        jd = capture["text"]
-    else:
-        jd = _read(args.jd, required=True)
-    return {"company": getattr(args, "company", None), "role": getattr(args, "role", None),
-            "jd": jd,
-            "report": _read(args.report, required=True) if getattr(args, "report", None) else "",
-            "sources": {"jd": args.jd_url or str(args.jd), "report": str(args.report) if getattr(args, "report", None) else None}}
-
-
 def plan(args: argparse.Namespace) -> None:
-    inputs = role_inputs(args)
-    if args.opportunity and (args.company or args.role or args.report):
-        raise ValueError("Company, role and report come from the selected opportunity")
-    if not inputs["company"] or not inputs["role"]:
-        raise ValueError("A supplied JD requires --company and --role")
-    result = build_preparation_plan(
-        company=inputs["company"], role=inputs["role"], jd=inputs["jd"],
-        cv=_read(args.cv), profile=_read(args.profile),
-        report=inputs["report"],
-        sources={**inputs["sources"], "cv": str(args.cv), "profile": str(args.profile)},
-    )
+    scan = load_context(args.directory, args.opportunity, require_candidate_sources=False)["results"].get("scan")
+    if not scan or scan["outcome"] != "jd_report":
+        raise ValueError("Opportunity has no retained JD report; evaluate it first")
+    result = build_preparation_plan(company=scan["artifact"]["company"], role=scan["artifact"]["role"], scan=scan["artifact"])
     output = json.dumps(result, ensure_ascii=False, indent=2) + "\n"
     if args.output:
         args.output.parent.mkdir(parents=True, exist_ok=True)
         args.output.write_text(output)
     print(output, end="")
-
-
-def jd_gap(args: argparse.Namespace) -> None:
-    jd, cv = role_inputs(args)["jd"], _read(args.cv, required=True)
-    skills, _ = scan_jd(jd)
-    buckets = classify_skill_gaps(skills, cv)
-    diagnosis = _diagnosis(diagnose_extraction(jd, skills))
-    if not args.summary:
-        _json({**buckets, "lowConfidence": diagnosis})
-        return
-    print(f"\nJD Skill-Gap Check\n{'─' * 40}\nJD skills found: {len(skills)}")
-    for key, label in (
-        ("existing", "  ✅ Already in Skills section:   "),
-        ("supportedByResume", "  📝 Mentioned in resume prose:   "),
-        ("gap", "  ⚠️  Real gaps (not found anywhere): "),
-    ):
-        print(f"{label}{', '.join(buckets[key]) or '(none)'}")
-    if diagnosis:
-        print(f"\n  🚨 LOW CONFIDENCE: this is not a clean result.\n     {diagnosis['message']}\n     (reason: {diagnosis['reason']})")
 
 
 def main() -> None:
@@ -226,26 +166,13 @@ def main() -> None:
     prov.add_argument("--cv", type=Path, default=INPUT_ROOT / "cv.md")
     prov.add_argument("--summary", action="store_true")
     prep = commands.add_parser("preparation-plan")
-    prep.add_argument("opportunity", nargs="?")
-    prep.add_argument("--jd", type=Path)
-    prep.add_argument("--jd-url")
-    prep.add_argument("--company")
-    prep.add_argument("--role")
-    prep.add_argument("--cv", type=Path, default=INPUT_ROOT / "cv.md")
-    prep.add_argument("--profile", type=Path, default=INPUT_ROOT / "profile.yml")
-    prep.add_argument("--report", type=Path)
+    prep.add_argument("opportunity")
     prep.add_argument("--output", type=Path)
-    gap = commands.add_parser("jd-skill-gap")
-    gap.add_argument("opportunity", nargs="?")
-    gap.add_argument("--jd", type=Path)
-    gap.add_argument("--jd-url")
-    gap.add_argument("--cv", type=Path, default=INPUT_ROOT / "cv.md")
-    gap.add_argument("--summary", action="store_true")
     args = parser.parse_args()
     if args.command == "context" and args.db is None:
         args.db = args.directory / "opportunities.db"
     try:
         {"context": context, "match-star": match, "story-provenance": provenance,
-         "preparation-plan": plan, "jd-skill-gap": jd_gap}[args.command](args)
+         "preparation-plan": plan}[args.command](args)
     except (OSError, ValueError) as error:
         parser.exit(1, f"{args.command}: {error}\n")
