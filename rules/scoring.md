@@ -107,7 +107,7 @@ record “I don't know”; never promote a guess to a verified fact.
 
 唯一四维标准为 `rules/evaluation/four-dimension.md`：direction、company、culture、compensation 独立小数期望分（1–5）、原始 confidence 和独立 evidence_sufficiency；无总分、权重或覆盖率。缺失评分保留 null/pending。公司事实按实体与精确适用范围维护，未知职级或城市不猜定。
 
-报告保持 A/B/C/D/E/G、Risk Summary、Evaluation Checklist、Machine Summary 的原顺序。正文由模型提供，能力竞争力、门槛和真实性单列。Machine Summary 使用 scoring-v3、attractiveness-v4，保留 sources/advertised_comp，保存 dimensions、company_profiles、company_research 和按四维分数计算的 recommendation。推荐阈值见 rules/evaluation/four-dimension.md；confidence与充分性仅作提示，不设置准入阈值；原始分数不截断取整，阅读显示保留两位小数。摘要按结构与适用范围接收，来源及原始响应留存供审阅，不要求逐字引文匹配或摘要 hash 完整性门禁。不得改写历史报告或从旧总分换算四维。
+评分报告只供候选人阅读，是评估记录的单向投影：程序不解析报告正文，报告中不出现来源哈希或机器数据。分节固定为 结论、职责、方向、公司、文化、薪酬、能力匹配、风险、待确认，末行为岗位来源。模型只提供结论、职责、方向说明、薪酬对照、风险和待确认的结构化文字；分数行、调研事实、能力匹配表和调研缺口由程序渲染。已知的负面事实与短板只进风险，未披露或未知的事项只进待确认，同一事项只出现一次；面试准备不进入报告。能力匹配在 scan 阶段对 JD 列出的全部要求判定一次，只作预筛门禁并在报告中展示，不计入四维评分，评分阶段不再重判。评估记录保存 dimensions、company_profiles、company_research、recommendation、sources、captured_at 和 advertised_comp，scoring_model 为 attractiveness-v4。推荐阈值见 rules/evaluation/four-dimension.md；confidence与充分性仅作提示，不设置准入阈值；原始分数不截断取整，阅读显示保留两位小数。摘要按结构与适用范围接收，来源及原始响应留存供审阅，不要求逐字引文匹配或摘要 hash 完整性门禁。报告格式变更后不为旧报告保留兼容，由重评生成新报告；不得从旧总分换算四维。
 
 <!-- How you like results formatted. Examples:
      - Reports: lead with the score and the one-line verdict.
@@ -140,7 +140,7 @@ record “I don't know”; never promote a guess to a verified fact.
 - 预筛中明确未知的相关年限保留待确认并继续评分；不能把“尚未证明满足年限”写成零年并淘汰。
 - 模型提供事实和判断；Python/LangGraph 负责来源冻结、结构化校验、哈希、报告及业务发布。同一输入仅发布一次；证据或报告不合格则修订或等待，不越过确定性门禁。
 - 三维公司 agent 各自保存采集及摘要原始产物与资源记录；正文保留 provider 实际完整返回，查询/读取按证据缺口进行，网络调用受每维独立 credits 限制，重复及访问失败记录停止原因。有效公司范围复用，无需按岗位重复研究。
-- 检查点绑定输入和产物哈希；候选事实、评分规则或 JD 变化使受影响阶段失效。来源有效性不足则等待补证；每岗通过确定性校验后立即发布，历史报告保留原格式和原始证据。
+- 检查点绑定输入和产物哈希；候选事实、评分规则或 JD 变化使受影响阶段失效。来源有效性不足则等待补证；每岗通过确定性校验后立即发布，原始证据保留。
 - 单次发布率、超时率、尝试次数和累计耗时分别记录；恢复运行的耗时不得称为从头完成的耗时。CV详细改写和面试准备在用户选岗后执行。
 
 三维并行，分别完成和评分。制度不存在必须有明确来源支持，未查到不能推出不存在；纯粹“无证据显示”等否定不进入事实，缺口仅写为具体后续问题。

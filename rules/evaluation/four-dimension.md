@@ -6,6 +6,8 @@
 
 标准依据为 [OII-397](https://linear.app/oii-workspace/issue/OII-397) 及用户后续确认。
 
+四维分数只认本文写明的方向偏好与薪资底线、目标：`inputs/targeting.md` 和 `inputs/profile.yml` 中的同类内容用于预筛和写作，修改它们不会改变四维分数。三处须手工保持一致，合并为单一来源见 OII-407、OII-408。
+
 ## 共同口径
 
 - 四个正式维度为 `direction`、`company`、`culture`、`compensation`，各自保留 1–5 小数分、Jev 原始评分 `confidence` 和独立证据充分性；不计算总分、均分或跨维度总排名。

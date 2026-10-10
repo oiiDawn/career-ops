@@ -179,4 +179,4 @@ Initial recommendations use four scores: all must be strictly above 3 and at lea
 are `deprioritize`, and confirmed hard failures remain `discard`. Confidence and sufficiency are
 informational and never trigger automatic review or fallback. Full scoring also includes employer lookup, direction and report generation; the 900-second cap applies to each Codex research task.
 
-Recommendation-only policy edits do not invalidate numeric scores. Stored scoring inputs remain byte-hash verified; freshness compares the scoring rubric independently of its two recommendation paragraphs. Historical reports retain their original recommendations; current decisions and Dashboard derive the current policy from retained scores.
+Recommendation-only policy edits do not invalidate numeric scores. Stored scoring inputs remain byte-hash verified; freshness compares the scoring rubric independently of its two recommendation paragraphs. A report format change keeps no compatibility for earlier reports; re-evaluation writes them anew. Current decisions and Dashboard derive the current policy from retained scores.

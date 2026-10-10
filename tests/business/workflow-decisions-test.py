@@ -57,10 +57,10 @@ from career_ops.input_contracts import digest, score_is_current
 
 with sqlite3.connect(':memory:') as connection:
     connection.execute('CREATE TABLE tasks (module TEXT, opportunity_id TEXT, input_hash TEXT, input_payload TEXT)')
-    frozen = {'rubric': 'intro old\n## 共同口径\nnumeric grading\n## 维护单位与岗位引用\nprocess old\n## 充分性与推荐的关系\n正式推荐按四维分数执行 old', 'rules': '初期四维均有分数且各自≥4才推荐；', 'cv': 'candidate', 'jd_report': {'opportunity_id': '7'}}
+    frozen = {'rubric': 'intro old\n## 共同口径\nnumeric grading\n## 维护单位与岗位引用\nprocess old\n## 充分性与推荐的关系\n正式推荐按四维分数执行 old', 'rules': 'scoring rules', 'cv': 'candidate', 'jd_report': {'opportunity_id': '7'}}
     payload = json.dumps(frozen)
     connection.execute('INSERT INTO tasks VALUES (?, ?, ?, ?)', ('score', '7', digest(payload), payload))
-    updated = dict(frozen, rubric='intro new\n## 共同口径\nnumeric grading\n## 维护单位与岗位引用\nprocess new\n## 充分性与推荐的关系\n正式推荐按四维分数执行 new', rules='推荐阈值见 rules/evaluation/four-dimension.md；')
+    updated = dict(frozen, rubric='intro new\n## 共同口径\nnumeric grading\n## 维护单位与岗位引用\nprocess new\n## 充分性与推荐的关系\n正式推荐按四维分数执行 new')
     with patch('career_ops.input_contracts.score_inputs', return_value=json.dumps(updated)):
         assert score_is_current(connection, digest(payload), frozen['jd_report'])
     for updated in (dict(frozen, rubric=frozen['rubric'].replace('numeric grading', 'changed grading')), dict(frozen, cv='changed candidate'), dict(frozen, jd_report={'opportunity_id': '7', 'jd': 'changed'})):

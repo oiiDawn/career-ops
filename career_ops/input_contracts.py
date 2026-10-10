@@ -61,8 +61,6 @@ def score_is_current(connection, input_hash: str, report: dict) -> bool:
     if not all(isinstance(value.get("rubric"), str) for value in (stored, current)):
         return False
     for value in (stored, current):
-        if "rules" in value:
-            value["rules"] = value["rules"].replace("初期四维均有分数且各自≥4才推荐；", "推荐阈值见 rules/evaluation/four-dimension.md；")
         value['rubric'] = jev.standards(value['rubric'], jev.DIMENSIONS)
     return stored == current
 
