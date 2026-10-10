@@ -100,7 +100,7 @@ are removed without an archive.
 Run `.venv/bin/python -B -m career_ops task start score ID scan:ID --re-evaluate`
 for a retained active JD. A deterministic lookup reuses retained employer identities and constructs region/grade scopes from official location fields and explicit role titles, without a model call. Missing fields remain unknown; ambiguous retained identities stop scoring. New employers use the posting host as an identity lead and the posting URL as a research seed.
 One Codex CLI task researches all missing company/culture/compensation scopes together, using
-`gpt-6-astra`, low reasoning and live web search, with a 900-second process deadline.
+`gpt-6.1-sol`, low reasoning and live web search, with a 900-second process deadline.
 The CLI must be installed and authenticated with `codex login` under the scheduler's user.
 `system doctor` checks CLI availability and login status. PATH discovery also supports the bundled
 macOS desktop CLI when the scheduler has a smaller PATH.
@@ -143,11 +143,10 @@ The local project's model prices were verified on 2026-10-09 (USD per million to
 | Model | Uncached input | Cached input | Cache writes | Output, including reasoning |
 | --- | --- | --- | --- | --- |
 | `jev-1.13.0` | 0.042 | — | — | 0 |
-| `gpt-6-astra` Codex aggregate estimate | 10 | 1 | 12.50 | 50 |
+| `gpt-6.1-sol` Codex (ChatGPT account login) | not verified | not verified | not verified | not verified |
 | `deepseek-v4.1-flash`, configured peak rates | 0.30 | 0.006 | — | 1.20 |
 
-Sources: [TypeSafe](https://docs.typesafe.ai/models),
-[OpenAI](https://developers.openai.com/api/docs/models/gpt-6-astra), and
+Sources: [TypeSafe](https://docs.typesafe.ai/models) and
 [DeepSeek](https://api-docs.deepseek.com/quick_start/pricing/).
 DeepSeek off-peak rates are half the configured peak rates; peak hours are weekdays
 01:00–04:00 and 06:00–10:00 UTC, excluding Chinese public holidays. The current model

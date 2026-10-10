@@ -25,7 +25,7 @@
 正式入口为 `.venv/bin/python -B -m career_ops task start score ID scan:ID --re-evaluate`；
 `career_ops/evaluation/company_pipeline.py` 维护公司档案，实验 CLI 复用同一实现。
 
-正式流程先由公共 JD 范围规划节点声明公司实体和范围，再由一次 Codex CLI 任务共同完成缺失的 company/culture/compensation 调研与事实整理。使用已登录的 ChatGPT 账户、gpt-6-astra、medium reasoning 和实时搜索；一次任务覆盖全部待查范围，最长 15 分钟。正式入口没有自研搜索／逐篇摘要循环。
+正式流程先由公共 JD 范围规划节点声明公司实体和范围，再由一次 Codex CLI 任务共同完成缺失的 company/culture/compensation 调研与事实整理。使用已登录的 ChatGPT 账户、gpt-6.1-sol、low reasoning 和实时搜索；一次任务覆盖全部待查范围，最长 15 分钟。正式入口没有自研搜索／逐篇摘要循环。
 研究仅接收公开公司资料和公开 JD，不接收 CV、个人偏好、评分标准或旧分数。使用临时只读目录、忽略用户配置，禁止额外 agent、skill 和目录外文件访问；项目 API 密钥不传入子进程。
 每条事实保留来源 URL、日期、性质、适用范围和局限，未知和冲突单列。程序检查结构、profile 身份和来源 URL；空事实不评分。各维度的非空事实分别交给 Jev，个人标准仅用于评分。
 保留原始输出、提示词、工具事件、耗时、已报告用量和失败记录。工具日志／引用不是完整网页正文存档，不冒充已取得全文。超时终止整个 CLI 进程组，不自动回退；后续尝试启动新任务，已经完成的事实和分数仍可复用。

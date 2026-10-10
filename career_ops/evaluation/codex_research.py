@@ -49,7 +49,7 @@ DIMENSION_TOPICS = {
                     'Other-region figures may remain labeled background but cannot substitute for target-region pay.'}
 
 
-MODEL = 'gpt-6-astra'
+MODEL = 'gpt-6.1-sol'
 REASONING = 'low'
 TIMEOUT_SECONDS = 900
 
