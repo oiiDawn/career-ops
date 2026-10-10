@@ -645,6 +645,9 @@ def _advance_evaluation(directory: Path) -> dict:
             )
             ORDER BY EXISTS(
               SELECT 1 FROM tasks t WHERE t.opportunity_id=CAST(o.id AS TEXT)
+                AND t.status='waiting' AND t.module='scan' AND t.waiting_reason='source_access_unknown'
+            ), EXISTS(
+              SELECT 1 FROM tasks t WHERE t.opportunity_id=CAST(o.id AS TEXT)
                 AND t.status='waiting' AND t.waiting_reason LIKE 'failure:%'
             ), EXISTS(
               SELECT 1 FROM tasks t WHERE t.opportunity_id=CAST(o.id AS TEXT)
@@ -656,7 +659,12 @@ def _advance_evaluation(directory: Path) -> dict:
             ), ''), o.id LIMIT 1
             """
         ).fetchone()
-        if not opportunity:
+        # Postings with an unconfirmed source sort last and can wait indefinitely, so stale scores go ahead of probing them.
+        unconfirmed = opportunity and store.db.execute(
+            "SELECT 1 FROM tasks WHERE opportunity_id=? AND module='scan' AND status='waiting' "
+            "AND waiting_reason='source_access_unknown'", (str(opportunity["id"]),),
+        ).fetchone()
+        if not opportunity or unconfirmed:
             for item in store.score_views():
                 if item["valid"] or item["stale_reason"] != "candidate_or_policy_inputs_changed":
                     continue
@@ -668,9 +676,9 @@ def _advance_evaluation(directory: Path) -> dict:
                     continue
                 stale_opportunity_id = candidate
                 break
-            if not stale_opportunity_id:
+            if not stale_opportunity_id and not opportunity:
                 return {"status": "idle", "reason": "no_unscored_opportunities"}
-        else:
+        if not stale_opportunity_id:
             opportunity_id = str(opportunity["id"])
             scan = store.module_result(opportunity_id, "scan")
             active = store.db.execute(
