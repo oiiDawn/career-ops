@@ -32,7 +32,7 @@ def source_path(input_root: Path, logical_name: str) -> Path:
 
 WORKFLOW_VERSION = "oii-333-v1"
 
-SCAN_POLICY_VERSION = 2
+SCAN_POLICY_VERSION = 3
 
 SCORE_POLICY_VERSION = 12
 

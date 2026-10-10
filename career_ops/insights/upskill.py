@@ -64,7 +64,7 @@ def upskill_view(db: sqlite3.Connection, cv: Path, *, min_reports: int = 5) -> d
         report = payload.get("artifact", {}).get("report", "")
         gaps, covered = _report_gaps(report)
         scan = reports.get((key, "scan"), {})
-        core = scan.get("artifact", {}).get("core_capabilities") if scan.get("outcome") == "jd_report" else None
+        core = scan.get("artifact", {}).get("capabilities") if scan.get("outcome") == "jd_report" else None
         if isinstance(core, list):
             for item in core:
                 if isinstance(item, dict) and item.get("match") == "gap" and item.get("name"):

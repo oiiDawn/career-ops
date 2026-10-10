@@ -43,22 +43,22 @@ def evaluate(value: dict) -> dict:
             failures.append(reason("years_gap_terminal", "years", f"Verified experience is {gap:g} years below the stated minimum", years.get("evidence")))
         elif gap > 0:
             unknowns.append(reason("years_gap_borderline", "years", f"Verified experience is {gap:g} years below the stated minimum", years.get("evidence")))
-    capabilities = value.get("core_capabilities")
+    capabilities = value.get("capabilities")
     if not isinstance(capabilities, list):
-        missing.append("core_capabilities")
+        missing.append("capabilities")
     else:
         valid = [item for item in capabilities if isinstance(item, dict)
                  and isinstance(item.get("name"), str) and item["name"].strip()
                  and isinstance(item.get("core"), bool) and isinstance(item.get("mandatory"), bool)
                  and item.get("match") in ("proven", "adjacent", "gap", "unverified")]
         if len(valid) != len(capabilities):
-            missing.append("core_capabilities.items")
+            missing.append("capabilities.items")
         gaps = [item for item in valid if item["core"] and item["mandatory"] and item["match"] == "gap"]
         if len(gaps) >= 2:
-            failures.append(reason("multiple_core_capability_gaps", "core_capabilities", f"Missing {len(gaps)} core mandatory capabilities: " + ", ".join(item["name"] for item in gaps), [item.get("evidence") for item in gaps]))
+            failures.append(reason("multiple_core_capability_gaps", "capabilities", f"Missing {len(gaps)} core mandatory capabilities: " + ", ".join(item["name"] for item in gaps), [item.get("evidence") for item in gaps]))
         for item in valid:
             if item["core"] and item["mandatory"] and item["match"] in ("adjacent", "unverified"):
-                unknowns.append(reason(f"core_capability_{item['match']}", "core_capabilities", f"{item['name']} is {item['match']}", item.get("evidence")))
+                unknowns.append(reason(f"core_capability_{item['match']}", "capabilities", f"{item['name']} is {item['match']}", item.get("evidence")))
     credentials = value.get("credentials")
     if not isinstance(credentials, list):
         missing.append("credentials")

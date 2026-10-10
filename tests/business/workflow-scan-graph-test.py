@@ -30,7 +30,7 @@ def extracted(*, liveness: str = "active", complete: bool = True, location: str 
         "location": gate(location), "employment": gate("pass"),
         "compensation": gate("pass"), "company_size": gate("pass"),
         "years": {"required": 3, "verified": 3, "evidence": "CV"},
-        "core_capabilities": [], "credentials": [],
+        "capabilities": [], "credentials": [],
     }
 
 
@@ -40,7 +40,7 @@ def years_status(required: float) -> str:
         "complete_jd": True, "assessment_complete": True,
         "gates": {name: gate for name in ("location", "employment", "compensation", "company_size")},
         "years": {"required": required, "verified": 3.3, "evidence": "CV"},
-        "core_capabilities": [], "credentials": [],
+        "capabilities": [], "credentials": [],
     })["status"]
 
 
@@ -62,7 +62,7 @@ with tempfile.TemporaryDirectory(prefix="career-ops-scan-graph-") as temporary:
     combined["credentials"] = [{"name": "Bachelor's degree and 4+ years coding experience",
                                 "mandatory": True, "status": "absent", "evidence": "CV supports 3.3 years"}]
     invalid_capabilities = extracted()
-    invalid_capabilities["core_capabilities"] = [
+    invalid_capabilities["capabilities"] = [
         {"core": True, "mandatory": True, "match": "gap", "evidence": "No named capability"},
         {"core": True, "mandatory": True, "match": "gap", "evidence": "No named capability"},
     ]

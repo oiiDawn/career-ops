@@ -90,7 +90,7 @@ def run_scan(inputs: dict, draft_root: Path) -> dict:
             "location_evidence": source.get("location_evidence"),
             "employment_evidence": source.get("employment_evidence"),
             "prescreen": state["prescreen"],
-            "core_capabilities": evidence["prescreen"]["core_capabilities"],
+            **{key: evidence["prescreen"][key] for key in ("capabilities", "years", "credentials")},
         }
         return {"outcome": "jd_report", "artifact": artifact}
 

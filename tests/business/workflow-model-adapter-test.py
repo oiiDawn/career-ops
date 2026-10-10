@@ -22,7 +22,7 @@ scan_attempts = []
 scan_responses = iter(({"jobs": []}, {"complete_jd": False, **dict.fromkeys((
     "company", "role", "liveness", "liveness_reason", "assessment_complete",
     "location", "employment", "compensation", "company_size", "years",
-    "core_capabilities", "credentials",
+    "capabilities", "credentials",
 ))}))
 with patch.object(adapter.llm, "complete_json",
                   lambda *_args: scan_attempts.append(True) or json.dumps(next(scan_responses))):
@@ -34,7 +34,7 @@ for years, expected in [(0, None), (None, None), (3, 3), (False, False)]:
     evidence = adapter.attach_evidence({
         **dict.fromkeys((
             "company", "role", "complete_jd", "liveness", "liveness_reason",
-            "assessment_complete", "core_capabilities", "credentials", "location",
+            "assessment_complete", "capabilities", "credentials", "location",
             "employment", "compensation", "company_size",
         )),
         "years": {"verified": years},

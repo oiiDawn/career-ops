@@ -392,6 +392,6 @@ with tempfile.TemporaryDirectory(prefix="career-ops-cron-rescanned-") as tempora
                   "url": "https://example.com/jobs/recovered", "company": "Recovered",
                   "role": "Engineer", "jd": "Build systems.",
                   "captured_at": "2026-09-29T00:00:00Z", "liveness": "active"}
-    assert json.loads(canonical_scan_input(json.dumps(scan_input)))["scan_policy_version"] == 2
+    assert json.loads(canonical_scan_input(json.dumps(scan_input)))["scan_policy_version"] == 3
 
 print("workflow scan: evidence, deduplication, and score handoff passed")

@@ -177,6 +177,7 @@ const COLUMNS = [
   { key: "company", label: "公司 / 职位" },
   { key: "location", label: "地点", cls: "hide-sm" },
   { key: "dims", label: "方向·公司·文化·薪酬", sortValue: j => j.scores ? (j.scores.direction ?? 0) : -1 },
+  { key: "capability", label: "核心能力", cls: "hide-sm", sortValue: j => j.capability_counts ? -(j.capability_counts.gap * 100 + j.capability_counts.adjacent + j.capability_counts.unverified) : null },
   { key: "action", label: "决策" },
   { key: "state", label: "状态" },
   { key: "application_status", label: "投递" },
@@ -344,6 +345,7 @@ function render() {
       <td><div class="role">${esc(j.role)}${jobLink(j)}</div><div class="sub">${esc(j.company)} · ${esc(j.source)}${j.material_count ? " · 📎 材料" : ""}${runs[j.id]?.status === "running" ? ` · ⏳ ${ACTION_TEXT[runs[j.id].action].running}` : ""}</div></td>
       <td class="hide-sm">${esc(j.location || "—")}</td>
       <td>${dims(j.scores, j.dimensions)}${j.score_current === false ? pill("stale") : ""}${j.profile_expired ? pill("expired") : ""}</td>
+      <td class="num hide-sm" title="核心必备：直接 · 相邻 · 未知 · 缺口">${capabilityCell(j.capability_counts)}</td>
       <td>${pill(j.action)}</td>
       <td>${pill(j.state)}</td>
       <td>${pill(j.application_status)}</td>
@@ -419,7 +421,17 @@ function overview(d) {
     ${dimTable(d)}
     ${findings.length ? `<div class="section-title">预筛发现</div>${findings.map(evidenceCard).join("")}` : ""}
     ${evidence.length ? `<div class="section-title">资格证据</div>${evidence.map(evidenceCard).join("")}` : ""}
-    ${artifact.core_capabilities && artifact.core_capabilities.length ? `<div class="section-title">核心能力要求</div>${jsonBlock(artifact.core_capabilities)}` : ""}`;
+    ${capabilityTable(d.capability_rows || [])}`;
+}
+
+const VERDICTS = { proven: "直接", adjacent: "相邻", gap: "缺口", unverified: "未知" };
+function capabilityCell(counts) {
+  return counts ? `${counts.proven}·${counts.adjacent}·${counts.unverified}·${counts.gap}` : "—";
+}
+function capabilityTable(rows) {
+  if (!rows.length) return "";
+  return `<div class="section-title">能力匹配</div><table class="dim-table"><thead><tr><th>类别</th><th>要求</th><th>判定</th><th>依据</th></tr></thead><tbody>${
+    rows.map(r => `<tr><td>${esc(r.tier)}</td><td>${esc(r.requirement)}</td><td>${esc(VERDICTS[r.match])}</td><td><span class="sub">${esc(r.evidence)}</span></td></tr>`).join("")}</tbody></table>`;
 }
 
 function evidenceCard(item) {
@@ -567,7 +579,6 @@ function renderArtifact(value) {
   return esc(value);
 }
 
-function jsonBlock(value) { return `<pre class="plain md"><code>${esc(JSON.stringify(value, null, 2))}</code></pre>`; }
 
 const STATUS_TEXT = {
   responded: "对方已回复", interview_progress: "进入面试 / 新一轮面试", offer_received: "收到 offer", hired: "已入职",

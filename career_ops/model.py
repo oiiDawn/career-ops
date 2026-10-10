@@ -57,12 +57,12 @@ Assess liveness only from the stated capture method, retrieval time and direct e
 official_job_page, successfactors_job_page, phenom_job_page, beesite_job_page, ikea_job_page, jibeapply_job_page, avature_job_page, and eightfold_job_page mean HTTP reads of official HTML pages; workday_cxs_api, oraclecloud_detail_api, and smartrecruiters_detail_api mean HTTP reads of official JSON APIs; only browser_snapshot means Playwright. Never call HTTP evidence browser evidence.
 Use structured location_evidence and employment_evidence when supplied; they are part of the official posting capture even if the JD prose omits them.
 Return these TOP-LEVEL fields: company,role,complete_jd,liveness,liveness_reason,assessment_complete,
-location,employment,compensation,company_size,years,core_capabilities,credentials.
+location,employment,compensation,company_size,years,capabilities,credentials.
 The program assembles the canonical prescreen record; do not nest fields inside prescreen or gates.
 complete_jd and assessment_complete are booleans. liveness is active|expired|uncertain.
 Each location/employment/compensation/company_size gate is {status:"pass|fail|unknown",reason,evidence}.
 years is {required:number,verified:number_or_null,evidence:string}.
-core_capabilities is [{name,core:boolean,mandatory:boolean,match:"proven|adjacent|gap|unverified",evidence:string}].
+capabilities is [{name,core:boolean,mandatory:boolean,match:"proven|adjacent|gap|unverified",evidence:string}].
 credentials is [{name,mandatory:boolean,status:"present|absent|unknown",evidence:string}].
 Credentials contain degrees, certifications and licenses only. Put every experience-duration requirement in years, never again in credentials.
 Years required=0 only if the JD states no minimum. Missing verified years must stay null, not guessed.
@@ -70,8 +70,10 @@ Absence of proof for the full requested tenure does NOT mean zero years. Count s
 Prescreen: a proven shortfall of more than 1 year or >=2 genuinely missing core mandatory capabilities fails; adjacent/unverified does not.
 Apply actual location/employment/size/payroll/compensation requirements from profile and targeting; salary absent is unknown.
 Quote the exact source evidence for liveness; closed signals take precedence over generic Apply text.
-This is a compact gate check, not the report: keep each reason/evidence under 100 Chinese characters.
-Only list mandatory core capabilities here; preferred qualifications belong to the later report. No prose outside JSON.
+capabilities is the only capability judgment made for this job: list every requirement the JD states, one item each, core mandatory ones first,
+including preferred qualifications, domain, language and soft requirements. Do not repeat tenure or credentials there.
+Set core and mandatory accurately: only a gap on a core mandatory item counts toward exclusion; a preferred item is mandatory=false.
+Keep each reason/evidence under 100 Chinese characters. No prose outside JSON.
 '''
 
 def parse_object(text):
@@ -87,7 +89,7 @@ def parse_object(text):
 
 def attach_evidence(value, snapshot):
     """Keep the extracted JD verbatim; absent tenure proof cannot establish zero experience."""
-    screen = {k: value[k] for k in ('complete_jd', 'assessment_complete', 'years', 'core_capabilities', 'credentials')}
+    screen = {k: value[k] for k in ('complete_jd', 'assessment_complete', 'years', 'capabilities', 'credentials')}
     screen['gates'] = {k: value[k] for k in ('location', 'employment', 'compensation', 'company_size')}
     years = screen['years']
     if isinstance(years, dict) and type(years.get('verified')) in (int, float) and years['verified'] == 0:
@@ -123,7 +125,7 @@ def call_agent(phase, prompt):
         if phase == 'prescreen_evidence' and not all(key in value for key in (
             'company', 'role', 'complete_jd', 'liveness', 'liveness_reason',
             'assessment_complete', 'location', 'employment', 'compensation',
-            'company_size', 'years', 'core_capabilities', 'credentials'
+            'company_size', 'years', 'capabilities', 'credentials'
         )):
             if attempt == 0:
                 continue

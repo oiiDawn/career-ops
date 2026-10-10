@@ -8,6 +8,7 @@ from pathlib import Path
 import sqlite3
 
 from career_ops.applications.application_lifecycle import OUTCOMES, TRANSITIONS
+from career_ops.evaluation.capabilities import core_counts, rows as capability_rows
 from career_ops.evaluation.decisions import classify, valid_scores
 from career_ops.input_contracts import score_is_current
 
@@ -116,6 +117,7 @@ def list_jobs(db: sqlite3.Connection) -> list[dict]:
             "liveness": scan_artifact.get("liveness"),
             "captured_at": scan_artifact.get("captured_at"),
             "prescreen": (scan_artifact.get("prescreen") or {}).get("status"),
+            "capability_counts": core_counts(scan_artifact) if isinstance(scan_artifact.get("capabilities"), list) else None,
             "eligibility": eligibility.get(key),
             "scores": score if isinstance(score, dict) else None,
             "dimensions": artifact.get("dimensions", {}),
@@ -262,6 +264,7 @@ def job_detail(db: sqlite3.Connection, opportunity_id: int) -> dict | None:
         **job,
         "jd": scan_artifact.get("jd"),
         "scan_artifact": {k: v for k, v in scan_artifact.items() if k != "jd"},
+        "capability_rows": capability_rows(scan_artifact),
         "report": _report(score_result, db, key),
         "eligibility_detail": {**dict(eligibility), "evidence": json.loads(eligibility["evidence"])} if eligibility else None,
         "application_events": _rows(db, "application_events", key),

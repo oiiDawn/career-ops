@@ -1,4 +1,4 @@
-"""Keep validated core capability evidence in published JD reports."""
+"""Keep every validated capability match in published JD reports."""
 
 import sys
 import tempfile
@@ -8,12 +8,15 @@ ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
 
 from career_ops import model as model_adapter
+from career_ops.evaluation.capabilities import core_counts, rows
 from career_ops.evaluation.scan_graph import run_scan
 
 
 with tempfile.TemporaryDirectory() as temp:
     original_call = model_adapter.call_agent
-    capabilities = [{"name": "Terraform", "core": True, "mandatory": True,
+    capabilities = [{"name": "Kubernetes", "core": False, "mandatory": False, "match": "gap", "evidence": "preferred"},
+                    {"name": "Go", "core": False, "mandatory": False, "match": "gap", "evidence": "preferred"},
+                    {"name": "Terraform", "core": True, "mandatory": True,
                      "match": "gap", "evidence": "JD requires Terraform"}]
     evidence = {
         "company": "Acme", "role": "Engineer", "complete_jd": True,
@@ -22,8 +25,9 @@ with tempfile.TemporaryDirectory() as temp:
         "employment": {"status": "pass", "reason": "full-time", "evidence": "JD"},
         "compensation": {"status": "unknown", "reason": "not posted", "evidence": "JD"},
         "company_size": {"status": "unknown", "reason": "not posted", "evidence": "JD"},
-        "years": {"required": 0, "verified": 1, "evidence": "CV"},
-        "core_capabilities": capabilities, "credentials": [],
+        "years": {"required": 2, "verified": 3, "evidence": "CV"},
+        "capabilities": capabilities,
+        "credentials": [{"name": "BSc", "mandatory": True, "status": "present", "evidence": "CV"}],
     }
     model_adapter.call_agent = lambda *_args: (evidence, "session")
     source = {"opportunity_id": "1", "url": "https://acme.example/jobs/1", "company": "Acme",
@@ -33,8 +37,14 @@ with tempfile.TemporaryDirectory() as temp:
         result = run_scan({"source": source, "cv": "CV", "profile": "profile",
                            "targeting": "targeting", "rules": "rules"}, Path(temp))
         assert result["outcome"] == "jd_report"
-        assert result["artifact"]["core_capabilities"] == capabilities
-        incomplete = {**evidence, "core_capabilities": None}
+        # Every listed requirement is judged at scan; only core mandatory gaps count toward exclusion.
+        assert result["artifact"]["capabilities"] == capabilities
+        assert core_counts(result["artifact"]) == {"proven": 0, "adjacent": 0, "gap": 1, "unverified": 0}
+        table = rows(result["artifact"])
+        assert [(row["requirement"], row["tier"], row["match"]) for row in table] == [
+            ("Terraform", "核心必备", "gap"), ("相关经验 ≥ 2 年", "必备", "proven"), ("BSc", "必备", "proven"),
+            ("Kubernetes", "加分", "gap"), ("Go", "加分", "gap")]
+        incomplete = {**evidence, "capabilities": None}
         model_adapter.call_agent = lambda *_args: (incomplete, "session")
         changed_source = {**source, "jd": "Build Terraform infrastructure for a new team"}
         waiting = run_scan({"source": changed_source, "cv": "CV", "profile": "profile",
