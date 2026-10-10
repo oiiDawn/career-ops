@@ -175,6 +175,20 @@ try {
   if (badDataJobs.length === 0) pass('jobstreet.fetch() handles null data field');
   else fail(`jobstreet.fetch() should return empty for null data`);
 
+  // JobsDB Hong Kong runs on the same SEEK search API; its detail pages live at /job/<id>.
+  const hk = parseJobstreetItem({ id: '95180982', title: 'AI Engineer', companyName: 'Acme HK', locations: [{ label: 'Hong Kong SAR' }] }, 'https://hk.jobsdb.com', '');
+  if (hk?.url === 'https://hk.jobsdb.com/job/95180982') pass('parseJobstreetItem builds the JobsDB detail URL');
+  else fail(`parseJobstreetItem JobsDB URL: ${JSON.stringify(hk)}`);
+  const district = parseJobstreetItem({ id: '1', title: 'Dev', companyName: 'Acme', locations: [{ label: 'Kwun Tong District', countryCode: 'HK' }] }, 'https://hk.jobsdb.com', '');
+  if (district?.location === 'Kwun Tong District, Hong Kong' && hk.location === 'Hong Kong SAR') pass('parseJobstreetItem places Hong Kong district labels');
+  else fail(`parseJobstreetItem district location: ${district?.location}`);
+  const asked = [];
+  await jobstreet.fetch({ name: 'JobsDB HK', provider: 'jobstreet', api: 'https://hk.jobsdb.com/api/jobsearch/v5/search', siteKey: 'HK-Main', sortMode: 'ListedDate' },
+    { searchKeywords: ['AI'], fetchJson: async url => { asked.push(url); return { data: [] }; } });
+  const query = new URL(asked[0]).searchParams;
+  if (new URL(asked[0]).hostname === 'hk.jobsdb.com' && query.get('siteKey') === 'HK-Main' && query.get('sortmode') === 'ListedDate') pass('jobstreet.fetch() searches JobsDB newest first when asked');
+  else fail(`jobstreet.fetch() JobsDB request: ${asked[0]}`);
+
 } catch (e) {
   fail(`jobstreet provider tests crashed: ${e.message}`);
 }

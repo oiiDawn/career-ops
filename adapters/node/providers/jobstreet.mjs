@@ -19,6 +19,7 @@ const ALLOWED_JOBSTREET_HOSTS = new Set([
   'my.jobstreet.com',
   'www.seek.com.au',
   'www.seek.co.nz',
+  'hk.jobsdb.com',
 ]);
 const V5_SEARCH_PATH = '/api/jobsearch/v5/search';
 
@@ -90,7 +91,8 @@ export function parseJobstreetItem(item, origin, fallbackCompany) {
   if (!title) return null;
   const jobId = (item.id || '').trim();
   if (!jobId) return null;
-  const url = `${origin}/id/job/${jobId}`;
+  // JobsDB Hong Kong serves postings at /job/<id>; the /id/ segment is JobStreet Indonesia's locale.
+  const url = `${origin}${origin.endsWith('jobsdb.com') ? '' : '/id'}/job/${jobId}`;
   try {
     const parsed = new URL(url);
     if (!ALLOWED_JOBSTREET_HOSTS.has(parsed.hostname)) return null;
@@ -98,7 +100,10 @@ export function parseJobstreetItem(item, origin, fallbackCompany) {
     return null;
   }
   const company = (item.advertiser?.description || item.companyName || fallbackCompany || '').trim();
-  const location = (item.locations?.[0]?.label || '').trim();
+  // JobsDB labels many postings by district only ("Kwun Tong District"), which no location filter can place.
+  const place = item.locations?.[0];
+  const label = (place?.label || '').trim();
+  const location = place?.countryCode === 'HK' && label && !/hong kong/i.test(label) ? `${label}, Hong Kong` : label;
   const postedAt = toEpochMs(item.listingDate);
 
   return { title, url, company, location, ...(postedAt != null ? { postedAt } : {}) };
@@ -112,10 +117,11 @@ export function parseJobstreetItem(item, origin, fallbackCompany) {
  */
 function buildSearchUrl(origin, params) {
   const url = new URL(V5_SEARCH_PATH, origin);
-  const { siteKey, keywords, location, pageSize, page } = params;
+  const { siteKey, keywords, location, pageSize, page, sortMode } = params;
   if (siteKey) url.searchParams.set('siteKey', siteKey);
   if (keywords) url.searchParams.set('keywords', keywords);
   if (location) url.searchParams.set('where', location);
+  if (sortMode) url.searchParams.set('sortmode', sortMode);
   url.searchParams.set('pageSize', String(pageSize || DEFAULT_PAGE_SIZE));
   url.searchParams.set('page', String(page || 1));
   return url.href;
@@ -150,6 +156,7 @@ export default {
           location: searchLocation,
           pageSize,
           page,
+          sortMode: entry.sortMode,
         });
 
         let json;
