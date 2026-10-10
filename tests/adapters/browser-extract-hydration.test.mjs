@@ -20,6 +20,9 @@ try {
   await assert.rejects(readPage(page, { timeout: 100 }), /Timeout/);
   await page.setContent('<main>This job is no longer available.</main>');
   assert((await readPage(page, { timeout: 100 })).text.includes('no longer available'));
+  // Workday answers a withdrawn posting with its own error block; that is evidence to keep, not a load failure.
+  await page.setContent('<main><div data-automation-id="errorMessage">The page you are looking for doesn\'t exist.</div></main>');
+  assert((await readPage(page, { timeout: 100 })).text.includes("doesn't exist"));
   await page.setContent(`<main data-automation-id="jobPostingDescription">Job details</main>
     <script type="application/ld+json">${JSON.stringify({ '@graph': [{ '@type': 'JobPosting',
       title: 'Engineer', hiringOrganization: { name: 'Employer' }, description: '&lt;p&gt;Build software.&lt;/p&gt;&lt;p&gt;Maintain services.&lt;/p&gt;' }] })}</script>`);

@@ -261,6 +261,7 @@ export async function readPage(page, { mode = 'jd', timeout = DEFAULT_TIMEOUT_MS
     await page.waitForFunction(() => {
       const description = document.querySelector('[data-automation-id="jobPostingDescription"]');
       return Boolean(description?.innerText?.trim())
+        || Boolean(document.querySelector('[data-automation-id="errorMessage"]')?.innerText?.trim())
         || /job (?:is no longer available|has been removed|you are looking for.*(?:not|no longer))|position (?:has been filled|is no longer available)/i.test(document.body?.innerText ?? '');
     }, undefined, { timeout });
   } else if (mode === 'jd' && ['careers.qualcomm.com', 'apply.careers.microsoft.com'].includes(url.hostname)
