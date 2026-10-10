@@ -6,6 +6,7 @@ from __future__ import annotations
 import hashlib
 import json
 from pathlib import Path
+from career_ops.evaluation import jev
 from career_ops.context import RULES_ROOT, INPUT_ROOT, SCAN_POLICY_VERSION, SCORE_POLICY_VERSION, company_valid_until
 
 
@@ -62,8 +63,7 @@ def score_is_current(connection, input_hash: str, report: dict) -> bool:
     for value in (stored, current):
         if "rules" in value:
             value["rules"] = value["rules"].replace("初期四维均有分数且各自≥4才推荐；", "推荐阈值见 rules/evaluation/four-dimension.md；")
-        value['rubric'] = '\n'.join(line for line in value['rubric'].splitlines() if not line.startswith(
-            ('历史评分不改写。初期推荐', '正式推荐按四维分数执行')))
+        value['rubric'] = jev.standards(value['rubric'], jev.DIMENSIONS)
     return stored == current
 
 
