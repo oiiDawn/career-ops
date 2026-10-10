@@ -121,7 +121,7 @@ def _research(research: object, name: str) -> tuple[list[str], list[str]]:
             continue
         evidence = profile.get("evidence", {})
         for fact in evidence.get("facts", []):
-            lead = " · ".join(str(fact[key]) for key in ("date", "kind", "claim") if fact.get(key))
+            lead = " · ".join(str(fact[key]) for key in ("date", "kind", "claim") if fact.get(key) and fact[key] != "unknown")
             limits = f" — 局限：{fact['limitations']}" if fact.get("limitations") else ""
             source = f" [来源](<{fact['source_url']}>)" if fact.get("source_url") else ""
             lines.append(f"- {lead}{limits}{source}")

@@ -71,8 +71,11 @@ Prescreen: a proven shortfall of more than 1 year or >=2 genuinely missing core 
 Apply actual location/employment/size/payroll/compensation requirements from profile and targeting; salary absent is unknown.
 Quote the exact source evidence for liveness; closed signals take precedence over generic Apply text.
 capabilities is the only capability judgment made for this job: list every requirement the JD states, one item each, core mandatory ones first,
-including preferred qualifications, domain, language and soft requirements. Do not repeat tenure or credentials there.
-Set core and mandatory accurately: only a gap on a core mandatory item counts toward exclusion; a preferred item is mandatory=false.
+including preferred qualifications, domain, language and soft requirements. Merge duplicates; do not repeat tenure or credentials there.
+mandatory=true only when the JD states the item as required or a minimum qualification; preferred, plus or nice-to-have items are mandatory=false.
+core=true only for a hard technical or domain capability the role's main work cannot be done without, normally a handful per job.
+Soft skills, mindset, collaboration, communication, language and general engineering habits are core=false even when required.
+Only a gap on a core mandatory item counts toward exclusion.
 Keep each reason/evidence under 100 Chinese characters. No prose outside JSON.
 '''
 

@@ -34,7 +34,7 @@ with tempfile.TemporaryDirectory(prefix="career-ops-report-") as temporary:
     fact = {"claim": "Offices close on weekends.", "date": "2026-03-09", "kind": "官方制度",
             "limitations": "Group policy.", "source_url": "https://example.com/policy_(cn)"}
     research = {"prepared_profiles": [{"company_id": "example", "profiles": [{"dimension": "culture", "evidence": {
-        "facts": [fact], "gaps": ["每周到岗几天？", "Is the employer direct?"], "conflicts": ["Two leave figures differ."]}}]}]}
+        "facts": [fact, {"claim": "Flexible hours.", "date": "unknown", "kind": "官方制度"}], "gaps": ["每周到岗几天？", "Is the employer direct?"], "conflicts": ["Two leave figures differ."]}}]}]}
     sections = {"verdict": "Deprioritize: culture and direction sit near 3.4.", "direction": "Product engineering duties.",
                 "compensation": "The quoted range reaches the CNY 300K floor.",
                 "responsibilities": ["Build the  product", "Run services"],
@@ -56,7 +56,7 @@ with tempfile.TemporaryDirectory(prefix="career-ops-report-") as temporary:
     # Research facts are laid out by the program, with their limits and source, next to the score they explain.
     assert ("## 文化 3.37（置信度 93% · 充分度 12%） · 范围 China\n\n"
             "- 2026-03-09 · 官方制度 · Offices close on weekends. — 局限：Group policy. "
-            "[来源](<https://example.com/policy_(cn)>)\n- 来源分歧：Two leave figures differ.") in report
+            "[来源](<https://example.com/policy_(cn)>)\n- 官方制度 · Flexible hours.\n- 来源分歧：Two leave figures differ.") in report
     assert "JD 披露：300k-400k CNY（“Annual salary CNY 300k-400k”）\n\nThe quoted range" in report
     assert "- Build the product\n- Run services" in report
     # Capability rows come from the scan judgment, core mandatory first, with table cells escaped.

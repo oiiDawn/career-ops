@@ -7,15 +7,10 @@ VERDICTS = {"proven": "直接", "adjacent": "相邻", "gap": "缺口", "unverifi
 TIERS = ("核心必备", "必备", "加分")
 
 
-def _judged(scan: dict) -> list[dict]:
-    # Postings that closed before scans judged every requirement cannot be rescanned; their core-only list still reads.
-    return scan.get("capabilities") or scan.get("core_capabilities") or []
-
-
 def rows(scan: dict) -> list[dict]:
     """Every requirement the scan judged, core mandatory first: capabilities, tenure and credentials."""
     found = []
-    for item in _judged(scan):
+    for item in scan.get("capabilities") or []:
         tier = 0 if item["core"] and item["mandatory"] else 1 if item["mandatory"] else 2
         found.append({"requirement": item["name"], "match": item["match"], "tier": TIERS[tier],
                       "evidence": item.get("evidence") or ""})
@@ -35,7 +30,7 @@ def rows(scan: dict) -> list[dict]:
 def core_counts(scan: dict) -> dict:
     """Count core mandatory capabilities by verdict, the same items the prescreen gate reads."""
     counts = dict.fromkeys(VERDICTS, 0)
-    for item in _judged(scan):
+    for item in scan.get("capabilities") or []:
         if item["core"] and item["mandatory"]:
             counts[item["match"]] += 1
     return counts
