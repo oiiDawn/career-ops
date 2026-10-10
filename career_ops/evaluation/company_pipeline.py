@@ -98,7 +98,7 @@ def job_request(job: dict, rubric: str) -> dict:
 
 
 def validate_bundle(bundle: dict) -> dict:
-    """Require explicit employer links; name normalization helps lookup but never resolves aliases automatically."""
+    """Require explicit employer links; aliases are resolved before the bundle, never inferred from names here."""
     if not isinstance(bundle, dict) or set(bundle) != {'companies', 'jobs'}:
         raise ValueError('Bundle requires companies and jobs')
     companies = {}

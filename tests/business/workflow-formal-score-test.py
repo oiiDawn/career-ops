@@ -103,7 +103,12 @@ with tempfile.TemporaryDirectory() as temp:
 with tempfile.TemporaryDirectory() as temp:
     directory = Path(temp)/'workflow-drafts'/'job'
     directory.mkdir(parents=True)
-    with patch.object(model, 'call_agent', side_effect=AssertionError('Scope lookup must not call a model')):
+    identity_calls, identity_answer = [], [None]
+    def identity(phase, prompt):
+        identity_calls.append(prompt)
+        assert phase == 'company_identity'
+        return {'company_id': identity_answer[0]}, 'identity'
+    with patch.object(model, 'call_agent', identity):
         bundle = g.public_bundle({**jd, 'company':'Microsoft', 'role':'Software Engineer 2--M365 UIPilot team',
             'location_evidence':'China, Shanghai, Shanghai; China, Beijing, Beijing; China, Jiangsu, Suzhou'}, directory, '2026-10-11')
         assert bundle['jobs'][0]['scopes']['culture'] == {'region':'China'}
@@ -121,6 +126,7 @@ with tempfile.TemporaryDirectory() as temp:
         assert second['companies'][0]['identity_url'] == entity['identity_url']
         assert second['companies'][0]['company_id'] == entity['company_id']
         assert second['jobs'][0]['scopes']['compensation']['level'] == 'senior'
+        assert not identity_calls, 'New and exactly named employers must not call a model'
         unknown = g.public_bundle({**jd, 'location_evidence':None, 'role':'Engineer'}, directory, '2026-10-11')
         assert unknown['jobs'][0]['scopes']['culture']['region'] == 'unknown'
         assert unknown['jobs'][0]['scopes']['compensation']['level'] == 'unknown'
@@ -136,4 +142,16 @@ with tempfile.TemporaryDirectory() as temp:
         assert shared[0] == shared[1] and shared[2] == shared[3]
         assert shared[0]['compensation']['role_family'] == 'software_engineering'
         assert shared[2]['compensation']['level'] == 'senior' and shared[4]['compensation']['role_family'] == 'other'
+        # An unseen name is matched to a retained employer by the model once; the kept decision serves later postings.
+        assert unknown['companies'][0]['company_id'] != entity['company_id'] and 'Microsoft' in identity_calls[-1]
+        identity_answer[0], asked = entity['company_id'], len(identity_calls)
+        for _ in range(2):
+            alias = g.public_bundle({**jd, 'company':'微软（中国）有限公司'}, directory, '2026-10-11')
+            assert {k:alias['companies'][0][k] for k in entity} == entity
+            assert alias['jobs'][0]['posting']['company'] == '微软（中国）有限公司'
+        assert len(identity_calls) == asked + 1
+        identity_answer[0] = 'not-retained'
+        try: g.public_bundle({**jd, 'company':'Another Name'}, directory, '2026-10-11')
+        except ValueError as error: assert 'retained employer' in str(error)
+        else: raise AssertionError('An identity answer outside the retained employers was accepted')
 print('formal score: deterministic scopes, retained identity, company reuse and checkpoint recovery passed')
