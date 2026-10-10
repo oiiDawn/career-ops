@@ -33,6 +33,10 @@ class Recorder(BaseCallbackHandler):
         self.errors.append(type(error).__name__)
 request = jev.request_for({"posting": {"jd": "A retained job"}}, jev.RUBRIC.read_text())
 assert len(request["questions"]) == 8
+# Recommendation thresholds and process text never reach a scoring request, so editing them keeps ratings reusable.
+scoped = jev.standards(jev.RUBRIC.read_text(), {"culture"})
+assert "## 共同口径" in scoped and "## culture：" in scoped
+assert not any(text in scoped for text in ("## compensation：", "## 维护单位", "正式推荐按四维分数执行", "初期推荐"))
 assert all(len(request["questions"][d]["criteria"]) == 5 for d in jev.DIMENSIONS)
 assert "净工作时长" in request["questions"]["culture_evidence"]["instructions"]
 assert "base / bonus / equity" in request["questions"]["compensation_evidence"]["instructions"]

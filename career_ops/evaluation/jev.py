@@ -33,6 +33,12 @@ def save(path: Path, value) -> None:
     path.write_text(json.dumps(value, ensure_ascii=False, indent=2) + "\n")
 
 
+def standards(rubric: str, dimensions) -> str:
+    """Keep shared rules and the named anchors; recommendation and process edits must not invalidate ratings."""
+    wanted = ("## 共同口径",) + tuple(f"## {dimension}：" for dimension in dimensions)
+    return "".join(section for section in re.split(r"^(?=## )", rubric, flags=re.M) if section.startswith(wanted))
+
+
 def request_for(evidence: dict, rubric: str) -> dict:
     """Read five ordered table anchors and one independent sufficiency question per dimension."""
     questions = {}

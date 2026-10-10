@@ -68,7 +68,8 @@ def company_request(company: dict, rubric: str) -> dict:
                 'Assess usefulness for public-information screening, not completeness of internal or individual offer details.'
             )
             questions[name + suffix] = question
-    return {'model': jev.MODEL, 'state': {'standards': rubric, 'evidence': {
+    return {'model': jev.MODEL, 'state': {'standards': jev.standards(
+            rubric, {p['dimension'] for p in profiles.values()}), 'evidence': {
             'company': {k: company[k] for k in ('company_id', 'name', 'identity_url')},
             'profiles': profiles, 'sources': sources}}, 'questions': questions}
 
@@ -92,6 +93,7 @@ def job_request(job: dict, rubric: str) -> dict:
                 ' Evaluate only explicit_job_quotation for this posting, not other company salary ranges.'
             )
     request['questions'] = {k: v for k, v in request['questions'].items() if k in names}
+    request['state']['standards'] = jev.standards(rubric, names & set(jev.DIMENSIONS))
     return request
 
 
