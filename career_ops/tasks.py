@@ -659,12 +659,12 @@ def _advance_evaluation(directory: Path) -> dict:
             ), ''), o.id LIMIT 1
             """
         ).fetchone()
-        # Postings with an unconfirmed source sort last and can wait indefinitely, so stale scores go ahead of probing them.
-        unconfirmed = opportunity and store.db.execute(
-            "SELECT 1 FROM tasks WHERE opportunity_id=? AND module='scan' AND status='waiting' "
-            "AND waiting_reason='source_access_unknown'", (str(opportunity["id"]),),
+        # Untried postings sort first. Once only failure retries and unconfirmed sources remain, stale scores go ahead
+        # of them: an unconfirmed source can wait indefinitely and must not hold re-evaluation back.
+        deferred = opportunity and store.db.execute(
+            "SELECT 1 FROM tasks WHERE opportunity_id=? AND status='waiting'", (str(opportunity["id"]),),
         ).fetchone()
-        if not opportunity or unconfirmed:
+        if not opportunity or deferred:
             for item in store.score_views():
                 if item["valid"] or item["stale_reason"] != "candidate_or_policy_inputs_changed":
                     continue

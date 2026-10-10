@@ -342,11 +342,14 @@ with tempfile.TemporaryDirectory(prefix="career-ops-cron-stale-") as temporary:
         source = json.loads(start.call_args.args[3])
         assert source["liveness"] == "active" and source["jd"] == fresh["text"]
         assert source["captured_at"] == fresh["retrieved_at"]
-    # A posting whose source cannot be confirmed keeps waiting; it must not hold back re-evaluating a stale score.
+    # A stale score is re-evaluated before a failed task is retried or an unconfirmed source is probed again.
     store = BusinessStore(directory / "opportunities.db")
     store.db.execute("INSERT INTO opportunities(id,url,company,role) VALUES (2,'https://example.com/jobs/unreachable','Unreachable','Engineer')")
     unreachable = store.start("2", "scan", "{}")
     store.wait(unreachable["task_id"], "source_access_unknown")
+    store.db.execute("INSERT INTO opportunities(id,url,company,role) VALUES (3,'https://example.com/jobs/failed','Failed','Engineer')")
+    failed = store.start("3", "scan", "{}")
+    store.wait(failed["task_id"], "failure:RuntimeError")
     store.close()
     with patch("career_ops.tasks.scan_discovered", return_value={"status": "waiting"}), \
          patch("career_ops.tasks.capture_jd", return_value=None), \
@@ -371,7 +374,14 @@ with tempfile.TemporaryDirectory(prefix="career-ops-cron-stale-") as temporary:
     pending = store.start("1", "score", "new-input", re_evaluate=True)
     store.wait(pending["task_id"], "user_deferred")
     store.close()
-    # With nothing stale left to re-evaluate, the unconfirmed posting is probed again.
+    # With nothing stale left, the failed task gets its one retry, and only then is the unconfirmed posting probed.
+    with patch("career_ops.tasks.resume_task", return_value={"status": "waiting"}) as resume:
+        assert cron_score(directory)["opportunity_id"] == "3"
+        assert resume.call_args.args == (directory, failed["task_id"], None, None)
+    database = sqlite3.connect(directory / "opportunities.db")
+    database.execute("UPDATE tasks SET attempt=2 WHERE task_id=?", (failed["task_id"],))
+    database.commit()
+    database.close()
     with patch("career_ops.tasks.capture_jd", return_value=None):
         assert cron_score(directory) == {"status": "waiting", "opportunity_id": "2", "reason": "source_access_unknown"}
 
