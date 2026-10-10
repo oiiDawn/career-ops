@@ -112,6 +112,11 @@ def _heading(name: str, dimension: dict, profile: object) -> str:
     return title + (f" · 范围 {scope}" if scope else "")
 
 
+def _plain(value: object) -> str:
+    """Keep quoted text on one line and stop a range tilde from reading as Markdown strikethrough."""
+    return " ".join(str(value).split()).replace("~", "～")
+
+
 def _research(research: object, name: str) -> tuple[list[str], list[str]]:
     """List one dimension's sourced facts as research wrote them; return its open questions separately."""
     lines, gaps = [], []
@@ -124,18 +129,18 @@ def _research(research: object, name: str) -> tuple[list[str], list[str]]:
             lead = " · ".join(str(fact[key]) for key in ("date", "kind", "claim") if fact.get(key) and fact[key] != "unknown")
             limits = f" — 局限：{fact['limitations']}" if fact.get("limitations") else ""
             source = f" [来源](<{fact['source_url']}>)" if fact.get("source_url") else ""
-            lines.append(f"- {lead}{limits}{source}")
-        lines += [f"- 来源分歧：{conflict}" for conflict in evidence.get("conflicts", [])]
+            lines.append(f"- {_plain(lead + limits)}{source}")
+        lines += [f"- 来源分歧：{_plain(conflict)}" for conflict in evidence.get("conflicts", [])]
         gaps += evidence.get("gaps", [])
     return lines, gaps
 
 
 def _bullets(items: list[str]) -> str:
-    return "\n".join(f"- {item}" for item in items) or "无。"
+    return "\n".join(f"- {_plain(item)}" for item in items) or "无。"
 
 
 def _cell(value: object) -> str:
-    return " ".join(str(value).split()).replace("|", "\\|")
+    return _plain(value).replace("|", "\\|")
 
 
 def render_report(packet: dict, evidence: dict, assessment: dict) -> dict:
@@ -165,7 +170,7 @@ def render_report(packet: dict, evidence: dict, assessment: dict) -> dict:
     files["research"].write_text(json.dumps(research, ensure_ascii=False, indent=2) + "\n")
     recommendation = classify(score, evidence.get("prescreen", {"status": "uncertain"}))
 
-    text = {name: re.sub(r"(?m)^#{1,2}(?=[ \t])", "###", sections[name]) for name in TEXT_SECTIONS}
+    text = {name: re.sub(r"(?m)^#{1,2}(?=[ \t])", "###", sections[name]).replace("~", "～") for name in TEXT_SECTIONS}
     counts = core_counts(evidence)
     summary = " ｜ ".join((
         recommendation,

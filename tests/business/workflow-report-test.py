@@ -25,7 +25,7 @@ with tempfile.TemporaryDirectory(prefix="career-ops-report-") as temporary:
                 "credentials": [{"name": "BSc", "mandatory": True, "status": "present", "evidence": "CV"}],
                 "capabilities": [
                     {"name": "Kubernetes", "core": False, "mandatory": False, "match": "gap", "evidence": "none | in CV"},
-                    {"name": "Python", "core": True, "mandatory": True, "match": "proven", "evidence": "VivoFlow"},
+                    {"name": "Python", "core": True, "mandatory": True, "match": "proven", "evidence": "VivoFlow 2022-03~2023-11"},
                     {"name": "Azure", "core": True, "mandatory": True, "match": "adjacent", "evidence": "Alibaba Cloud"}]}
     raw = {"score": 3.3700000000000006, "confidence": .93, "evidence_sufficiency": .12,
            "probabilities": {"0": .1, "1": .1, "2": .43, "3": .07, "4": .3}}
@@ -46,7 +46,7 @@ with tempfile.TemporaryDirectory(prefix="career-ops-report-") as temporary:
     report = rendered["report"]
     # The report is for reading: fixed sections in order, and no machine block or provenance hash.
     assert re.findall(r"^## (\S+)", report, re.M) == ["结论", "职责", "方向", "公司", "文化", "薪酬", "能力匹配", "风险", "待确认"]
-    assert "```" not in report and "sha256" not in report and "总分" not in report
+    assert "```" not in report and "sha256" not in report and "总分" not in report and "~" not in report
     assert not re.search(r"[0-9a-f]{32}", report)
     assert ("deprioritize ｜ 方向 3.37 · 公司 — · 文化 3.37 · 薪酬 — ｜ "
             "核心必备 1 直接 · 1 相邻 · 0 缺口 · 0 未知") in report
@@ -60,7 +60,7 @@ with tempfile.TemporaryDirectory(prefix="career-ops-report-") as temporary:
     assert "JD 披露：300k-400k CNY（“Annual salary CNY 300k-400k”）\n\nThe quoted range" in report
     assert "- Build the product\n- Run services" in report
     # Capability rows come from the scan judgment, core mandatory first, with table cells escaped.
-    assert ("| 类别 | 要求 | 判定 | 依据 |\n|---|---|---|---|\n| 核心必备 | Python | 直接 | VivoFlow |\n"
+    assert ("| 类别 | 要求 | 判定 | 依据 |\n|---|---|---|---|\n| 核心必备 | Python | 直接 | VivoFlow 2022-03～2023-11 |\n"
             "| 核心必备 | Azure | 相邻 | Alibaba Cloud |\n| 必备 | 相关经验 ≥ 2 年 | 未知 | CV dates unclear |\n"
             "| 必备 | BSc | 直接 | CV |\n| 加分 | Kubernetes | 缺口 | none \\| in CV |") in report
     # Research gaps join the questions once.

@@ -75,7 +75,7 @@ td .sub { color: var(--muted); font-size: 12px; }
 .dim.weak { opacity: .5; outline: 1px dashed currentColor; outline-offset: -1px; }
 .dim-table { width: 100%; font-size: 13px; margin-bottom: 8px; }
 .dim-table th { position: static; cursor: auto; }
-.dim-table td:first-child { white-space: nowrap; }
+.dim-table td:first-child, .dim-table td.verdict { white-space: nowrap; }
 .empty { padding: 40px; text-align: center; color: var(--muted); }
 .drawer { position: fixed; top: 0; right: 0; bottom: 0; width: min(860px, 100vw); background: var(--panel);
   box-shadow: var(--shadow); transform: translateX(100%); transition: transform .2s ease; z-index: 10;
@@ -104,6 +104,7 @@ button.primary:disabled { opacity: .6; cursor: progress; }
 .md { line-height: 1.65; overflow-wrap: anywhere; }
 .md table { border: 1px solid var(--line); margin: 8px 0; font-size: 13px; }
 .md th { position: static; cursor: auto; }
+.report td:first-child, .report td:nth-child(3) { white-space: nowrap; }
 .md h1, .md h2 { font-size: 16px; border-bottom: 1px solid var(--line); padding-bottom: 4px; margin-top: 22px; }
 .md h3 { font-size: 15px; }
 .md code { background: var(--neutral-bg); padding: 1px 4px; border-radius: 4px; }
@@ -431,7 +432,7 @@ function capabilityCell(counts) {
 function capabilityTable(rows) {
   if (!rows.length) return "";
   return `<div class="section-title">能力匹配</div><table class="dim-table"><thead><tr><th>类别</th><th>要求</th><th>判定</th><th>依据</th></tr></thead><tbody>${
-    rows.map(r => `<tr><td>${esc(r.tier)}</td><td>${esc(r.requirement)}</td><td>${esc(VERDICTS[r.match])}</td><td><span class="sub">${esc(r.evidence)}</span></td></tr>`).join("")}</tbody></table>`;
+    rows.map(r => `<tr><td>${esc(r.tier)}</td><td>${esc(r.requirement)}</td><td class="verdict">${esc(VERDICTS[r.match])}</td><td><span class="sub">${esc(r.evidence)}</span></td></tr>`).join("")}</tbody></table>`;
 }
 
 function evidenceCard(item) {
@@ -443,7 +444,7 @@ function evidenceCard(item) {
 
 function report(d) {
   const stale = d.score_current === false ? '<div class="banner failed">此报告基于旧版简历、资料或打分规则，建议点击上方「重新打分」。</div>' : "";
-  return runBanner(d, "rescore") + stale + (d.report ? md(d.report) : '<p class="sub">该职位尚无打分报告。</p>');
+  return runBanner(d, "rescore") + stale + (d.report ? `<div class="report">${md(d.report)}</div>` : '<p class="sub">该职位尚无打分报告。</p>');
 }
 function jd(d) { return d.jd ? `<pre class="plain">${esc(d.jd)}</pre>` : '<p class="sub">未保留 JD 原文。</p>'; }
 
