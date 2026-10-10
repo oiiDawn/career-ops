@@ -132,7 +132,7 @@ record “I don't know”; never promote a guess to a verified fact.
 
 ### Hermes 定时评分
 
-- 固定 score cron 每二十分钟触发一次，`scripts/career-ops-score.sh` 调用 Python `system advance` 推进一个持久任务，再调用 `system notify cron`。每次 Codex 调研最长 15 分钟，其他单次请求仍有超时；持久任务与公司锁防止重复研究，调度间隔不能代替互斥。
+- 固定 score cron 每十分钟触发一次，`scripts/career-ops-score.sh` 调用 Python `system advance` 推进一个持久任务，再调用 `system notify cron`。每次 Codex 调研最长 15 分钟，其他单次请求仍有超时；持久任务与公司锁防止重复研究，调度间隔不能代替互斥。
 - `data/opportunities.db` 是机会与任务的权威队列；任务行记录尝试次数、模型调用与耗时。首次失败排在未尝试岗位后，第二次失败留待人工处理，不再自动重试。手动处理或候选资料/规则更新后可重评。
 - scan 在筛选、去重后保留来源抓取证据；失败保留原因，不能写 complete_jd=true。score 使用 scan 正式交接的完整 JD 和来源有效性证据；历史快照不代表岗位此刻仍开放，申请前重新核验。
 - 任务锁防止同一岗位并发执行；SQLite 短事务维护业务归属，网络和模型调用不占用业务事务。
