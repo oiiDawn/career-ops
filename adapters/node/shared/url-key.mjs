@@ -42,6 +42,7 @@
 const TRACKING_PARAMS = [
   /^utm_/i, /^gh_src$/i, /^fbclid$/i, /^gclid$/i,
   /^mc_cid$/i, /^mc_eid$/i, /^igshid$/i, /^_hsenc$/i, /^_hsmi$/i, /^trk$/i, /^trackingid$/i,
+  /^feedid$/i, // SuccessFactors career sites append their job-feed id to the posting URL
 ];
 
 /**

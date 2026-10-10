@@ -33,6 +33,10 @@ try {
   const localized = 'https://careers.ibm.com/en_US/careers/JobDetail?jobId=131606';
   assert.equal(samePostingUrl(ibm.url, localized), true);
   assert.equal(samePostingUrl(ibm.url, localized.replace('131606', '131607')), false);
+  const chartered = 'https://jobs.standardchartered.com/job/Principal-AI-Engineer/59473-en_GB';
+  assert.equal(samePostingUrl(chartered, `${chartered}?&feedid=363857`), true);
+  assert.equal(samePostingUrl(chartered, `${chartered.replace('59473', '59474')}?&feedid=363857`), false);
+  assert.equal(samePostingUrl(`${chartered}/`, chartered), true);
   assert.equal((await captureScanJds([ibm], root, async () => ({ url: localized, text: 'IBM job description' }))).captured, 1);
   assert.equal(readScanJd(ibm.url, root).url, localized);
   console.log('scan-jd: capture, dedup, reuse, expiry and failure retry passed');

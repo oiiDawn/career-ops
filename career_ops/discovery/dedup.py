@@ -9,7 +9,7 @@ import unicodedata
 from urllib.parse import parse_qsl, unquote, urlencode, urlsplit, urlunsplit
 
 
-STRIP_PARAMS = frozenset("language lang locale utm_source utm_medium utm_campaign utm_term utm_content ref src source gh_src lever-origin lever-source rltr".split())
+STRIP_PARAMS = frozenset("language lang locale utm_source utm_medium utm_campaign utm_term utm_content ref src source gh_src lever-origin lever-source rltr feedid".split())
 LOCATION_SUFFIXES = frozenset([
     "amer", "americas", "amsterdam", "apac", "austin", "barcelona", "bay area", "belgium", "berlin", "boston",
     "brussels", "budapest", "canada", "chicago", "copenhagen", "dublin", "emea", "eu", "europe", "finland",

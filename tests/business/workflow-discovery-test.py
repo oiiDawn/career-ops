@@ -54,6 +54,18 @@ ibm = "https://careers.ibm.com/careers/JobDetail?jobId=131606"
 localized = "https://careers.ibm.com/en_US/careers/JobDetail?jobId=131606"
 assert same_posting_url(ibm, localized)
 assert not same_posting_url(ibm, localized.replace("131606", "131607"))
+# A site may drop a trailing slash or append its own feed tracking; neither changes which posting was read.
+sap = "https://careers.sap.com/job/SAP-AI-Engineering-Architect-%28fmd%29/1375273433/"
+assert same_posting_url(sap, sap.rstrip("/"))
+chartered = "https://jobs.standardchartered.com/job/Principal-AI-Engineer/59473-en_GB"
+assert same_posting_url(chartered, chartered + "?&feedid=363857")
+assert not same_posting_url(chartered, chartered.replace("59473", "59474") + "?&feedid=363857")
+assert not same_posting_url(chartered, "https://jobs.standardchartered.com/search/?feedid=363857")
+sap_row = {**row, "url": sap, "capture_payload": json.dumps({
+    "url": sap, "scan_jd": {"text": jd, "retrieved_at": captured_at,
+                            "final_url": sap.rstrip("/"), "content_hash": hashlib.sha256(jd.encode()).hexdigest()},
+})}
+assert discovered_scan_source(sap_row)["liveness"] == "active"
 ibm_row = {**row, "url": ibm, "capture_payload": json.dumps({
     "url": ibm, "scan_jd": {"text": jd, "retrieved_at": captured_at,
                             "final_url": localized, "content_hash": hashlib.sha256(jd.encode()).hexdigest()},

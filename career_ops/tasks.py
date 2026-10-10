@@ -20,6 +20,7 @@ from langgraph.graph import END, START, StateGraph
 from langchain_core.runnables import RunnableLambda
 from uuid import uuid4
 from career_ops.discovery.configured import capture_jd
+from career_ops.discovery.dedup import url_key
 from career_ops.applications.resume_renderer import render_resume
 from career_ops.applications.apply_graph import apply_evaluate as run_apply
 from career_ops.context import ATTEMPT_CALLS, ATTEMPT_SECONDS, INPUT_ROOT, ROOT, WORKFLOW_VERSION
@@ -462,8 +463,8 @@ def discovery_query(store: BusinessStore) -> tuple[str, str]:
 
 
 def same_posting_url(requested: str, final: str) -> bool:
-    """Accept IBM's locale redirect only when the public job ID is unchanged."""
-    if requested == final:
+    """Compare posting keys; accept IBM's locale redirect only when the public job ID is unchanged."""
+    if url_key(requested) == url_key(final):
         return True
     try:
         source, target = urlsplit(requested), urlsplit(final)
