@@ -18,7 +18,8 @@ from career_ops import model as model_adapter
 from career_ops.context import company_valid_until
 from career_ops.db import BusinessStore
 from career_ops.evaluation import company_pipeline as pipeline
-from career_ops.evaluation.report import conflicting_sections, render_report
+from career_ops.evaluation.report import (LIST_SECTIONS, TEXT_SECTIONS, advertised_compensation, conflicting_sections,
+                                          render_report, section_value)
 from career_ops.tracing import traced
 
 
@@ -142,38 +143,57 @@ def public_bundle(jd: dict, directory: Path, valid_until: str) -> dict:
     return bundle
 
 
-def _complete_sections(assessment: dict, jd: dict, sources: dict, research: dict) -> tuple[dict, int]:
-    required = ("overview", "capabilities", "compensation", "questions", "legitimacy", "risks", "checklist")
-    def section_text(value: object) -> str | None:
-        if isinstance(value, str) and value.strip():
-            return value
-        if isinstance(value, list) and value and all(isinstance(item, str) and item.strip() for item in value):
-            return "\n".join(f"- {item}" for item in value)
-        return None
+SECTION_CONTRACT = """Field contract. Every value is plain Chinese text: no Markdown headings, tables, bold lead-ins or content hashes.
+verdict: string, at most 3 sentences. Why the recommendation follows from the four dimension scores, and the largest uncertainty.
+responsibilities: array of 3-6 short strings. What the role actually does, keeping concrete products, stack and team names from the JD. No requirements.
+direction: string, 2-3 sentences. How the main duties fit or deviate from the preferred direction stated in the rubric.
+compensation: string, one sentence. Compare the pay evidence with the candidate's floor and target for this region as stated in the rubric.
+risks: array of strings, may be empty. Known negative facts and shortfalls only; nothing that is merely undisclosed.
+questions: array of strings, may be empty. Undisclosed or unknown items to confirm with the recruiter; nothing already known.
+Each point belongs to exactly one of risks or questions, and appears once.
+advertised_comp: null unless the JD itself states an annual pay figure; then {"amount","currency","quote"}, where quote is verbatim JD text
+containing the amount and its annual wording, and currency is the ISO code written in that quote or "UNKNOWN".
+"""
 
+
+def _complete_sections(assessment: dict, jd: dict, sources: dict, research: dict) -> tuple[dict, int]:
+    """Ask the model for the report fields still missing; the program lays them out."""
+    names = TEXT_SECTIONS + LIST_SECTIONS
     original = assessment.get("sections")
-    sections = {name: section_text(original.get(name)) for name in required} if isinstance(original, dict) else {}
-    missing = [name for name in required if sections.get(name) is None]
-    if not missing:
+    sections = {name: section_value(name, original.get(name)) for name in names} if isinstance(original, dict) else {}
+    missing = [name for name in names if sections.get(name) is None]
+    wants_pay = "advertised_comp" not in assessment
+    if not missing and not wants_pay:
         return {**assessment, "sections": sections}, 0
     prompt = (
-        "Complete only these missing score report sections as a JSON object with exactly these top-level keys: "
-        + ", ".join(missing) + ". Write concise Chinese Markdown strings without level-two headings. "
-        "Map every material requirement when capabilities is requested. Keep unknown facts unknown. "
+        "Write only these score report fields as a JSON object with exactly these top-level keys: "
+        + ", ".join(missing + ["advertised_comp"] * wants_pay) + ".\n" + SECTION_CONTRACT
+        + "Keep unknown facts unknown. "
         "Ground claims only in the supplied JD, candidate sources, frozen research, and existing Jev dimension results. "
+        "The rubric is the authority for the candidate's direction preference and pay floor and target; use its figures where other sources differ. "
+        "jd_report.capabilities, years and credentials are the settled capability judgment: do not re-judge or restate them; "
+        "a gap that materially weakens the application may be named once under risks. Interview preparation is out of scope. "
+        "Research facts and their open questions are added to the report by the program; do not copy them. "
         "Structured location_evidence is official location evidence; do not claim the city is undisclosed when present. "
         "A browser_snapshot liveness_reason records a page capture; do not claim no snapshot exists. "
-        "Do not repeat existing sections, change dimension scores, or infer any score. Generic market salary statistics or other employers in candidate materials cannot replace applicable company pay evidence. Initial recommendations use only the four dimension scores (all >3 and at least two >4); confidence and sufficiency are informational, not gates. Explain missing and uncertain facts without blocking recommendations on sufficiency.\n"
+        "Do not repeat existing fields, change dimension scores, or infer any score. Generic market salary statistics or other employers in candidate materials cannot replace applicable company pay evidence. Initial recommendations use only the four dimension scores (all >3 and at least two >4); confidence and sufficiency are informational, not gates. Explain missing and uncertain facts without blocking recommendations on sufficiency.\n"
         + pipeline.research.EVIDENCE_RULES + "\n"
         + json.dumps({"jd_report": jd, "candidate_sources": sources, "research": research,
                       "dimensions": assessment["dimensions"],
-                      "existing_sections": [name for name, value in sections.items() if value]}, ensure_ascii=False)
+                      "existing_sections": [name for name, value in sections.items() if value is not None]}, ensure_ascii=False)
     )
     added = model_adapter.call_agent("score_sections", prompt)[0]
-    completed = {name: section_text(added.get(name)) for name in missing}
+    completed = {name: section_value(name, added.get(name)) for name in missing}
     if any(value is None for value in completed.values()):
         raise ValueError("Score section completion is incomplete")
-    return {**assessment, "sections": {**sections, **completed}}, 1
+    result = {**assessment, "sections": {**sections, **completed}}
+    if wants_pay:
+        try:
+            result["advertised_comp"] = advertised_compensation(added.get("advertised_comp"), jd["jd"])
+        except ValueError:
+            # A figure without exact annual JD wording is not an advertised observation; the pay sentence may still mention it.
+            result["advertised_comp"] = None
+    return result, 1
 
 
 def run_score(inputs: dict, draft_root: Path, root: Path) -> dict:
@@ -241,7 +261,7 @@ def run_score(inputs: dict, draft_root: Path, root: Path) -> dict:
                           'prepared_profiles': prepared['companies'],
                           'stages': json.loads((output/'company-stages.json').read_text()),
                           'summary_references': json.loads((output/'summary-references.json').read_text()),
-                          'run_directory': str(output), 'calls': result['calls']}, 'advertised_comp': None}
+                          'run_directory': str(output), 'calls': result['calls']}}
         _write_json(directory / 'jev-assessment.json', assessment)
         return {'assessment': assessment}
 
@@ -265,7 +285,8 @@ def run_score(inputs: dict, draft_root: Path, root: Path) -> dict:
         evidence = {'company': jd['company'], 'role': jd['role'], 'complete_jd': True, 'liveness': 'active',
                     'liveness_reason': jd.get('liveness_reason', 'Retained active posting'),
                     'location_evidence': jd.get('location_evidence'), 'employment_evidence': jd.get('employment_evidence'),
-                    'captured_at': jd.get('captured_at'), 'prescreen': jd['prescreen'], 'jd': jd['jd']}
+                    'captured_at': jd.get('captured_at'), 'prescreen': jd['prescreen'], 'jd': jd['jd'],
+                    **{name: jd.get(name) for name in ('capabilities', 'years', 'credentials')}}
         path = directory / 'assessment.json'
         assessment = json.loads(path.read_text()) if path.exists() else state['assessment']
         assessment, calls = _complete_sections(assessment, jd, sources, assessment['company_research'])
@@ -290,7 +311,8 @@ def run_score(inputs: dict, draft_root: Path, root: Path) -> dict:
             'scoring_model': 'attractiveness-v4', 'dimensions': state['assessment']['dimensions'],
             'company_profiles': state['assessment']['company_profiles'],
             'company_ratings': state['assessment']['company_ratings'],
-            'company_research': state['assessment']['company_research'], 'recommendation': result['recommendation']}}
+            'company_research': state['assessment']['company_research'], 'recommendation': result['recommendation'],
+            **{name: result[name] for name in ('sources', 'captured_at', 'advertised_comp')}}}
 
     graph = StateGraph(ScoreState)
     for name, fn in [('prescreen', prescreen), ('lookup', lookup), ('score', score), ('sections', sections), ('render', render)]:

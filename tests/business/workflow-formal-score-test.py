@@ -29,8 +29,10 @@ def research(company, postings, output):
 def agent(phase, prompt):
     model_calls.append(phase)
     assert phase == 'score_sections'
-    return {n:'Grounded explanation; unknown facts remain unknown.' for n in (
-        'overview','capabilities','compensation','questions','legitimacy','risks','checklist')}, 'sections'
+    assert 'verdict, direction, compensation, responsibilities, risks, questions, advertised_comp' in prompt
+    text = 'Grounded explanation; unknown facts remain unknown.'
+    return {'verdict':text, 'direction':text, 'compensation':text, 'responsibilities':[text], 'risks':[], 'questions':[text],
+            'advertised_comp':{'amount':'1', 'currency':'CNY', 'quote':'not in the JD'}}, 'sections'
 
 
 def jev(name, request, output, key):
@@ -80,7 +82,10 @@ with tempfile.TemporaryDirectory() as temp:
         assert len(jev_calls)==5 and len(research_calls)==1
         assert first['artifact']['company_profiles']==second['artifact']['company_profiles']
         assert len(second['artifact']['company_ratings'])==3
-        assert 'attractiveness-v4' in second['artifact']['report']
+        assert second['artifact']['report'].startswith('## 结论') and '```' not in second['artifact']['report']
+        assert 'Public employer fact' in second['artifact']['report']
+        assert second['artifact']['advertised_comp'] is None and second['artifact']['captured_at'] == jd['captured_at']
+        assert {s['id'] for s in second['artifact']['sources']} >= {'cv', 'jd', 'research'}
         values={**values,'jd_report':{**jd,'opportunity_id':'3','url':'https://sample.test/jobs/3'}}
         company_id=first['artifact']['company_profiles']['company']['company_id']
         with (root/'company-profiles'/(company_id+'.lock')).open('a') as locked:

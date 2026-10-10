@@ -345,7 +345,7 @@ function render() {
       <td><div class="role">${esc(j.role)}${jobLink(j)}</div><div class="sub">${esc(j.company)} · ${esc(j.source)}${j.material_count ? " · 📎 材料" : ""}${runs[j.id]?.status === "running" ? ` · ⏳ ${ACTION_TEXT[runs[j.id].action].running}` : ""}</div></td>
       <td class="hide-sm">${esc(j.location || "—")}</td>
       <td>${dims(j.scores, j.dimensions)}${j.score_current === false ? pill("stale") : ""}${j.profile_expired ? pill("expired") : ""}</td>
-      <td class="num hide-sm" title="核心必备：直接 · 相邻 · 未知 · 缺口">${capabilityCell(j.capability_counts)}</td>
+      <td class="num hide-sm" title="核心必备：直接 · 相邻 · 缺口 · 未知">${capabilityCell(j.capability_counts)}</td>
       <td>${pill(j.action)}</td>
       <td>${pill(j.state)}</td>
       <td>${pill(j.application_status)}</td>
@@ -426,7 +426,7 @@ function overview(d) {
 
 const VERDICTS = { proven: "直接", adjacent: "相邻", gap: "缺口", unverified: "未知" };
 function capabilityCell(counts) {
-  return counts ? `${counts.proven}·${counts.adjacent}·${counts.unverified}·${counts.gap}` : "—";
+  return counts ? `${counts.proven}·${counts.adjacent}·${counts.gap}·${counts.unverified}` : "—";
 }
 function capabilityTable(rows) {
   if (!rows.length) return "";
