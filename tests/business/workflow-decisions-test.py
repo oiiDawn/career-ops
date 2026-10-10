@@ -66,5 +66,16 @@ with sqlite3.connect(':memory:') as connection:
     for updated in (dict(frozen, rubric=frozen['rubric'].replace('numeric grading', 'changed grading')), dict(frozen, cv='changed candidate'), dict(frozen, jd_report={'opportunity_id': '7', 'jd': 'changed'})):
         with patch('career_ops.input_contracts.score_inputs', return_value=json.dumps(updated)):
             assert not score_is_current(connection, digest(payload), frozen['jd_report'])
+    # Discovery search keywords recall postings and never reach a rating; other profile edits still invalidate.
+    profile = 'target_roles:\n  search_keywords:\n    - AI Engineer\n    - LLM\n  primary:\n    - "AI Agent Engineer"\nlocation:\n  country: China\n'
+    frozen = dict(frozen, profile=profile)
+    payload = json.dumps(frozen)
+    connection.execute('UPDATE tasks SET input_hash=?, input_payload=?', (digest(payload), payload))
+    for keywords in ('  search_keywords:\n    - AI\n', '  search_keywords: [AI, Backend]\n', ''):
+        updated = dict(frozen, profile=profile.replace('  search_keywords:\n    - AI Engineer\n    - LLM\n', keywords))
+        with patch('career_ops.input_contracts.score_inputs', return_value=json.dumps(updated)):
+            assert score_is_current(connection, digest(payload), frozen['jd_report'])
+    with patch('career_ops.input_contracts.score_inputs', return_value=json.dumps(dict(frozen, profile=profile.replace('AI Agent Engineer', 'Data Engineer')))):
+        assert not score_is_current(connection, digest(payload), frozen['jd_report'])
     connection.execute('UPDATE tasks SET input_payload=?', (json.dumps(dict(frozen, cv='tampered')),))
     assert not score_is_current(connection, digest(payload), frozen['jd_report'])

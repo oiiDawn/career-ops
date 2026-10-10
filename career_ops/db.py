@@ -9,7 +9,7 @@ from pathlib import Path
 from career_ops.evaluation.decisions import classify as classify_decision, order as order_decisions, valid_scores
 from career_ops.evaluation.report import dimension_scores
 from career_ops.context import WORKFLOW_VERSION
-from career_ops.input_contracts import canonical_scan_input, digest, score_inputs, score_is_current, verify_package_files
+from career_ops.input_contracts import canonical_scan_input, digest, scan_is_current, score_inputs, score_is_current, verify_package_files
 from career_ops.task_state import WorkflowState
 
 
@@ -467,7 +467,7 @@ class BusinessStore:
                 raise ValueError("Score inputs changed before business commit")
         if task["module"] == "scan":
             current = canonical_scan_input(json.dumps(json.loads(task["input_payload"])["source"]))
-            if digest(current) != task["input_hash"]:
+            if not scan_is_current(task["input_payload"], current):
                 self.wait(state["task_id"], "input_changed")
                 raise ValueError("Scan inputs changed before business commit")
         artifact = json.loads(state["draft"]) if state["draft"].startswith("{") else {"report": state["draft"]}

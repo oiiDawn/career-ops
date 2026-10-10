@@ -6,12 +6,26 @@ from __future__ import annotations
 import hashlib
 import json
 from pathlib import Path
+import re
 from career_ops.evaluation import jev
 from career_ops.context import RULES_ROOT, INPUT_ROOT, SCAN_POLICY_VERSION, SCORE_POLICY_VERSION, company_valid_until
 
 
 def digest(value: str) -> str:
     return hashlib.sha256(value.encode()).hexdigest()
+
+
+def scoring_profile(profile: str) -> str:
+    """Drop the discovery search keywords; they recall postings and never reach a scan or a rating."""
+    return re.sub(r"(?m)^( +)search_keywords:.*\n(?:\1(?: +|- ).*\n)*", "", profile)
+
+
+def scan_is_current(stored: str, current: str) -> bool:
+    """Compare frozen and current scan inputs, ignoring the discovery search keywords."""
+    values = [json.loads(stored), json.loads(current)]
+    for value in values:
+        value["profile"] = scoring_profile(value["profile"])
+    return values[0] == values[1]
 
 
 def score_inputs(report: dict) -> str:
@@ -62,6 +76,8 @@ def score_is_current(connection, input_hash: str, report: dict) -> bool:
         return False
     for value in (stored, current):
         value['rubric'] = jev.standards(value['rubric'], jev.DIMENSIONS)
+        if isinstance(value.get("profile"), str):
+            value["profile"] = scoring_profile(value["profile"])
     return stored == current
 
 
