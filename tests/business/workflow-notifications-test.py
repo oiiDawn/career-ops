@@ -8,7 +8,14 @@ import tempfile
 from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
-from career_ops.notifications import deliver
+from career_ops.notifications import deliver, thread_title
+
+scores = {"direction": 4.28, "company": 3.95, "culture": 4.46, "compensation": 4.6}
+title = thread_title("122", "c5175ea73d0aff", " Microsoft ", "Software Engineer II – Windows Cloud Experience", scores)
+assert title == "Microsoft · Software Engineer II – Windows Cloud Experience · 方向4.3 公司4.0 文化4.5 薪酬4.6 · #122-c517"
+long_title = thread_title("122", "c5175ea73d0aff", "Microsoft", "Engineer " * 30, scores)
+# Discord caps thread names at 100 characters; the role gives way, never the scores or the thread key.
+assert len(long_title) == 100 and long_title.endswith("薪酬4.6 · #122-c517")
 
 
 def check(outcome):

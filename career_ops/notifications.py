@@ -18,12 +18,21 @@ from langgraph.graph import END, START, StateGraph
 from career_ops.db import BusinessStore
 from career_ops.input_contracts import digest, score_is_current
 from career_ops.evaluation.decisions import worth_attention
+from career_ops.evaluation.report import DIMENSIONS, LABELS
 
 
 class DeliveryState(TypedDict):
     opportunity_id: str
     report_hash: str
     status: str
+
+
+def thread_title(opportunity_id: str, report_hash: str, company: str, role: str, score: dict) -> str:
+    """Name the thread for reading; the trailing key keeps one thread per published report within Discord's 100 characters."""
+    suffix = (" · " + " ".join(f"{LABELS[name]}{score[name]:.1f}" for name in DIMENSIONS if score.get(name) is not None)
+              + f" · #{opportunity_id}-{report_hash[:4]}")
+    prefix = " ".join(company.split())[:35] + " · "
+    return prefix + " ".join(role.split())[:max(0, 100 - len(prefix) - len(suffix))] + suffix
 
 
 def eligible_report(store: BusinessStore, opportunity_id: str) -> dict | None:
@@ -59,14 +68,10 @@ def eligible_report(store: BusinessStore, opportunity_id: str) -> dict | None:
         if not worth_attention(score):
             return None
         posting = scan["artifact"]
-        suffix = " · " + " / ".join(f"{name} {value}/5" for name, value in score.items() if value is not None)
-        company = " ".join(posting["company"].split())[:35]
-        prefix = f"[{opportunity_id}:{artifact['report_sha256'][:12]}] 高分岗位 · {company} · "
-        role = " ".join(posting["role"].split())
         return {
             "opportunity_id": opportunity_id,
             "report_hash": artifact["report_sha256"],
-            "title": prefix + role[:max(0, 100 - len(prefix) - len(suffix))] + suffix,
+            "title": thread_title(opportunity_id, artifact["report_sha256"], posting["company"], posting["role"], score),
             "report": report,
             "path": str(report_path),
             "scores": score,
