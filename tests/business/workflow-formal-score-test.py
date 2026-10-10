@@ -94,7 +94,7 @@ with tempfile.TemporaryDirectory() as temp:
         assert len(jev_calls)==6 and len(research_calls)==1
         assert third['artifact']['company_profiles']==first['artifact']['company_profiles']
         values = {**values, 'jd_report': {**jd, 'opportunity_id':'4', 'url':'https://sample.test/jobs/4',
-            'location_evidence':'Shanghai, China'}}
+            'location_evidence':'Shanghai, China', 'role':'Senior '+jd['role']}}
         fourth = g.run_score(values, root/'workflow-drafts', root)
         assert len(research_calls) == 2
         assert [item['dimension'] for item in research_calls[-1]['scopes']] == ['compensation']
@@ -109,7 +109,7 @@ with tempfile.TemporaryDirectory() as temp:
         assert bundle['jobs'][0]['scopes']['culture'] == {'region':'China'}
         compensation = bundle['jobs'][0]['scopes']['compensation']
         assert compensation['level'] == 'Software Engineer 2'
-        assert compensation['region'] == 'China:Beijing|Shanghai|Suzhou'
+        assert compensation['region'] == 'China'
         entity = {k:bundle['companies'][0][k] for k in ('company_id','name','identity_url')}
         entity['identity_url'] = 'https://www.microsoft.com/'
         archive = directory.parent.parent/'company-profiles'/entity['company_id']/'evidence'
@@ -120,12 +120,20 @@ with tempfile.TemporaryDirectory() as temp:
                 'addressCountry':'CN', 'addressLocality':'Suzhou'}}]}, directory, '2026-10-11')
         assert second['companies'][0]['identity_url'] == entity['identity_url']
         assert second['companies'][0]['company_id'] == entity['company_id']
-        assert second['jobs'][0]['scopes']['compensation']['level'] == 'Senior Software Engineer'
+        assert second['jobs'][0]['scopes']['compensation']['level'] == 'senior'
         unknown = g.public_bundle({**jd, 'location_evidence':None, 'role':'Engineer'}, directory, '2026-10-11')
         assert unknown['jobs'][0]['scopes']['culture']['region'] == 'unknown'
         assert unknown['jobs'][0]['scopes']['compensation']['level'] == 'unknown'
         coded = g.public_bundle({**jd, 'location_evidence':'CN-Jiaozi Financial Center, Chengdu'}, directory, '2026-10-11')
-        assert coded['jobs'][0]['scopes']['compensation']['region'] == 'China:Chengdu'
+        assert coded['jobs'][0]['scopes']['compensation']['region'] == 'China'
         city_only = g.public_bundle({**jd, 'location_evidence':'Beijing'}, directory, '2026-10-11')
-        assert city_only['jobs'][0]['scopes']['compensation']['region'] == 'China:Beijing'
+        assert city_only['jobs'][0]['scopes']['compensation']['region'] == 'China'
+        # Same employer, same country and seniority share one compensation scope across titles and cities.
+        shared = [g.public_bundle({**jd, 'role':role, 'location_evidence':place}, directory, '2026-10-11')['jobs'][0]['scopes']
+                  for role, place in (('AI Engineer_BD', 'China, Jiangsu, Suzhou'), ('数据挖掘工程师（大模型方向）_XC', 'China, Shanghai, Shanghai'),
+                                      ('Senior Full Stack Developer', 'Beijing'), ('资深平台工程师', 'China, Shanghai, Shanghai'),
+                                      ('Business Analyst, AVP', 'China, Zhejiang, Hangzhou'))]
+        assert shared[0] == shared[1] and shared[2] == shared[3]
+        assert shared[0]['compensation']['role_family'] == 'software_engineering'
+        assert shared[2]['compensation']['level'] == 'senior' and shared[4]['compensation']['role_family'] == 'other'
 print('formal score: deterministic scopes, retained identity, company reuse and checkpoint recovery passed')

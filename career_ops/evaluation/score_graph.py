@@ -68,7 +68,7 @@ def public_bundle(jd: dict, directory: Path, valid_until: str) -> dict:
         locations = locations.split(';')
     elif isinstance(locations, dict):
         locations = [locations]
-    countries, cities = set(), set()
+    countries = set()
     for location in locations:
         if isinstance(location, dict):
             address = location.get('address', location)
@@ -77,38 +77,35 @@ def public_bundle(jd: dict, directory: Path, valid_until: str) -> dict:
             country = address.get('addressCountry', '')
             if isinstance(country, dict):
                 country = country.get('name', '')
-            city = address.get('addressLocality', '')
         elif isinstance(location, str):
             parts = [part.strip() for part in location.split(',')]
             country = next((aliases[part] for part in parts if part in aliases), '')
             if not country:
                 prefix = parts[0].split('-', 1)[0]
                 country = aliases.get(prefix, '')
-            city = (parts[-1] if parts[0] in aliases or parts[0].split('-', 1)[0] in aliases
-                    else parts[0]) if len(parts) > 1 else ''
-            if city in aliases:
-                city = ''
         else:
             continue
         country = aliases.get(country, country)
         if not country and isinstance(location, str) and location.strip() in {
                 'Beijing', 'Shanghai', 'Suzhou', 'Chengdu', 'Shenzhen', 'Guangzhou', "Xi'an"}:
-            country, city = 'China', location.strip()
+            country = 'China'
         if country:
             countries.add(country)
-            if city:
-                cities.add(city)
     country = next(iter(countries)) if len(countries) == 1 else 'unknown'
-    region = country + (':' + '|'.join(sorted(cities)) if country != 'unknown' and cities else '')
     role = jd['role'].strip()
-    engineering = bool(re.search(r'\b(?:software|developer|sde[1-9]?|(?:AI|ML|Applied|Agent)\s+Engineer)\b', role, re.I))
-    grade = re.search(r'\b(?:Senior|Staff|Principal|Junior)\s+(?:Software\s+)?(?:Engineer|Developer)\b'
-                      r'|\bSoftware Engineer (?:[1-9]|I{1,3}|IV)\b|\bSDE[1-9]\b', role, re.I)
-    level = grade.group() if grade else 'unknown'
-    if re.fullmatch(r'Software Engineer (?:2|II)', level, re.I):
-        level = 'Software Engineer 2'
+    # Coarse on purpose: public pay evidence is rarely city- or title-specific, and every distinct scope costs a research run.
+    # ponytail: two role families; split out research or management when their pay baselines prove misleading.
+    engineering = bool(re.search(r'engineer|developer|architect|software|sde[1-9]?\b|工程师|开发|架构|研发', role, re.I))
+    seniority = re.search(r'\b(?:senior|sr|staff|principal|junior)\b|资深|高级', role, re.I)
+    grade = re.search(r'\bSoftware Engineer (?:[1-9]|I{1,3}|IV)\b|\bSDE[1-9]\b', role, re.I)
+    if seniority:
+        level = {'sr': 'senior', '资深': 'senior', '高级': 'senior'}.get(seniority.group().lower(), seniority.group().lower())
+    else:
+        level = grade.group() if grade else 'unknown'
+        if re.fullmatch(r'Software Engineer (?:2|II)', level, re.I):
+            level = 'Software Engineer 2'
     scopes = {'company': {'region': 'global'}, 'culture': {'region': country}, 'compensation': {
-        'region': region, 'level': level, 'role_family': 'software_engineering' if engineering else role.casefold(),
+        'region': country, 'level': level, 'role_family': 'software_engineering' if engineering else 'other',
         'currency': {'China': 'CNY', 'Hong Kong': 'HKD', 'United States': 'USD',
                      'United Kingdom': 'GBP', 'Singapore': 'SGD'}.get(country, 'unknown'),
         'basis': 'annual_guaranteed_base' if country == 'Hong Kong' else 'annual_total'}}
