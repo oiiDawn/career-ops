@@ -6,6 +6,8 @@ import { mkdirSync, readFileSync, writeFileSync, renameSync } from 'node:fs';
 import { resolve, dirname } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { normalizeUrl } from '../shared/url-key.mjs';
+import { makeHttpCtx } from '../providers/_http.mjs';
+import { readJibeapplyPosting } from '../providers/jibeapply.mjs';
 
 const exec = promisify(execFile);
 const extractor = fileURLToPath(new URL('./browser-extract.mjs', import.meta.url));
@@ -42,11 +44,25 @@ export function readScanJd(url, root, now = Date.now()) {
   } catch { return null; }
 }
 
-export async function captureScanJds(offers, root, extract = async url => {
+async function browserPosting(url) {
   const { stdout } = await exec(process.execPath, [extractor, url, '--max-chars', '100000', '--timeout', '30000'],
     { timeout: 45000, maxBuffer: 2 * 1024 * 1024 });
   return JSON.parse(stdout);
-}, fresh = false) {
+}
+
+/** Read the page in a browser; when the site refuses it, ask the posting's own JSON API for the same JD. */
+export async function extractPosting(url, browser = browserPosting,
+  api = target => readJibeapplyPosting(target, makeHttpCtx().fetchJson)) {
+  try {
+    return await browser(url);
+  } catch (error) {
+    const posting = await api(url).catch(() => null);
+    if (!posting) throw error;
+    return posting;
+  }
+}
+
+export async function captureScanJds(offers, root, extract = extractPosting, fresh = false) {
   const counts = { captured: 0, reused: 0, failed: 0 };
   for (const url of new Set(offers.map(offer => normalizeUrl(offer.url)))) {
     if (!fresh && readScanJd(url, root)) { counts.reused++; continue; }

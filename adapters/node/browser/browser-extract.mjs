@@ -340,7 +340,9 @@ async function main() {
     browser = await chromium.launch({ headless: true });
     const page = await newExtractionPage(browser);
     const started = Date.now();
-    await page.goto(url, { waitUntil: 'domcontentloaded', timeout });
+    const response = await page.goto(url, { waitUntil: 'domcontentloaded', timeout });
+    // A refusal page is not the posting; some SPAs serve real content under 404, so only these count.
+    if ([401, 403, 429].includes(response?.status())) throw new Error(`HTTP ${response.status()}`);
     const raw = await readPage(page, { mode, timeout: Math.max(1, timeout - (Date.now() - started)) });
 
     // Belt-and-suspenders: never emit content read from a private final URL.

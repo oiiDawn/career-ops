@@ -1,6 +1,8 @@
 // @ts-check
 /** @typedef {import('./_types.js').Provider} Provider */
 
+import { htmlToText } from './_html-to-text.mjs';
+
 // JibeApply provider — hits the /api/jobs endpoint on the same hostname.
 // Auto-detects from careers_url pattern `https://<slug>.jibeapply.com`.
 // iCIMS acquired Jibe in 2019; some tenants run it on a branded custom
@@ -57,6 +59,10 @@ export function parseJibeapplyResponse(json, entry) {
   if (!origin) {
     try { origin = new URL(entry.api || '').origin; } catch { /* ignore */ }
   }
+  // Some branded tenants serve the site under a path (careers.amd.com/careers-home/jobs/<id>);
+  // the bare /jobs/<id> form only redirects there, which a capture reads as another page.
+  let prefix = '';
+  try { prefix = /^(.*)\/jobs\/?$/.exec(new URL(entry.careers_url || '').pathname)?.[1] ?? ''; } catch { /* ignore */ }
   const items = Array.isArray(json?.jobs) ? json.jobs : [];
   return items
     .map(item => {
@@ -65,14 +71,39 @@ export function parseJibeapplyResponse(json, entry) {
       const title = String(d.title || '').trim();
       const slug = d.slug || d.req_id;
       if (!title || !slug) return null;
+      const url = `${origin}${prefix}/jobs/${encodeURIComponent(slug)}`;
+      const description = htmlToText(String(d.description || '')).trim();
       return {
         title,
-        url: `${origin}/jobs/${encodeURIComponent(slug)}`,
+        url,
         company: String(d.hiring_organization || entry.name || '').trim(),
         location: d.full_location || [d.city, d.country].filter(Boolean).join(', '),
+        ...(description ? { description } : {}),
+        ...(description.length >= 200
+          ? { scan_jd: { text: description, final_url: url, retrieved_at: new Date().toISOString() } } : {}),
       };
     })
     .filter(Boolean);
+}
+
+/**
+ * Read one posting through the list API. The detail page is a client-rendered
+ * SPA that answers headless browsers with an access-denied page (observed on
+ * careers.se.com), so the API description is the only readable JD.
+ * @param {string} url
+ * @param {(url: string, options?: object) => Promise<any>} fetchJson
+ * @returns {Promise<{ url: string, text: string } | null>}
+ */
+export async function readJibeapplyPosting(url, fetchJson) {
+  const page = new URL(url);
+  const [, prefix, slug] = /^(.*)\/jobs\/([^/]+)\/?$/.exec(page.pathname) ?? [];
+  if (page.protocol !== 'https:' || !slug) return null;
+  const api = new URL('/api/jobs', page.origin);
+  api.searchParams.set('keywords', decodeURIComponent(slug));
+  const json = await fetchJson(api.href, { redirect: 'error' });
+  const job = parseJibeapplyResponse(json, { careers_url: `${page.origin}${prefix}/jobs` })
+    .find(candidate => candidate.url === `${page.origin}${prefix}/jobs/${slug}`);
+  return job?.scan_jd ? { url: job.url, text: job.scan_jd.text } : null;
 }
 
 /** @type {Provider} */

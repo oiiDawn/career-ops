@@ -305,6 +305,29 @@ try {
     else fail(`jibeapply.fetch() wrong error: ${e2.message}`);
   }
 
+  // The list API carries the JD; the SPA detail page is closed to headless browsers.
+  const { readJibeapplyPosting } = jibeapplyModule;
+  const body = '<p>' + 'Build and operate agent services. '.repeat(10) + '</p>';
+  const listed = { jobs: [{ data: { title: 'AI Engineer', slug: '129299', req_id: '129299', description: body } },
+    { data: { title: 'Other', slug: '1292990', description: body } }] };
+  const withJd = parseJibeapplyResponse(listed, { name: 'Acme', careers_url: 'https://careers.acme.com/jobs' })[0];
+  if (withJd.description.startsWith('Build and operate') && withJd.scan_jd.text === withJd.description
+      && withJd.scan_jd.final_url === 'https://careers.acme.com/jobs/129299') pass('parseJibeapplyResponse keeps the API description as the JD');
+  else fail(`parseJibeapplyResponse JD: ${JSON.stringify(withJd)}`);
+  const nested = parseJibeapplyResponse(listed, { name: 'Acme', careers_url: 'https://careers.acme.com/careers-home/jobs' })[0];
+  const nestedRead = await readJibeapplyPosting(nested.url, async () => listed);
+  if (nested.url === 'https://careers.acme.com/careers-home/jobs/129299' && nestedRead?.url === nested.url) pass('jibeapply keeps a tenant path prefix in posting URLs');
+  else fail(`jibeapply path prefix: ${nested.url} ${JSON.stringify(nestedRead)}`);
+  let asked = '';
+  const read = await readJibeapplyPosting('https://careers.acme.com/jobs/129299', async url => { asked = url; return listed; });
+  if (asked === 'https://careers.acme.com/api/jobs?keywords=129299' && read.url === 'https://careers.acme.com/jobs/129299'
+      && read.text === withJd.description) pass('readJibeapplyPosting reads one posting through the list API');
+  else fail(`readJibeapplyPosting: ${asked} ${JSON.stringify(read)}`);
+  if (await readJibeapplyPosting('https://careers.acme.com/jobs/777', async () => listed) === null
+      && await readJibeapplyPosting('https://careers.acme.com/roles/129299', async () => { throw new Error('no request'); }) === null) {
+    pass('readJibeapplyPosting returns null for an unlisted posting or a non-posting path');
+  } else fail('readJibeapplyPosting should return null');
+
 } catch (e) {
   fail(`jibeapply provider tests crashed: ${e.message}`);
 }

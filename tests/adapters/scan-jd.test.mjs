@@ -5,7 +5,7 @@ import { spawnSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { captureScanJds, readScanJd, scanJdPath, samePostingUrl, JD_MAX_AGE_MS } from '../../adapters/node/browser/scan-jd.mjs';
+import { captureScanJds, extractPosting, readScanJd, scanJdPath, samePostingUrl, JD_MAX_AGE_MS } from '../../adapters/node/browser/scan-jd.mjs';
 const root = mkdtempSync(join(tmpdir(), 'scan-jd-'));
 try {
   assert.equal(scanJdPath('https://example.com/jobs/123', root).startsWith(join(root, 'cache', 'scan-jds')), true);
@@ -29,6 +29,10 @@ try {
   const redirected = { url: 'https://example.com/jobs/redirected' };
   assert.equal((await captureScanJds([redirected], root, async () => ({ url: 'https://example.com/', text: 'Other page' }))).failed, 1);
   assert.equal(readScanJd(redirected.url, root), null);
+  const blocked = async () => { throw new Error('navigation error: HTTP 403'); };
+  assert.deepEqual(await extractPosting(offer.url, blocked, async url => ({ url, text: 'API description' })), { url: offer.url, text: 'API description' });
+  await assert.rejects(extractPosting(offer.url, blocked, async () => null), /HTTP 403/);
+  assert.equal((await extractPosting(offer.url, extract, async () => { throw new Error('unused'); })).title, 'Engineer');
   const ibm = { url: 'https://careers.ibm.com/careers/JobDetail?jobId=131606' };
   const localized = 'https://careers.ibm.com/en_US/careers/JobDetail?jobId=131606';
   assert.equal(samePostingUrl(ibm.url, localized), true);
