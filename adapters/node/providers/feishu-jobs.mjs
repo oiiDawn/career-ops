@@ -82,7 +82,9 @@ export default {
     }
     const api = `${origin}/api/v1/search/job/posts`;
 
-    const keywords = providerKeywords(ctx);
+    // The site search matches English terms poorly against Chinese titles ("Backend" finds no 后端开发工程师),
+    // so a small employer board is walked whole and left to the title filter.
+    const keywords = entry.full_inventory === true ? DEFAULT_KEYWORDS : providerKeywords(ctx);
     const entryLimit = Number(entry.max_pages);
     const probeLimit = Number(ctx?.maxPages);
     const entryMaxPages = Number.isSafeInteger(entryLimit) && entryLimit > 0

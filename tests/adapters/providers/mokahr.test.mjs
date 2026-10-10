@@ -323,6 +323,14 @@ try {
     fail(`mokahr.fetch() cross-keyword: ${overlapJobs.length} jobs, ${overlap.calls.length} requests, sleeps ${JSON.stringify(overlap.sleeps)}`);
   }
 
+  const whole = mkCtx(() => ({ success: true, data: { jobStats: { total: 0 }, jobs: [mkJob('all', '后端开发工程师')] } }));
+  const wholeJobs = await mokahr.fetch({ name: 'Example Labs', careers_url: MOKA_URL, full_inventory: true }, { ...whole.ctx, searchKeywords: ['AI', 'Backend'] });
+  if (wholeJobs.length === 1 && whole.calls.length === 1 && whole.calls[0].keyword === undefined) {
+    pass('mokahr.fetch() walks the whole board once when full_inventory is set');
+  } else {
+    fail(`mokahr.fetch() full_inventory: ${wholeJobs.length} jobs, calls ${JSON.stringify(whole.calls.map(call => call.keyword))}`);
+  }
+
   const capped = mkCtx(() => ({ success: true, data: { jobStats: { total: 0 }, jobs: Array.from({ length: 50 }, (_, i) => mkJob(`c${i}`, `岗位C${i}`)) } }));
   await mokahr.fetch({ name: 'Example Labs', careers_url: MOKA_URL, max_pages: 1 }, { ...capped.ctx, searchKeywords: ['AI'] });
   if (capped.calls.length === 1) {

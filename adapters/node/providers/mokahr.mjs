@@ -114,7 +114,9 @@ export default {
       throw new Error('mokahr: careers_url must be an allowed HTTPS app.mokahr.com tenant URL with a positive site ID');
     }
 
-    const keywords = providerKeywords(ctx);
+    // The site search matches English terms poorly against Chinese titles ("Backend" finds no 后端开发工程师),
+    // so a small employer board is walked whole and left to the title filter.
+    const keywords = entry.full_inventory === true ? DEFAULT_KEYWORDS : providerKeywords(ctx);
     const entryMaxPages = Number(entry.max_pages) > 0 ? Number(entry.max_pages) : DEFAULT_MAX_PAGES;
     const maxPages = Math.min(entryMaxPages, Number(ctx?.maxPages) > 0 ? Number(ctx.maxPages) : Infinity);
 

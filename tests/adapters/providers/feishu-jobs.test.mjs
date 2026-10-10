@@ -230,6 +230,14 @@ try {
     fail(`feishu-jobs.fetch() cross-keyword: ${overlapJobs.length} jobs, ${overlap.calls.length} requests, sleeps ${JSON.stringify(overlap.sleeps)}`);
   }
 
+  const whole = mkCtx(() => ({ code: 0, data: { count: 1, job_post_list: [mkJob('43', '后端开发工程师')] } }));
+  const wholeJobs = await feishu.fetch({ name: 'Example Labs', careers_url: TENANT_URL, full_inventory: true }, { ...whole.ctx, searchKeywords: ['AI', 'Backend'] });
+  if (wholeJobs.length === 1 && whole.calls.length === 1 && whole.calls[0].keyword === undefined) {
+    pass('feishu-jobs.fetch() walks the whole board once when full_inventory is set');
+  } else {
+    fail(`feishu-jobs.fetch() full_inventory: ${wholeJobs.length} jobs, calls ${JSON.stringify(whole.calls.map(call => call.keyword))}`);
+  }
+
   const capped = mkCtx(() => ({
     code: 0,
     data: { count: 500, job_post_list: Array.from({ length: 100 }, (_, i) => mkJob(String(5000 + i), `岗位E${i}`)) },
