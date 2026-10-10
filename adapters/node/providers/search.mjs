@@ -8,6 +8,11 @@ import { rejectPrivateOrInvalid, validateUrlSecurity } from '../browser/liveness
 import { normalizeUrl } from '../shared/url-key.mjs';
 import { providerKeywords } from './_profile-keywords.mjs';
 
+// ponytail: fixed pacing shared by every LinkedIn source; adaptive backoff if 429s persist
+const LINKEDIN_GAP_MS = 2000;
+let linkedinTurn = Promise.resolve();
+const linkedinPause = () => (linkedinTurn = linkedinTurn.then(() => new Promise(resolve => setTimeout(resolve, LINKEDIN_GAP_MS))));
+
 export function searchOptions(entry) {
   const search = entry.search;
   if (!search || !['web', 'linkedin'].includes(search.method)) throw new Error('search.method must be web or linkedin');
@@ -43,7 +48,7 @@ export function searchRequest(options, keyword, page = 0) {
   if (options.method === 'linkedin') {
     const url = new URL('https://www.linkedin.com/jobs/search/');
     url.search = new URLSearchParams({ keywords: keyword, location: options.locations[0],
-      f_TPR: 'r2592000', f_JT: 'F', sortBy: 'DD', start: String(page * 25) }).toString();
+      f_TPR: 'r604800', f_JT: 'F', sortBy: 'DD', start: String(page * 25) }).toString();
     return url.href;
   }
   const quote = value => `"${value.replace(/["\\]/g, ' ')}"`;
@@ -185,6 +190,7 @@ export default {
     try {
       const read = async (url, mode = 'jd') => {
         await validateUrlSecurity(url);
+        if (withinSites(url, ['linkedin.com'])) await linkedinPause();
         const page = await newExtractionPage(browser);
         try {
           const response = await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 20000 });

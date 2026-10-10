@@ -8,6 +8,7 @@ assert.equal(searchRequest(options, '智能体 & AI'), 'site:jobs.example.com/ro
 const linkedin = searchOptions({ search: { method: 'linkedin', sites: ['linkedin.com/jobs/view'], locations: ['Shanghai, China'] } });
 assert.equal(new URL(searchRequest(linkedin, '智能体 & AI')).searchParams.get('keywords'), '智能体 & AI');
 assert.equal(new URL(searchRequest(linkedin, 'AI', 1)).searchParams.get('start'), '25');
+assert.equal(new URL(searchRequest(linkedin, 'AI')).searchParams.get('f_TPR'), 'r604800');
 for (const url of ['https://jobs.example.com.evil/roles/1', 'https://jobs.example.com/roles-other/1', 'http://jobs.example.com/roles/1', 'https://u:p@jobs.example.com/roles/1']) assert.equal(withinSites(url, options.sites), false);
 assert.throws(() => searchOptions({ ...entry, search: { ...entry.search, sites: ['127.0.0.1'] } }), /Invalid/);
 assert.throws(() => searchOptions({ ...entry, max_results: 0 }), /max_results/);
