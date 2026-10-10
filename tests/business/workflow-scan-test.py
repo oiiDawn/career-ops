@@ -351,12 +351,16 @@ with tempfile.TemporaryDirectory(prefix="career-ops-cron-stale-") as temporary:
     failed = store.start("3", "scan", "{}")
     store.wait(failed["task_id"], "failure:RuntimeError")
     store.close()
-    with patch("career_ops.tasks.scan_discovered", return_value={"status": "waiting"}), \
+    # A started scan reports only its task; the outcome is read from the task view, as a manual evaluation does.
+    rescanned = {"task_id": "rescan", "status": "waiting"}
+    with patch("career_ops.tasks.scan_discovered", return_value=rescanned), \
+         patch("career_ops.tasks.view", return_value={"task_id": "rescan", "status": "waiting", "reason": "source_access_unknown"}) as viewed, \
          patch("career_ops.tasks.capture_jd", return_value=None), \
          patch("career_ops.tasks.start_and_run") as start:
-        assert cron_score(directory) == {"status": "waiting", "opportunity_id": "1", "task": {"status": "waiting"}}
+        assert cron_score(directory) == {"status": "waiting", "opportunity_id": "1", "task": viewed.return_value}
         start.assert_not_called()
-    with patch("career_ops.tasks.scan_discovered", return_value={"status": "completed", "artifact": {"outcome": "jd_report"}}) as scan, \
+    with patch("career_ops.tasks.scan_discovered", return_value={"task_id": "rescan", "status": "completed"}) as scan, \
+         patch("career_ops.tasks.view", return_value={"task_id": "rescan", "status": "completed", "artifact": {"outcome": "jd_report"}}), \
          patch("career_ops.tasks.start_and_run", return_value={"status": "completed"}) as start:
         assert cron_score(directory)["opportunity_id"] == "1"
         assert scan.call_args.args == (directory, "1", True)
