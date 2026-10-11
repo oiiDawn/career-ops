@@ -1,4 +1,4 @@
-"""Verify apply package HITL, invalidation and cross-process confirmation."""
+"""Verify apply packages publish without review, supersede failures and migrate staged drafts."""
 
 import json
 import os
@@ -11,7 +11,7 @@ import tempfile
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
 from career_ops.db import BusinessStore
-from career_ops.input_contracts import validate_resume_payload
+from career_ops.input_contracts import digest, validate_resume_payload
 
 PYTHON = ROOT / ".venv" / "bin" / "python"
 RUNNER = str(ROOT / 'tests' / 'fixtures' / 'workflow-model-runner.py')
@@ -27,17 +27,37 @@ else:
 with tempfile.TemporaryDirectory(prefix="career-ops-draft-migration-") as temporary:
     database = Path(temporary) / "opportunities.db"
     store = BusinessStore(database)
-    task = store.start("legacy-draft", "apply", "{}")
-    store.db.execute("ALTER TABLE drafts ADD COLUMN review TEXT NOT NULL DEFAULT '{}'")
-    store.db.execute("ALTER TABLE drafts ADD COLUMN approved INTEGER NOT NULL DEFAULT 0")
-    store.db.execute(
-        "INSERT INTO drafts(task_id,version,input_hash,package_hash,payload) VALUES(?,?,?,?,?)",
-        (task["task_id"], 1, store.task(task["task_id"])["input_hash"], "hash", '{"package":{}}'),
-    )
+    staged = store.start("legacy-draft", "apply", '{"feedback":["tighten"],"jd_report":{}}')["task_id"]
+    failed = store.start("legacy-failed", "apply", "{}")["task_id"]
+    abandoned = store.start("legacy-jd-change", "apply", "{}")["task_id"]
+    store.wait(staged, "user_review")
+    store.wait(failed, "failure:RuntimeError")
+    store.wait(abandoned, "jd_changed")
+    store.set_context(abandoned, "input_change", {"diff": "changed JD"})
+    store.db.executescript("""
+        CREATE TABLE drafts(task_id TEXT, version INTEGER, input_hash TEXT, package_hash TEXT, payload TEXT);
+        CREATE TABLE feedback(id INTEGER PRIMARY KEY, task_id TEXT, text TEXT);
+        CREATE TABLE confirmations(task_id TEXT PRIMARY KEY, input_hash TEXT, package_hash TEXT);
+    """)
+    for version, letter in ((1, "old"), (2, "current")):
+        store.db.execute("INSERT INTO drafts VALUES(?,?,?,?,?)",
+                         (staged, version, "stale", f"hash-{version}", json.dumps({"package": {"cover_letter": letter}})))
     store.close()
     store = BusinessStore(database)
-    assert set(store.draft(task["task_id"])) == {"package", "version", "package_hash", "input_hash"}
+    published = store.result(staged)
+    assert published["outcome"] == "package" and published["material_hash"] == "hash-2"
+    assert published["artifact"] == {"package": {"cover_letter": "current"}}
+    task = store.task(staged)
+    assert task["status"] == "completed" and task["input_payload"] == '{"jd_report":{}}'
+    assert task["input_hash"] == published["input_hash"] == digest('{"jd_report":{}}')
+    assert store.task(failed)["waiting_reason"] == "failure:RuntimeError"
+    assert store.task(abandoned)["status"] == "cancelled"
+    assert not store.db.execute("SELECT 1 FROM task_context WHERE key='input_change'").fetchone()
+    assert not store.db.execute(
+        "SELECT 1 FROM sqlite_master WHERE type='table' AND name IN ('drafts','feedback','confirmations')"
+    ).fetchone()
     store.close()
+    BusinessStore(database).close()
 
 
 def call(directory: Path, input_root: Path, *args: str, expected: int = 0,
@@ -89,158 +109,65 @@ with tempfile.TemporaryDirectory(prefix="career-ops-apply-") as temporary:
     first = source(root / "first.json", "job-1", "Build reviewed AI agents.")
     call(directory, inputs, "task", "start", "scan", "job-1", str(first))
     call(directory, inputs, "task", "start", "score", "job-1", "scan:job-1")
-    draft = call(directory, inputs, "task", "start", "apply", "job-1", "score:job-1")
+    package = call(directory, inputs, "task", "start", "apply", "job-1", "score:job-1")
     with sqlite3.connect(directory / "opportunities.db") as connection:
-        stored_input = json.loads(connection.execute("SELECT input_payload FROM tasks WHERE task_id=?", (draft["task_id"],)).fetchone()[0])
+        stored_input = json.loads(connection.execute("SELECT input_payload FROM tasks WHERE task_id=?", (package["task_id"],)).fetchone()[0])
     assert stored_input["artifact_contract_version"] == 4
     assert stored_input["articles"] == "Approved article evidence"
     assert stored_input["voice"] == "Direct first-person voice"
     assert stored_input["writing_samples"]["writing-samples/sample.md"] == "Approved writing sample"
     assert set(stored_input["market_rules"]) == {"cn", "hk", "remote"}
-    assert draft["status"] == "waiting" and draft["reason"] == "user_review"
-    assert draft["allowed_actions"] == ["feedback", "confirm", "defer", "cancel"]
-    assert "review" not in draft["artifact"]
-    assert Path(draft["artifact"]["files"]["resume_payload"]).is_file()
-    assert Path(draft["artifact"]["files"]["resume_pdf"]).is_file()
-    assert Path(draft["artifact"]["files"]["resume_metadata"]).is_file()
-    assert draft["artifact"]["pdf_receipt"]["pages"] == 1
-    assert Path(draft["artifact"]["files"]["cover_letter"]).is_file()
-    assert "application_answers" not in draft["artifact"]["files"]
-    cover_letter = Path(draft["artifact"]["files"]["cover_letter"])
-    original_letter = cover_letter.read_text()
-    cover_letter.write_text("changed after staging")
-    call(directory, inputs, "task", "resume", draft["task_id"], "--decision", "confirm", expected=1)
-    assert call(directory, inputs, "task", "show", draft["task_id"])["status"] == "waiting"
-    cover_letter.write_text(original_letter)
-    with sqlite3.connect(directory / "opportunities.db") as connection:
-        original_manifest = connection.execute(
-            "SELECT payload FROM drafts WHERE task_id=? ORDER BY version DESC LIMIT 1", (draft["task_id"],)
-        ).fetchone()[0]
-        missing_letter = json.loads(original_manifest)
-        missing_letter["files"].pop("cover_letter")
-        missing_letter["file_hashes"].pop("cover_letter")
-        connection.execute("UPDATE drafts SET payload=? WHERE task_id=?", (json.dumps(missing_letter), draft["task_id"]))
-    call(directory, inputs, "task", "resume", draft["task_id"], "--decision", "confirm", expected=1)
-    with sqlite3.connect(directory / "opportunities.db") as connection:
-        connection.execute("UPDATE drafts SET payload=? WHERE task_id=?", (original_manifest, draft["task_id"]))
-        altered_package = json.loads(original_manifest)
-        altered_package["package"]["cover_letter"] = "Unconfirmed replacement letter"
-        connection.execute("UPDATE drafts SET payload=? WHERE task_id=?", (json.dumps(altered_package), draft["task_id"]))
-    call(directory, inputs, "task", "resume", draft["task_id"], "--decision", "confirm", expected=1)
-    with sqlite3.connect(directory / "opportunities.db") as connection:
-        connection.execute("UPDATE drafts SET payload=? WHERE task_id=?", (original_manifest, draft["task_id"]))
+    assert "feedback" not in stored_input
+    assert package["status"] == "completed" and package["reason"] is None and package["allowed_actions"] == []
+    assert package["artifact"]["outcome"] == "package"
+    files = package["artifact"]["artifact"]["files"]
+    assert set(files) == {"resume_payload", "changes", "cover_letter", "upskill", "interview_prep", "questions",
+                          "resume_pdf", "resume_metadata"}
+    assert all(Path(path).is_file() for path in files.values())
+    assert Path(files["cover_letter"]).read_text() == "Grounded cover letter"
+    assert package["artifact"]["artifact"]["pdf_receipt"]["pages"] == 1
 
-    deferred = call(directory, inputs, "task", "resume", draft["task_id"], "--decision", "defer")
-    assert deferred["status"] == "waiting" and deferred["reason"] == "user_deferred"
-    confirmed = call(directory, inputs, "task", "resume", draft["task_id"], "--decision", "confirm")
-    assert confirmed["status"] == "completed"
-    assert confirmed["artifact"]["outcome"] == "package_confirmed"
-    assert call(directory, inputs, "task", "cancel", draft["task_id"])["status"] == "completed"
-    cover_letter.write_text("changed after confirmation")
-    call(directory, inputs, "task", "resume", draft["task_id"], "--decision", "confirm", expected=1)
-    cover_letter.write_text(original_letter)
-    assert call(directory, inputs, "task", "resume", draft["task_id"], "--decision", "confirm") == confirmed
-    for args in (("--decision", "defer"), ("--feedback", "Retry completed work")):
-        call(directory, inputs, "task", "resume", draft["task_id"], *args, expected=1)
-        assert call(directory, inputs, "task", "show", draft["task_id"])["status"] == "completed"
-    (inputs / "cv.md").write_text("Verified candidate facts changed after confirmation")
-    call(directory, inputs, "task", "resume", draft["task_id"], "--decision", "confirm", expected=1)
-    (inputs / "cv.md").write_text("Verified candidate facts")
-
-    second = source(root / "second.json", "job-2", "Build agent workflows.")
-    call(directory, inputs, "task", "start", "scan", "job-2", str(second))
-    call(directory, inputs, "task", "start", "score", "job-2", "scan:job-2")
-    second_draft = call(directory, inputs, "task", "start", "apply", "job-2", "score:job-2")
-    (inputs / "writing-samples" / "sample.md").write_text("Changed writing sample")
-    assert call(directory, inputs, "task", "show", second_draft["task_id"])["reason"] == "input_changed"
-    (inputs / "writing-samples" / "sample.md").write_text("Approved writing sample")
-    ownership_probe = source(root / "ownership.json", "job-2", "Build changed agent workflows.")
-    call(directory, inputs, "task", "start", "scan", "job-2", str(ownership_probe), "--re-evaluate", expected=1)
-    assert call(directory, inputs, "task", "show", second_draft["task_id"])["status"] == "waiting"
-    revised = call(directory, inputs, "task", "resume", second_draft["task_id"], "--feedback", "Emphasize verified testing work")
-    assert revised["status"] == "waiting" and revised["attempt"] == 2
-    assert revised["artifact"]["version"] == 2
-
-    (inputs / "cv.md").write_text("Verified candidate facts changed")
-    invalid = call(directory, inputs, "task", "show", second_draft["task_id"])
-    assert invalid["reason"] == "input_changed"
-    rejected = call(directory, inputs, "task", "resume", second_draft["task_id"], "--decision", "confirm", expected=1)
-    refreshed = call(directory, inputs, "task", "resume", second_draft["task_id"], "--feedback", "Regenerate for current facts")
-    assert refreshed["attempt"] == 3 and refreshed["artifact"]["version"] == 3
-
-    changed_jd = root / "changed-jd.json"
-    changed_jd.write_text(json.dumps({
-        "schema_version": "jd_report_v1", "opportunity_id": "job-2",
-        "url": "https://example.com/job-2", "company": "Example", "role": "AI Engineer",
-        "captured_at": "2026-09-21T00:00:00Z", "liveness": "active", "jd": "Build agent workflows and production evaluation.",
-        "prescreen": {"status": "pass"},
-    }))
-    changed = call(directory, inputs, "task", "resume", second_draft["task_id"], "--input", str(changed_jd))
-    assert changed["reason"] == "jd_changed" and changed["input_change"]["diff"]
-    accepted = call(directory, inputs, "task", "resume", second_draft["task_id"], "--decision", "accept-jd-change")
-    assert accepted["status"] == "waiting" and accepted["artifact"]["version"] == 4
-    cancelled = call(directory, inputs, "task", "cancel", second_draft["task_id"])
-    assert cancelled["status"] == "cancelled"
-    assert call(directory, inputs, "task", "cancel", second_draft["task_id"])["status"] == "cancelled"
-    for args in (("--decision", "defer"), ("--feedback", "Retry cancelled work"), ("--input", str(changed_jd))):
-        call(directory, inputs, "task", "resume", second_draft["task_id"], *args, expected=1)
-        assert call(directory, inputs, "task", "show", second_draft["task_id"])["status"] == "cancelled"
-    with sqlite3.connect(directory / "opportunities.db") as connection:
-        assert connection.execute("SELECT COUNT(*) FROM feedback WHERE task_id=? AND text='Retry cancelled work'",
-                                  (second_draft["task_id"],)).fetchone()[0] == 0
-        assert connection.execute("SELECT COUNT(*) FROM events WHERE task_id=? AND type='cancelled'",
-                                  (second_draft["task_id"],)).fetchone()[0] == 1
-        assert connection.execute("SELECT COUNT(*) FROM events WHERE task_id=? AND type='cancelled'",
-                                  (draft["task_id"],)).fetchone()[0] == 0
-    store = BusinessStore(directory / "opportunities.db")
-    store.wait(second_draft["task_id"], "must_not_reopen")
-    assert store.task(second_draft["task_id"])["status"] == "cancelled"
-    count = store.db.execute("SELECT COUNT(*) FROM drafts WHERE task_id=?", (second_draft["task_id"],)).fetchone()[0]
-    try:
-        store.stage_draft({"task_id": second_draft["task_id"], "input_hash": store.task(second_draft["task_id"])["input_hash"]},
-                          {"files": {}})
-    except ValueError as error:
-        assert "no longer running" in str(error)
-    else:
-        raise AssertionError("Cancelled apply task staged another draft")
-    assert store.db.execute("SELECT COUNT(*) FROM drafts WHERE task_id=?", (second_draft["task_id"],)).fetchone()[0] == count
-    store.close()
+    assert call(directory, inputs, "task", "start", "apply", "job-1", "score:job-1")["task_id"] == package["task_id"]
+    call(directory, inputs, "task", "resume", package["task_id"], expected=1)
+    assert call(directory, inputs, "task", "cancel", package["task_id"])["status"] == "completed"
+    (inputs.parent / "rules" / "applications" / "workflow.md").write_text("Prepare materials; never submit or send.")
+    call(directory, inputs, "task", "start", "apply", "job-1", "score:job-1", expected=1)
+    regenerated = call(directory, inputs, "task", "start", "apply", "job-1", "score:job-1", "--re-evaluate")
+    assert regenerated["status"] == "completed" and regenerated["task_id"] != package["task_id"]
+    assert all(Path(path).is_file() for path in files.values())
 
     third = source(root / "third.json", "job-3", "Build reliable AI agents.")
     call(directory, inputs, "task", "start", "scan", "job-3", str(third))
     call(directory, inputs, "task", "start", "score", "job-3", "scan:job-3")
-    crashed = subprocess.run(
-        [str(PYTHON), str(ROOT / "tests/fixtures/workflow-cli.py"), "--directory", str(directory), "task", "start", "apply", "job-3", "score:job-3", "--crash-at", "publish"],
-        text=True, capture_output=True,
-        env={**os.environ, "CAREER_OPS_MODEL_STUB": RUNNER, "CAREER_OPS_RESUME_RENDERER": RESUME_RENDERER,
-             "CAREER_OPS_INPUT_ROOT": str(inputs)},
-    )
-    assert crashed.returncode == 0
+    call(directory, inputs, "task", "start", "apply", "job-3", "score:job-3", "--crash-at", "publish", expected=86)
     crashed_task = next(task for task in call(directory, inputs, "task", "list") if task["opportunity_id"] == "job-3" and task["module"] == "apply")
     recovered = call(directory, inputs, "task", "run", crashed_task["task_id"])
-    assert recovered["status"] == "waiting" and recovered["reason"] == "user_review"
-    budgeted = call(directory, inputs, "task", "resume", crashed_task["task_id"], "--feedback", "force-budget")
-    assert budgeted["reason"] == "tool_budget_exhausted"
+    assert recovered["status"] == "completed" and recovered["artifact"]["outcome"] == "package"
 
     fourth = source(root / "fourth.json", "job-4", "Build verifiable AI agents.")
     call(directory, inputs, "task", "start", "scan", "job-4", str(fourth))
     call(directory, inputs, "task", "start", "score", "job-4", "scan:job-4")
     apply_call_log = root / "failed-export-model-calls.txt"
-    failed_export = subprocess.run(
-        [str(PYTHON), str(ROOT / "tests/fixtures/workflow-cli.py"), "--directory", str(directory), "task", "start", "apply", "job-4", "score:job-4"],
-        text=True, capture_output=True,
-        env={**os.environ, "CAREER_OPS_MODEL_STUB": RUNNER, "CAREER_OPS_RESUME_RENDERER": RESUME_RENDERER,
-             "CAREER_OPS_INPUT_ROOT": str(inputs), "CAREER_OPS_RESUME_FAIL_ONCE": str(root / "export-failed"),
-             "WORKFLOW_TEST_CALL_LOG": str(apply_call_log)},
-    )
-    assert failed_export.returncode == 1
+    call(directory, inputs, "task", "start", "apply", "job-4", "score:job-4", expected=1,
+         extra_env={"CAREER_OPS_RESUME_FAIL_ONCE": str(root / "export-failed"), "WORKFLOW_TEST_CALL_LOG": str(apply_call_log)})
     export_task = next(task for task in call(directory, inputs, "task", "list") if task["opportunity_id"] == "job-4" and task["module"] == "apply")
-    assert export_task["reason"] == "failure:RuntimeError"
-    export_recovered = call(directory, inputs, "task", "run", export_task["task_id"],
+    assert export_task["reason"] == "failure:RuntimeError" and export_task["allowed_actions"] == ["resume", "cancel"]
+    call(directory, inputs, "task", "resume", export_task["task_id"], "--input", str(fourth), expected=1)
+    export_recovered = call(directory, inputs, "task", "resume", export_task["task_id"],
                             extra_env={"WORKFLOW_TEST_CALL_LOG": str(apply_call_log)})
-    assert export_recovered["status"] == "waiting" and export_recovered["reason"] == "user_review"
+    assert export_recovered["status"] == "completed"
     assert apply_call_log.read_text().splitlines() == ["apply_evaluate"]
-    assert export_recovered["artifact"]["version"] == 1
-    assert Path(export_recovered["artifact"]["files"]["resume_pdf"]).is_file()
+    assert Path(export_recovered["artifact"]["artifact"]["files"]["resume_pdf"]).is_file()
 
-print("workflow apply: package HITL, invalidation, JD choice and confirmation passed")
+    fifth = source(root / "fifth.json", "job-5", "Build observable AI agents.")
+    call(directory, inputs, "task", "start", "scan", "job-5", str(fifth))
+    call(directory, inputs, "task", "start", "score", "job-5", "scan:job-5")
+    call(directory, inputs, "task", "start", "apply", "job-5", "score:job-5", expected=1,
+         extra_env={"CAREER_OPS_RESUME_FAIL_ONCE": str(root / "export-failed-again")})
+    failed_task = next(task for task in call(directory, inputs, "task", "list") if task["opportunity_id"] == "job-5" and task["module"] == "apply")
+    call(directory, inputs, "task", "start", "score", "job-5", "scan:job-5", "--re-evaluate")
+    superseding = call(directory, inputs, "task", "start", "apply", "job-5", "score:job-5")
+    assert superseding["status"] == "completed" and superseding["task_id"] != failed_task["task_id"]
+    assert call(directory, inputs, "task", "show", failed_task["task_id"])["status"] == "cancelled"
+
+print("workflow apply: direct publication, regeneration, failure recovery and draft migration passed")

@@ -38,7 +38,6 @@ def _tracker(db: sqlite3.Connection) -> dict | None:
     application_count = sum(counts.values())
     excluded = 0
     unknown = 0
-    reviews = 0
     failures = 0
     if _table(db, "results"):
         outcomes = db.execute("""SELECT r.opportunity_id,r.outcome FROM (
@@ -50,9 +49,8 @@ def _tracker(db: sqlite3.Connection) -> dict | None:
         waiting = {str(row["opportunity_id"]): row["waiting_reason"] for row in db.execute(
             "SELECT opportunity_id,waiting_reason FROM tasks WHERE status='waiting' ORDER BY rowid"
         )}
-        unknown = sum(reason in {"source_access_unknown", "core_evidence_missing", "jd_changed", "input_changed"}
+        unknown = sum(reason in {"source_access_unknown", "core_evidence_missing", "input_changed"}
                       for reason in waiting.values())
-        reviews = sum(reason == "user_review" for reason in waiting.values())
         failures = sum(reason and (reason.startswith("failure:") or reason == "workflow_version_incompatible")
                        for reason in waiting.values())
     by_state = {row["state"]: row["count"] for row in db.execute(
@@ -62,7 +60,7 @@ def _tracker(db: sqlite3.Connection) -> dict | None:
             "by_application_status": counts, "by_opportunity_state": by_state,
             "active_applications": sum(counts[status] for status in ACTIVE),
             "last_retained_exclusions": excluded, "waiting_for_evidence": unknown,
-            "waiting_for_review": reviews, "waiting_after_failure": failures,
+            "waiting_after_failure": failures,
             "definition": "Stored lifecycle state and latest retained result; last active JD evidence is historical, not a live posting check."}
 
 

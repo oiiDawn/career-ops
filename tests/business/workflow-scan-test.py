@@ -376,7 +376,7 @@ with tempfile.TemporaryDirectory(prefix="career-ops-cron-stale-") as temporary:
                      (json.dumps({"outcome": "jd_report", "artifact": {**report, "jd": "Changed current JD."}}), scanned["task_id"]))
     assert store.score_views()[0]["stale_reason"] == "candidate_or_policy_inputs_changed"
     pending = store.start("1", "score", "new-input", re_evaluate=True)
-    store.wait(pending["task_id"], "user_deferred")
+    store.wait(pending["task_id"], "source_access_unknown")
     store.close()
     # With nothing stale left, the failed task gets its one retry, and only then is the unconfirmed posting probed.
     with patch("career_ops.tasks.resume_task", return_value={"status": "waiting"}) as resume:

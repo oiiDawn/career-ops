@@ -16,7 +16,7 @@ ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
 
 from career_ops.dashboard.actions import ActionRunner  # noqa: E402
-from career_ops.input_contracts import digest, score_inputs  # noqa: E402
+from career_ops.input_contracts import apply_inputs, digest, score_inputs  # noqa: E402
 from career_ops.dashboard.server import handler_for  # noqa: E402
 
 
@@ -53,6 +53,8 @@ with tempfile.TemporaryDirectory() as temporary:
     package.mkdir()
     (package / "upskill.md").write_text("# Upskill\n\nLearn **evals**.")
     (package / "interview-prep.md").write_text("# Prep")
+    (package / "resume.json").write_text("{}")
+    (package / "resume.pdf").write_text("%PDF-1.4 fixture")
     (directory / "secret.md").write_text("not referenced")
     score = {"direction": 4.96, "compensation": None, "company": 4.02, "culture": None}
     prescreen = {"status": "pass"}
@@ -63,12 +65,11 @@ with tempfile.TemporaryDirectory() as temporary:
         CREATE TABLE opportunities(id INTEGER PRIMARY KEY,url TEXT,company TEXT,role TEXT,source TEXT,state TEXT,application_state TEXT,created_at TEXT DEFAULT CURRENT_TIMESTAMP);
         CREATE TABLE tasks(task_id TEXT PRIMARY KEY,opportunity_id TEXT,module TEXT,status TEXT,input_hash TEXT,attempt INTEGER,waiting_reason TEXT,workflow_version TEXT,input_payload TEXT);
         CREATE TABLE results(result_key TEXT PRIMARY KEY,task_id TEXT UNIQUE,opportunity_id TEXT,module TEXT,input_hash TEXT,payload TEXT);
-        CREATE TABLE drafts(task_id TEXT,version INTEGER,input_hash TEXT,package_hash TEXT,payload TEXT,PRIMARY KEY(task_id,version));
         CREATE TABLE eligibility(opportunity_id INTEGER PRIMARY KEY,status TEXT,evidence TEXT,created_at TEXT DEFAULT CURRENT_TIMESTAMP);
         CREATE TABLE evaluations(opportunity_id INTEGER PRIMARY KEY,lower_score REAL,upper_score REAL,coverage REAL,dimension_scores TEXT,report_hash TEXT,created_at TEXT DEFAULT CURRENT_TIMESTAMP);
         CREATE TABLE artifacts(id INTEGER PRIMARY KEY,opportunity_id INTEGER,kind TEXT,path TEXT,sha256 TEXT);
         CREATE TABLE application_lifecycle(opportunity_id TEXT PRIMARY KEY,status TEXT,updated_at TEXT DEFAULT CURRENT_TIMESTAMP);
-        CREATE TABLE application_events(id INTEGER PRIMARY KEY,operation_id TEXT,opportunity_id TEXT,from_status TEXT,to_status TEXT,action TEXT,source TEXT,payload TEXT,package_result_key TEXT,created_at TEXT DEFAULT CURRENT_TIMESTAMP);
+        CREATE TABLE application_events(id INTEGER PRIMARY KEY,operation_id TEXT,opportunity_id TEXT,from_status TEXT,to_status TEXT,action TEXT,source TEXT,payload TEXT,created_at TEXT DEFAULT CURRENT_TIMESTAMP);
         INSERT INTO opportunities(id,url,company,role,source,state,application_state) VALUES
           (1,'https://example.com/1','Acme','Scanned Engineer','search','discovered','none'),
           (2,'https://example.com/2','Beta','Scored Engineer','provider','evaluated','none'),
@@ -93,10 +94,20 @@ with tempfile.TemporaryDirectory() as temporary:
         db.execute("INSERT INTO tasks VALUES(?,?,?,?,?,?,?,?,?)", (f"score-{opportunity}", opportunity, "score", "completed", input_hash, 1, None, "v", score_inputs(jd_report(opportunity))))
         scored = {"outcome": "score", "input_hash": input_hash, "artifact": {"report": "## A. 岗位概览\n\nGood fit", "score": score, "scoring_model": "attractiveness-v4", "dimensions": {"culture": {"score": None, "reason": "no_matching_valid_profile"}}, "company_profiles": {"company": {"profile_id": "company-x", "valid_until": "2000-01-01"}}}}
         db.execute("INSERT INTO results VALUES(?,?,?,?,?,?)", (f"score-{opportunity}", f"score-{opportunity}", opportunity, "score", input_hash, json.dumps(scored)))
-    db.execute("INSERT INTO tasks VALUES('apply-3','3','apply','waiting','h',1,'user_review','v','{}')")
-    db.execute("INSERT INTO drafts VALUES('apply-3',1,'h','p',?)", (json.dumps({"files": {
-        "upskill": str(package / "upskill.md"), "interview_prep": str(package / "interview-prep.md"),
-        "resume_pdf": str(package / "missing.pdf")}}),))
+        if opportunity == "2":
+            current_apply_hash = digest(apply_inputs(jd_report(opportunity), scored))
+    # Job 3 keeps a superseded package and a newer one whose inputs have since changed; job 2's package is current.
+    packages = (
+        ("apply-3-old", "3", "old", {"upskill": str(directory / "secret.md")}),
+        ("apply-3", "3", "h", {
+            "upskill": str(package / "upskill.md"), "interview_prep": str(package / "interview-prep.md"),
+            "resume_pdf": str(package / "missing.pdf"), "resume_payload": str(package / "resume.json")}),
+        ("apply-2", "2", current_apply_hash, {"resume_pdf": str(package / "resume.pdf")}),
+    )
+    for task_id, opportunity, input_hash, files in packages:
+        db.execute("INSERT INTO tasks VALUES(?,?,'apply','completed',?,1,NULL,'v','{}')", (task_id, opportunity, input_hash))
+        db.execute("INSERT INTO results VALUES(?,?,?,'apply',?,?)", (task_id, task_id, opportunity, input_hash, json.dumps(
+            {"outcome": "package", "input_hash": input_hash, "artifact": {"files": files}})))
     db.commit()
     db.close()
     before = hashlib.sha256(database.read_bytes()).hexdigest()
@@ -113,21 +124,27 @@ with tempfile.TemporaryDirectory() as temporary:
         assert jobs[2]["dimensions"]["culture"]["reason"] == "no_matching_valid_profile"
         assert jobs[2]["profile_expired"] and jobs[2]["profile_shared"] == {"company": 2} and not jobs[1]["profile_expired"]
         assert jobs[2]["scores"]["direction"] == 4.96 and jobs[3]["action"] is None
-        assert jobs[3]["application_status"] == "applied" and jobs[3]["material_count"] == 1
+        assert jobs[3]["application_status"] == "applied" and jobs[3]["material_count"] == 2
         assert jobs[3]["url"] == "https://example.com/3" and jobs[1]["location"] == "Shanghai"
         assert [jobs[i]["score_current"] for i in (1, 2, 3)] == [None, True, False]
 
         detail = fetch(base, "/api/jobs/3")
         assert detail["report"].startswith("## A.") and detail["jd"] == "JD text"
         assert detail["application_events"][0]["payload"] == {"notes": "ok"}
-        materials = {item["key"]: item for item in detail["materials"]}
-        assert materials["upskill"]["content"].startswith("# Upskill") and materials["upskill"]["package"] == "draft v1"
-        assert not materials["resume_pdf"]["exists"] and "path" not in materials["upskill"]
+        assert [item["id"] for item in detail["materials"]] == ["resume_pdf", "interview_prep", "upskill"], "latest package only, display order"
+        materials = {item["id"]: item for item in detail["materials"]}
+        assert materials["upskill"] == {"id": "upskill", "label": "Upskill", "content": "# Upskill\n\nLearn **evals**.", "exists": True}
+        assert not materials["resume_pdf"]["exists"] and materials["resume_pdf"]["content"] is None
+        assert detail["materials_current"] is False and "confirmed_package" not in detail
+        current = fetch(base, "/api/jobs/2")
+        assert current["materials_current"] is True and current["materials"][0]["exists"]
+        assert fetch(base, "/api/jobs/1")["materials_current"] is None
 
-        upskill_id = materials["upskill"]["id"]
-        assert "Learn **evals**" in fetch(base, f"/api/jobs/3/file?id={upskill_id}")
-        fetch(base, f"/api/jobs/2/file?id={upskill_id}", 404)
-        fetch(base, f"/api/jobs/3/file?id={materials['resume_pdf']['id']}", 404)
+        assert "Learn **evals**" in fetch(base, "/api/jobs/3/file?id=upskill")
+        assert fetch(base, "/api/jobs/2/file?id=resume_pdf") == "%PDF-1.4 fixture"
+        fetch(base, "/api/jobs/2/file?id=upskill", 404)
+        fetch(base, "/api/jobs/3/file?id=resume_pdf", 404)
+        fetch(base, "/api/jobs/3/file?id=resume_payload", 404)
         fetch(base, "/api/jobs/3/file?id=" + str(directory / "secret.md"), 404)
         fetch(base, "/api/jobs/99", 404)
 
@@ -147,7 +164,7 @@ with tempfile.TemporaryDirectory() as temporary:
         assert fetch(base, "/api/jobs/2/run")["run"]["action"] == "prepare" and fetch(base, "/api/jobs/3/run")["run"] is None
         assert {job["id"]: job["run"] for job in fetch(base, "/api/jobs")} == {
             1: {"action": "rescore", "status": "running"}, 2: {"action": "prepare", "status": "running"}, 3: None}
-        assert fetch(base, "/api/jobs/3")["apply_task"] == {"task_id": "apply-3", "status": "waiting", "reason": "user_review"}
+        assert fetch(base, "/api/jobs/3")["apply_task"] == {"task_id": "apply-3", "status": "completed", "reason": None}
     finally:
         server.shutdown()
         server.server_close()
@@ -168,7 +185,7 @@ with tempfile.TemporaryDirectory() as temporary:
     assert finished["status"] == "failed" and finished["finished_at"], finished
     assert "Current score is stale" in finished["error"], finished["error"]
     with sqlite3.connect(database) as check:
-        assert check.execute("SELECT COUNT(*) FROM tasks WHERE opportunity_id='3' AND module='apply'").fetchone()[0] == 1
+        assert check.execute("SELECT COUNT(*) FROM tasks WHERE opportunity_id='3' AND module='apply'").fetchone()[0] == 2
 
     # Application records are written synchronously through the CLI with the page's idempotency key.
     server = ThreadingHTTPServer(("127.0.0.1", 0), handler_for(database, StubRunner()))

@@ -26,7 +26,6 @@ Daily commands derive inputs from the opportunity ID:
 .venv/bin/python -B -m career_ops apply prepare 123
 .venv/bin/python -B -m career_ops interview preparation-plan 123
 .venv/bin/python -B -m career_ops task show TASK_ID
-.venv/bin/python -B -m career_ops task resume TASK_ID --decision confirm
 ```
 
 Use `task start scan|score|apply ID INPUT` for explicit input imports. Business

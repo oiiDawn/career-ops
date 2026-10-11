@@ -85,8 +85,8 @@ def application_package_error(decision: dict) -> str | None:
 
 
 def _prompt(payload: dict) -> str:
-    prompt = """Prepare one application package from only the supplied candidate facts, completed JD scan, score report, rules, requirements, optional writing evidence and user feedback. Apply the market employment rule relevant to the posting; do not treat a remote label as proof of lawful employment.
-For a first draft, return JSON with exactly these package fields:
+    prompt = """Prepare one application package from only the supplied candidate facts, completed JD scan, score report, rules, requirements, and optional writing evidence. Apply the market employment rule relevant to the posting; do not treat a remote label as proof of lawful employment.
+Return JSON with exactly these package fields:
 - resume_payload: exact input for reactive-resume.mjs. candidate has name/email/phone/location and optional linkedin/github/portfolio {url,display}; headline and summary are strings; competencies is a string array; experience entries use {company,role,location,dates,bullets:string[]}; projects use {name,url,tech,badge,bullets:string[]}; education uses {org,title,year,description}; certifications and awards use {org,title,year}; skills use {category,items:string[]}. Optional projects_start_on_new_page is a boolean layout instruction; use true when layout feedback says the Projects heading is orphaned at a page end, otherwise false. Preserve facts; tailor experience through evidence-backed selection, ordering or rewriting. Never use points/institution/degree keys. Do not invent or upgrade prototypes.
 - changes: Markdown listing every material CV change and its source evidence.
 - cover_letter: write in the configured language.output, with the substance of a 250-300 word letter (adapt length naturally for Chinese). Address the company hiring team unless a named person is supplied. Open with the role and strongest evidence-backed match; map 3 concrete achievements to the role; explain why this company using only supplied evidence; close directly. Use active first-person language, no clichés, em dashes, empty praise, or invented company facts.
@@ -96,8 +96,6 @@ For a first draft, return JSON with exactly these package fields:
 Each of changes, cover_letter, upskill, interview_prep, and questions must be a Markdown STRING, not an array or object. Do not calculate a decimal-year career length from dates; use only the tenure wording explicitly supported by candidate sources. REST APIs, Docker deployment and a full-stack platform do not by themselves prove microservice architecture or delivery. Keep the resume skills concise and nonduplicative.
 Write user-facing material in the configured output language. Never submit, send, contact anyone, or modify a base resume. No prose outside JSON.
 """
-    if payload.get("previous_artifact"):
-        prompt += """The previous_artifact is a draft, not evidence. Revise it only for the supplied feedback. Return a JSON object containing only changed top-level package fields; omit unchanged fields. If changing resume_payload, return its complete replacement. The unchanged fields will be retained and the merged package validated. Do not return an empty patch or extra fields.\n"""
     return prompt
 
 
@@ -124,15 +122,6 @@ def apply_evaluate(payload: dict, draft_root: Path) -> dict:
         )[0]
         return {"prompt": prompt, "decision": decision, "tool_calls": 1}
 
-    def merge_revision(state: ApplyState) -> dict:
-        previous = state["payload"].get("previous_artifact")
-        if not previous:
-            return {"decision": state["decision"]}
-        decision = state["decision"]
-        if not isinstance(previous, dict) or not isinstance(decision, dict) or not decision or set(decision) - set(previous):
-            raise ValueError("Invalid application revision patch")
-        return {"decision": {**previous, **decision}}
-
     def validate(state: ApplyState) -> dict:
         decision = state["decision"]
         return {"decision": decision, "defect": application_package_error(decision)}
@@ -156,13 +145,11 @@ def apply_evaluate(payload: dict, draft_root: Path) -> dict:
 
     graph = StateGraph(ApplyState)
     graph.add_node("draft", draft)
-    graph.add_node("merge_revision", merge_revision)
     graph.add_node("validate", validate)
     graph.add_node("repair", repair)
     graph.add_node("finish", finish)
     graph.add_edge(START, "draft")
-    graph.add_edge("draft", "merge_revision")
-    graph.add_edge("merge_revision", "validate")
+    graph.add_edge("draft", "validate")
     graph.add_conditional_edges("validate", lambda state: "repair" if state["defect"] else "finish",
                                 {"repair": "repair", "finish": "finish"})
     graph.add_edge("repair", "finish")

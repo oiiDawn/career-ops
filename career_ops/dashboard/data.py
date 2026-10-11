@@ -10,18 +10,17 @@ import sqlite3
 from career_ops.applications.application_lifecycle import OUTCOMES, TRANSITIONS
 from career_ops.evaluation.capabilities import core_counts, rows as capability_rows
 from career_ops.evaluation.decisions import classify, valid_scores
-from career_ops.input_contracts import score_is_current
+from career_ops.input_contracts import apply_inputs, digest, score_is_current
 
 
+# The package files the page shows, in display order; the rendering intermediates stay on disk.
 MATERIAL_LABELS = {
-    "changes": "简历改动 / Resume changes",
-    "cover_letter": "Cover letter",
-    "upskill": "Upskill 计划",
-    "interview_prep": "面试准备 / Interview prep",
-    "questions": "反问问题 / Questions",
-    "resume_payload": "简历 JSON",
     "resume_pdf": "简历 PDF",
-    "resume_metadata": "Reactive Resume 元数据",
+    "cover_letter": "Cover letter",
+    "interview_prep": "面试准备",
+    "upskill": "Upskill",
+    "questions": "反问问题",
+    "changes": "简历改动",
 }
 TEXT_SUFFIXES = {".md", ".json", ".txt"}
 
@@ -146,31 +145,19 @@ def list_jobs(db: sqlite3.Connection) -> list[dict]:
     return jobs
 
 
-def _apply_packages(db: sqlite3.Connection, opportunity_id: str) -> list[dict]:
-    """Confirmed packages first, then the newest staged draft of each apply task."""
-    packages = []
-    for row in db.execute(
-        "SELECT task_id,payload FROM results WHERE opportunity_id=? AND module='apply' ORDER BY rowid DESC", (opportunity_id,)
-    ):
-        artifact = json.loads(row["payload"]).get("artifact", {})
-        packages.append({"source": "confirmed", "task_id": row["task_id"], "version": artifact.get("version"),
-                         "files": artifact.get("files", {})})
-    for row in db.execute(
-        "SELECT d.task_id,d.version,d.payload FROM drafts d JOIN tasks t ON t.task_id=d.task_id "
-        "WHERE t.opportunity_id=? AND d.version=(SELECT MAX(version) FROM drafts WHERE task_id=d.task_id) "
-        "ORDER BY d.rowid DESC", (opportunity_id,)
-    ):
-        if any(package["task_id"] == row["task_id"] for package in packages):
-            continue
-        packages.append({"source": "draft", "task_id": row["task_id"], "version": row["version"],
-                         "files": json.loads(row["payload"]).get("files", {})})
-    return packages
+def _package_current(package: dict | None, scan: dict | None, score_result: dict | None) -> bool | None:
+    """Whether the latest package was prepared from today's JD, score, candidate and rule inputs."""
+    if not package:
+        return None
+    try:
+        return package["input_hash"] == digest(apply_inputs(scan["artifact"], score_result))
+    except (KeyError, OSError, TypeError, ValueError):
+        return False
 
 
 def _material_counts(db: sqlite3.Connection) -> dict[str, int]:
     counts: dict[str, int] = {}
-    for row in db.execute("SELECT opportunity_id,task_id FROM results WHERE module='apply' UNION "
-                          "SELECT t.opportunity_id,d.task_id FROM drafts d JOIN tasks t ON t.task_id=d.task_id"):
+    for row in db.execute("SELECT opportunity_id FROM results WHERE module='apply'"):
         counts[str(row[0])] = counts.get(str(row[0]), 0) + 1
     if _has_table(db, "interview_results"):
         for row in db.execute("SELECT t.opportunity_id FROM interview_results r JOIN interview_tasks t ON t.task_id=r.task_id"):
@@ -179,17 +166,9 @@ def _material_counts(db: sqlite3.Connection) -> dict[str, int]:
 
 
 def material_files(db: sqlite3.Connection, opportunity_id: str) -> list[dict]:
-    """Every file the store references for this opportunity; the only paths the server may read."""
-    files = []
-    for package in _apply_packages(db, opportunity_id):
-        for key, path in sorted(package["files"].items()):
-            files.append({"id": f"{package['task_id']}:{package['version']}:{key}", "key": key,
-                          "label": MATERIAL_LABELS.get(key, key), "path": path,
-                          "package": f"{package['source']} v{package['version']}"})
-    for row in db.execute("SELECT id,kind,path FROM artifacts WHERE opportunity_id=? AND kind!='report'", (opportunity_id,)):
-        files.append({"id": f"artifact:{row['id']}", "key": row["kind"], "label": MATERIAL_LABELS.get(row["kind"], row["kind"]),
-                      "path": row["path"], "package": "artifact"})
-    return files
+    """The displayed files of this opportunity's latest package; the only paths the server may read."""
+    files = (_latest_results(db, "apply").get(opportunity_id) or {}).get("artifact", {}).get("files", {})
+    return [{"id": key, "label": label, "path": files[key]} for key, label in MATERIAL_LABELS.items() if key in files]
 
 
 def _interview_materials(db: sqlite3.Connection, opportunity_id: str) -> list[dict]:
@@ -237,14 +216,6 @@ def status_options(status: str | None) -> list[str]:
     return options + [name for name, target in OUTCOMES.items() if target in allowed or (allowed and target == status)]
 
 
-def confirmed_package(db: sqlite3.Connection, opportunity_id: str) -> str | None:
-    row = db.execute(
-        "SELECT result_key FROM results WHERE opportunity_id=? AND module='apply' "
-        "AND json_extract(payload,'$.outcome')='package_confirmed' ORDER BY rowid DESC LIMIT 1", (opportunity_id,)
-    ).fetchone()
-    return row["result_key"] if row else None
-
-
 def job_detail(db: sqlite3.Connection, opportunity_id: int) -> dict | None:
     """The full retained record of one opportunity for the detail panel."""
     job = next((item for item in list_jobs(db) if item["id"] == opportunity_id), None)
@@ -256,8 +227,8 @@ def job_detail(db: sqlite3.Connection, opportunity_id: int) -> dict | None:
     scan_artifact = (scan or {}).get("artifact", {})
     eligibility = db.execute("SELECT status,evidence,created_at FROM eligibility WHERE opportunity_id=?", (key,)).fetchone()
     materials = [
-        {**{k: v for k, v in item.items() if k != "path"}, "name": Path(item["path"]).name,
-         "content": read_text(item["path"]), "exists": Path(item["path"]).is_file()}
+        {"id": item["id"], "label": item["label"], "content": read_text(item["path"]),
+         "exists": Path(item["path"]).is_file()}
         for item in material_files(db, key)
     ]
     return {
@@ -271,7 +242,7 @@ def job_detail(db: sqlite3.Connection, opportunity_id: int) -> dict | None:
         "application_activity": _rows(db, "application_activity", key),
         "followups": _rows(db, "application_followup_directives", key),
         "status_options": status_options(job["application_status"]),
-        "confirmed_package": confirmed_package(db, key),
         "materials": materials,
+        "materials_current": _package_current(_latest_results(db, "apply").get(key), scan, score_result),
         "interviews": _interview_materials(db, key),
     }

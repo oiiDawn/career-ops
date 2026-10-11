@@ -83,11 +83,9 @@ def parser() -> argparse.ArgumentParser:
     start.add_argument("--re-evaluate", action="store_true")
     run = tasks.add_parser("run", help="continue a running or failed checkpoint")
     run.add_argument("task_id")
-    resume = tasks.add_parser("resume", help="resume with new input, feedback or a decision")
+    resume = tasks.add_parser("resume", help="resume a waiting task, optionally with new input")
     resume.add_argument("task_id")
     resume.add_argument("--input")
-    resume.add_argument("--feedback")
-    resume.add_argument("--decision", choices=("confirm", "defer", "accept-jd-change"))
     task_show = tasks.add_parser("show")
     task_show.add_argument("identifier")
     tasks.add_parser("list")
@@ -280,10 +278,7 @@ def main() -> None:
                     db.row_factory = sqlite3.Row
                     result = [dict(row) for row in db.execute("SELECT id,url,company,role,state FROM opportunities ORDER BY id DESC")]
         elif args.operation == "resume":
-            resume_task(
-                args.directory, args.task_id, args.input, None,
-                feedback=args.feedback, decision=args.decision,
-            )
+            resume_task(args.directory, args.task_id, args.input, None)
             result = view(args.directory, args.task_id)
         elif args.operation == "show":
             result = view(args.directory, args.identifier)

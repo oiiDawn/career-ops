@@ -133,7 +133,7 @@ def handler_for(database: Path, runner: ActionRunner) -> type[BaseHTTPRequestHan
                 if job is None:
                     self.send_json({"error": "not found"}, HTTPStatus.NOT_FOUND)
                     return
-                command = record_command(opportunity_id, body, job["status_options"], job["confirmed_package"])
+                command = record_command(opportunity_id, body, job["status_options"])
                 self.send_json({"result": run_cli(database.parent, command)})
             except ValueError as error:  # bad form input or a lifecycle refusal the page should show
                 self.send_json({"error": str(error)}, HTTPStatus.CONFLICT)

@@ -35,7 +35,7 @@ with tempfile.TemporaryDirectory() as temporary:
         INSERT INTO opportunities(id,url,company,role,source,state,application_state) VALUES(42,'https://example.com/job/42','Example','Engineer','provider','discovered','none');
         INSERT INTO artifacts VALUES(1,42,'verified-application-pdf','/review/resume.pdf','sha-42');
         INSERT INTO tasks VALUES('apply-1','42','apply','completed','hash',1,NULL,'oii-333-v1','{}');
-        INSERT INTO results VALUES('apply-1','apply-1','42','apply','hash','{"outcome":"package_confirmed","artifact":{"version":2,"package_hash":"package-42","files":{"resume_pdf":"/review/resume.pdf"},"file_hashes":{"resume_pdf":"sha-42"}}}');
+        INSERT INTO results VALUES('apply-1','apply-1','42','apply','hash','{"outcome":"package","artifact":{"version":2,"package_hash":"package-42","files":{"resume_pdf":"/review/resume.pdf"},"file_hashes":{"resume_pdf":"sha-42"}}}');
         """
     )
     database.close()
@@ -105,40 +105,11 @@ with tempfile.TemporaryDirectory() as temporary:
     assert view["status"] == "hired"
     assert view["opportunity"]["company"] == "Example"
     assert view["artifacts"][0]["path"] == "/review/resume.pdf"
-    assert view["confirmedPackage"] is None
-    assert view["events"][0]["packageResultKey"] is None
     assert [item["kind"] for item in view["followupDirectives"]] == ["schedule", "retire", "reopen"]
     offer_activity = next(item for item in view["activities"] if item["type"] == "offer_prepared")
     assert offer_activity["payload"]["evidence"]["sha256"] == "offer-sha"
     assert offer_activity["source"] == "candidate-confirmed"
     assert [event["toStatus"] for event in view["events"]] == ["applied", "interview", "offer", "hired"]
-    database = sqlite3.connect(directory / "opportunities.db")
-    assert database.execute("SELECT COUNT(*) FROM application_activity WHERE operation_id IN ('offer-42','hired-42')").fetchone()[0] == 0, "outcomes live only in application_events"
-    database.close()
-    assert call(directory, "followups")["entries"] == []
-    assert call(directory, "view")[0]["company"] == "Example"
-    assert sqlite3.connect(directory / "opportunities.db").execute("SELECT application_state FROM opportunities WHERE id=42").fetchone()[0] == "submitted"
-
-    database = sqlite3.connect(directory / "opportunities.db")
-    database.executescript(
-        """
-        INSERT INTO opportunities(id,url,company,role,source,state,application_state) VALUES(43,'https://example.com/job/43','Example','Analyst','provider','discovered','none');
-        INSERT INTO tasks VALUES('apply-43a','43','apply','completed','hash-a',1,NULL,'oii-333-v1','{}');
-        INSERT INTO tasks VALUES('apply-43b','43','apply','completed','hash-b',1,NULL,'oii-333-v1','{}');
-        INSERT INTO results VALUES('apply-43a','apply-43a','43','apply','hash-a','{"outcome":"package_confirmed","artifact":{"package_hash":"package-43a"}}');
-        INSERT INTO results VALUES('apply-43b','apply-43b','43','apply','hash-b','{"outcome":"package_confirmed","artifact":{"package_hash":"package-43b"}}');
-        """
-    )
-    database.close()
-    for key in ("apply-1", "missing", 42):
-        invalid_link = call(directory, "submit", "43", "--confirmed", "--payload", json.dumps({"package_result_key": key}), "--idempotency-key", f"invalid-link-{key}", ok=False)
-        assert "package_result_key must identify" in invalid_link["error"]
-    assert call(directory, "view", "43") is None
-    selected = call(directory, "submit", "43", "--confirmed", "--payload", '{"package_result_key":"apply-43a"}', "--idempotency-key", "submit-43a")
-    assert selected["status"] == "applied"
-    assert call(directory, "view", "43")["events"][0]["packageResultKey"] == "apply-43a"
-    assert call(directory, "view", "43")["confirmedPackage"]["packageHash"] == "package-43a"
-
     database = sqlite3.connect(directory / "opportunities.db")
     database.execute("INSERT INTO opportunities(id,url,company,role,source,state,application_state) VALUES(44,'https://example.com/job/44','Example','Engineer','provider','evaluated','none')")
     database.commit()
@@ -147,12 +118,10 @@ with tempfile.TemporaryDirectory() as temporary:
     assert call(directory, *manual_args)["status"] == "applied"
     assert call(directory, *manual_args)["reused"]
     manual = call(directory, "view", "44")
-    assert manual["confirmedPackage"] is None
     assert manual["opportunity"]["applicationState"] == "submitted"
     assert len(manual["events"]) == 1
     assert manual["events"][0]["payload"]["notes"] == "Applied using default resume"
     assert manual["events"][0]["source"] == "user-confirmed"
-    assert manual["events"][0]["packageResultKey"] is None
 
 
 with tempfile.TemporaryDirectory() as temporary:

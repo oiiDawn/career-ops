@@ -14,4 +14,3 @@ class WorkflowState(TypedDict):
     waiting_reason: str | None
     material_hash: str
     tool_calls: int
-    has_prior_package: bool

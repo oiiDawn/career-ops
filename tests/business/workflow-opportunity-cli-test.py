@@ -48,12 +48,11 @@ with tempfile.TemporaryDirectory() as temporary:
     context = run("show", "1")
     assert context["opportunity"]["company"] == "Example" and context["results"]["scan"]["artifact"]["jd"] == jd
     prepared = run("apply", "prepare", "1")
-    assert prepared["status"] == "waiting" and prepared["reason"] == "user_review"
-    assert set(prepared["allowed_actions"]) == {"feedback", "confirm", "defer", "cancel"}
+    assert prepared["status"] == "completed" and prepared["artifact"]["outcome"] == "package"
     plan = run("interview", "preparation-plan", "1")
     assert plan["role"] == {"company": "Example", "title": "AI Engineer"}
     assert "require --view followups" in run("list", "--overdue-only", expected=2)
     assert "put global immediately" in run("discover", "--dry-run", "global", expected=2)
     assert "not allowed with argument" in run("system", "resolve-company", "Example", "--write", "--dry-run", expected=2)
     assert "requires --confirmed" in run("apply", "record", "submit", "1", "--idempotency-key", "unconfirmed", expected=1)
-print("opportunity CLI: derived inputs, stable tasks, review boundary and safe preview passed")
+print("opportunity CLI: derived inputs, stable tasks, published package and safe preview passed")

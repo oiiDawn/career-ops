@@ -22,8 +22,8 @@ def _now() -> str:
 def _command(action: str, opportunity_id: int) -> list[str]:
     target = str(opportunity_id)
     if action == "prepare":
-        # --re-evaluate is safe: unchanged inputs reuse the stored package and a waiting
-        # draft is returned as-is, so a model call only happens for new inputs.
+        # --re-evaluate is safe: unchanged inputs reuse the stored package, so a model
+        # call only happens for new inputs or after a failed attempt.
         return ["apply", "prepare", target, "--re-evaluate"]
     if action == "rescore":
         # Re-score the retained JD against current candidate and policy inputs without rescanning.
@@ -47,7 +47,7 @@ def run_cli(directory: Path, arguments: list[str]) -> dict | list:
     return json.loads(result.stdout)
 
 
-def record_command(opportunity_id: int, body: dict, status_options: list[str], package_key: str | None) -> list[str]:
+def record_command(opportunity_id: int, body: dict, status_options: list[str]) -> list[str]:
     """Translate one dashboard form into a confirmed `apply record` command; the lifecycle validates the rest."""
     def text(name: str) -> str:
         value = body.get(name)
@@ -67,7 +67,7 @@ def record_command(opportunity_id: int, body: dict, status_options: list[str], p
     value = ""
     if kind == "submit":
         action = "submit"
-        payload = {"submitted_at": day("date"), "package_result_key": package_key}
+        payload = {"submitted_at": day("date")}
     elif kind == "status":
         value = text("value")
         if value not in status_options:

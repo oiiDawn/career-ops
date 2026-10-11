@@ -35,13 +35,6 @@ def run(phase, payload):
             "tool_calls": 1,
         }
     elif phase == "apply_evaluate":
-        feedback = payload["inputs"].get("feedback", [])
-        if "Emphasize verified testing work" in feedback and "Regenerate for current facts" not in feedback:
-            assert payload.get("previous_artifact", {}).get("cover_letter") == "Grounded cover letter"
-        if "Regenerate for current facts" in feedback:
-            assert payload.get("previous_artifact") is None
-        if "force-budget" in feedback:
-            assert payload.get("previous_artifact", {}).get("cover_letter") == "Grounded cover letter"
         return {
             "outcome": "package",
             "artifact": {
@@ -52,7 +45,7 @@ def run(phase, payload):
                 "interview_prep": "# Interview preparation",
                 "questions": "# Questions",
             },
-            "tool_calls": 20 if "force-budget" in feedback else 1,
+            "tool_calls": 1,
         }
     elif phase == "evaluate":
         if os.environ.get("WORKFLOW_TEST_DURABLE_FAIL") or os.environ.get("WORKFLOW_TEST_DURABLE_SUCCESS"):

@@ -9,7 +9,7 @@ from pathlib import Path
 from career_ops.evaluation.decisions import classify as classify_decision, order as order_decisions, valid_scores
 from career_ops.evaluation.report import dimension_scores
 from career_ops.context import WORKFLOW_VERSION
-from career_ops.input_contracts import canonical_scan_input, digest, scan_is_current, score_inputs, score_is_current, verify_package_files
+from career_ops.input_contracts import canonical_scan_input, digest, scan_is_current, score_inputs, score_is_current
 from career_ops.task_state import WorkflowState
 
 
@@ -107,30 +107,11 @@ class BusinessStore:
               captured_at TEXT NOT NULL,
               payload TEXT NOT NULL
             );
-            CREATE TABLE IF NOT EXISTS drafts (
-              task_id TEXT NOT NULL REFERENCES tasks(task_id),
-              version INTEGER NOT NULL,
-              input_hash TEXT NOT NULL,
-              package_hash TEXT NOT NULL,
-              payload TEXT NOT NULL,
-              PRIMARY KEY(task_id,version)
-            );
-            CREATE TABLE IF NOT EXISTS feedback (
-              id INTEGER PRIMARY KEY,
-              task_id TEXT NOT NULL REFERENCES tasks(task_id),
-              text TEXT NOT NULL
-            );
             CREATE TABLE IF NOT EXISTS task_context (
               task_id TEXT NOT NULL REFERENCES tasks(task_id),
               key TEXT NOT NULL,
               payload TEXT NOT NULL,
               PRIMARY KEY(task_id,key)
-            );
-            CREATE TABLE IF NOT EXISTS confirmations (
-              task_id TEXT PRIMARY KEY REFERENCES tasks(task_id),
-              input_hash TEXT NOT NULL,
-              package_hash TEXT NOT NULL,
-              confirmed_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
             );
             """
         )
@@ -151,10 +132,7 @@ class BusinessStore:
                 COMMIT;
                 PRAGMA foreign_keys=ON;
             """)
-        draft_columns = {row[1] for row in self.db.execute("PRAGMA table_info(drafts)")}
-        for obsolete in ("review", "approved"):
-            if obsolete in draft_columns:
-                self.db.execute(f"ALTER TABLE drafts DROP COLUMN {obsolete}")
+        self.publish_staged_packages()
         task_columns = {row[1] for row in self.db.execute("PRAGMA table_info(tasks)")}
         if "elapsed_seconds" not in task_columns:
             self.db.execute("ALTER TABLE tasks ADD COLUMN elapsed_seconds REAL NOT NULL DEFAULT 0")
@@ -171,9 +149,52 @@ class BusinessStore:
             DROP INDEX IF EXISTS one_active_task_per_opportunity;
             CREATE UNIQUE INDEX one_active_task_per_opportunity
               ON tasks(opportunity_id)
-              WHERE status='running' OR (status='waiting' AND module='apply');
+              WHERE status='running';
             """
         )
+
+    def publish_staged_packages(self) -> None:
+        """Retire the review step: staged apply drafts become published packages, then the review tables go."""
+        if not self.db.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='drafts'").fetchone():
+            return
+        self.db.execute("BEGIN IMMEDIATE")
+        try:
+            staged = self.db.execute(
+                "SELECT t.task_id,t.opportunity_id,t.input_payload,d.package_hash,d.payload FROM tasks t "
+                "JOIN drafts d ON d.task_id=t.task_id AND d.version=(SELECT MAX(version) FROM drafts WHERE task_id=t.task_id) "
+                "WHERE t.module='apply' AND t.status='waiting' AND t.waiting_reason NOT LIKE 'failure:%' ORDER BY t.rowid"
+            ).fetchall()
+            for row in staged:
+                # Feedback left the apply input contract; rehash so an unchanged package still reads as current.
+                inputs = {key: value for key, value in json.loads(row["input_payload"]).items() if key != "feedback"}
+                input_text = json.dumps(inputs, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+                payload = {"module": "apply", "outcome": "package", "artifact": json.loads(row["payload"]),
+                           "input_hash": digest(input_text), "material_hash": row["package_hash"]}
+                published = self.db.execute(
+                    "INSERT OR IGNORE INTO results(result_key,task_id,opportunity_id,module,input_hash,payload) VALUES(?,?,?,?,?,?)",
+                    (row["task_id"], row["task_id"], row["opportunity_id"], "apply", payload["input_hash"],
+                     json.dumps(payload, sort_keys=True)),
+                ).rowcount
+                if published:
+                    self.db.execute(
+                        "UPDATE tasks SET status='completed',waiting_reason=NULL,input_hash=?,input_payload=? WHERE task_id=?",
+                        (payload["input_hash"], input_text, row["task_id"]),
+                    )
+            self.db.execute(
+                "UPDATE tasks SET status='cancelled',waiting_reason=NULL WHERE module='apply' AND status='waiting' "
+                "AND waiting_reason NOT LIKE 'failure:%'"
+            )
+            self.db.execute(
+                "UPDATE results SET payload=json_set(payload,'$.outcome','package') "
+                "WHERE module='apply' AND json_extract(payload,'$.outcome')='package_confirmed'"
+            )
+            self.db.execute("DELETE FROM task_context WHERE key='input_change'")
+            for table in ("drafts", "feedback", "confirmations"):
+                self.db.execute(f"DROP TABLE {table}")
+            self.db.execute("COMMIT")
+        except Exception:
+            self.db.execute("ROLLBACK")
+            raise
 
     def close(self) -> None:
         self.db.close()
@@ -192,6 +213,12 @@ class BusinessStore:
         ).fetchone()
         if prior and not re_evaluate:
             raise ValueError(f"A {module} result already exists; pass --re-evaluate for changed inputs")
+        if module == "apply":
+            # A waiting apply task is a failed attempt; preparing again supersedes it.
+            self.db.execute(
+                "UPDATE tasks SET status='cancelled',waiting_reason=NULL WHERE opportunity_id=? AND module='apply' AND status='waiting'",
+                (opportunity_id,),
+            )
         waiting = self.db.execute(
             "SELECT task_id,status,input_hash FROM tasks WHERE opportunity_id=? AND module=? AND status='waiting' ORDER BY rowid DESC LIMIT 1",
             (opportunity_id, module),
@@ -203,7 +230,7 @@ class BusinessStore:
         self.db.execute("BEGIN IMMEDIATE")
         try:
             active = self.db.execute(
-                "SELECT task_id,module,status,input_hash FROM tasks WHERE opportunity_id=? AND (status='running' OR (status='waiting' AND module='apply'))",
+                "SELECT task_id,module,status,input_hash FROM tasks WHERE opportunity_id=? AND status='running'",
                 (opportunity_id,),
             ).fetchone()
             if active:
@@ -260,103 +287,11 @@ class BusinessStore:
             (digest(payload), opportunity_id, source["url"], source["captured_at"], payload),
         )
 
-    def feedback(self, task_id: str) -> list[str]:
-        return [row["text"] for row in self.db.execute(
-            "SELECT text FROM feedback WHERE task_id=? ORDER BY id", (task_id,)
-        )]
-
-    def add_feedback(self, task_id: str, text: str) -> None:
-        if not text.strip():
-            raise ValueError("feedback cannot be empty")
-        self.db.execute("INSERT INTO feedback(task_id,text) VALUES(?,?)", (task_id, text.strip()))
-
     def set_context(self, task_id: str, key: str, payload: dict) -> None:
         self.db.execute(
             "INSERT INTO task_context(task_id,key,payload) VALUES(?,?,?) ON CONFLICT(task_id,key) DO UPDATE SET payload=excluded.payload",
             (task_id, key, json.dumps(payload, ensure_ascii=False, sort_keys=True)),
         )
-
-    def context(self, task_id: str, key: str) -> dict | None:
-        row = self.db.execute(
-            "SELECT payload FROM task_context WHERE task_id=? AND key=?", (task_id, key)
-        ).fetchone()
-        return json.loads(row["payload"]) if row else None
-
-    def clear_context(self, task_id: str, key: str) -> None:
-        self.db.execute("DELETE FROM task_context WHERE task_id=? AND key=?", (task_id, key))
-
-    def draft(self, task_id: str) -> dict | None:
-        row = self.db.execute(
-            "SELECT * FROM drafts WHERE task_id=? ORDER BY version DESC LIMIT 1", (task_id,)
-        ).fetchone()
-        if not row:
-            return None
-        return {
-            **json.loads(row["payload"]),
-            "version": row["version"],
-            "package_hash": row["package_hash"],
-            "input_hash": row["input_hash"],
-        }
-
-    def stage_draft(self, state: WorkflowState, artifact: dict) -> dict:
-        self.db.execute("BEGIN IMMEDIATE")
-        try:
-            task = self.task(state["task_id"])
-            if task["status"] != "running" or task["input_hash"] != state["input_hash"]:
-                raise ValueError("Apply task is no longer running with the current input")
-            version = self.db.execute(
-                "SELECT COALESCE(MAX(version),0)+1 FROM drafts WHERE task_id=?", (state["task_id"],)
-            ).fetchone()[0]
-            package_hash = digest(json.dumps(artifact, ensure_ascii=False, sort_keys=True))
-            self.db.execute(
-                "INSERT INTO drafts(task_id,version,input_hash,package_hash,payload) VALUES(?,?,?,?,?)",
-                (
-                    state["task_id"], version, state["input_hash"], package_hash,
-                    json.dumps(artifact, ensure_ascii=False, sort_keys=True),
-                ),
-            )
-            self.db.execute("COMMIT")
-        except Exception:
-            self.db.execute("ROLLBACK")
-            raise
-        return self.draft(state["task_id"])
-
-    def confirm_apply(self, task_id: str, current_input: str) -> dict:
-        task = self.task(task_id)
-        draft = self.draft(task_id)
-        if task["module"] != "apply" or task["status"] not in ("waiting", "completed") or not draft:
-            raise ValueError("apply task has no package awaiting confirmation")
-        if task["input_hash"] != digest(current_input) or draft["input_hash"] != task["input_hash"]:
-            if task["status"] == "waiting":
-                self.wait(task_id, "input_changed")
-            raise ValueError("apply inputs changed; regenerate before confirmation")
-        verify_package_files(draft, require_pdf=True)
-        if task["status"] == "completed":
-            return self.result(task_id)
-        payload = {
-            "module": "apply", "outcome": "package_confirmed", "artifact": draft,
-            "input_hash": task["input_hash"], "material_hash": draft["package_hash"],
-        }
-        self.db.execute("BEGIN IMMEDIATE")
-        try:
-            current = self.task(task_id)
-            if current["status"] != "waiting" or current["input_hash"] != task["input_hash"]:
-                raise ValueError("Apply task changed before confirmation")
-            self.db.execute(
-                "INSERT INTO results(result_key,task_id,opportunity_id,module,input_hash,payload) VALUES(?,?,?,?,?,?)",
-                (task_id, task_id, task["opportunity_id"], "apply", task["input_hash"], json.dumps(payload, sort_keys=True)),
-            )
-            self.db.execute(
-                "INSERT INTO confirmations(task_id,input_hash,package_hash) VALUES(?,?,?)",
-                (task_id, task["input_hash"], draft["package_hash"]),
-            )
-            self.db.execute("UPDATE tasks SET status='completed',waiting_reason=NULL WHERE task_id=?", (task_id,))
-            self.db.execute("INSERT INTO events(task_id,type) VALUES(?, 'confirmed')", (task_id,))
-            self.db.execute("COMMIT")
-        except Exception:
-            self.db.execute("ROLLBACK")
-            raise
-        return payload
 
     def find_task(self, identifier: str) -> sqlite3.Row:
         row = self.db.execute("SELECT * FROM tasks WHERE task_id=?", (identifier,)).fetchone()

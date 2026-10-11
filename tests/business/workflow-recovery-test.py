@@ -186,7 +186,7 @@ with tempfile.TemporaryDirectory(prefix="career-ops-recovery-") as temporary:
     assert store.result(pending["task_id"]) is None
     for input_text in ("{}", '{"changed":true}'):
         stale = store.start(f"reset-race-{input_text}", "scan", "{}")
-        store.wait(stale["task_id"], "user_deferred")
+        store.wait(stale["task_id"], "source_access_unknown")
         observed = store.task(stale["task_id"])
         store.cancel(stale["task_id"])
         original_task = store.task
@@ -202,7 +202,7 @@ with tempfile.TemporaryDirectory(prefix="career-ops-recovery-") as temporary:
             store.task = original_task
         assert store.task(stale["task_id"])["status"] == "cancelled"
     current_resume = store.start("current-resume-race", "scan", "{}")
-    store.wait(current_resume["task_id"], "user_deferred")
+    store.wait(current_resume["task_id"], "source_access_unknown")
     observed = store.task(current_resume["task_id"])
     store.cancel(current_resume["task_id"])
     original_task = store.task
@@ -241,7 +241,7 @@ with tempfile.TemporaryDirectory(prefix="career-ops-recovery-") as temporary:
         USAGE.reset(token)
     assert store.task(capped_task["task_id"])["attempt_tool_calls"] == 20
     store.add_usage(budget_task["task_id"], 899, 19)
-    store.wait(budget_task["task_id"], "user_review")
+    store.wait(budget_task["task_id"], "time_budget_exhausted")
     continued = store.reset_input(budget_task["task_id"], '{"feedback":"revise"}')
     assert continued["elapsed_seconds"] == 899 and continued["tool_calls"] == 19
     assert continued["attempt_elapsed_seconds"] == 0 and continued["attempt_tool_calls"] == 0
@@ -249,7 +249,7 @@ with tempfile.TemporaryDirectory(prefix="career-ops-recovery-") as temporary:
     store.wait(budget_task["task_id"], "failure:RuntimeError")
     recovered = store.resume_failed_checkpoint(budget_task["task_id"])
     assert recovered["attempt_elapsed_seconds"] == 2 and recovered["attempt_tool_calls"] == 1
-    store.wait(budget_task["task_id"], "user_deferred")
+    store.wait(budget_task["task_id"], "time_budget_exhausted")
     resumed = store.resume_current(budget_task["task_id"])
     assert resumed["elapsed_seconds"] == 901 and resumed["tool_calls"] == 20
     assert resumed["attempt_elapsed_seconds"] == 0 and resumed["attempt_tool_calls"] == 0
@@ -263,29 +263,6 @@ with tempfile.TemporaryDirectory(prefix="career-ops-recovery-") as temporary:
     recovered_apply = store.task(failed_apply["task_id"])
     assert recovered_apply["status"] == "running" and recovered_apply["attempt"] == 1
     assert recovered_apply["attempt_tool_calls"] == 2 and recovered_apply["attempt_elapsed_seconds"] == 3
-    feedback_task = store.start("feedback-rollback", "apply", "{}")
-    store.wait(feedback_task["task_id"], "user_review")
-    assert run_task(directory, feedback_task["task_id"])["reason"] == "user_review"
-    with patch("career_ops.tasks.current_apply_input", return_value="{}"), \
-         patch.object(BusinessStore, "reset_input", side_effect=ValueError("simulated reset failure")):
-        try:
-            resume_task(directory, feedback_task["task_id"], None, None, feedback="Source-backed revision")
-        except ValueError as error:
-            assert "simulated reset failure" in str(error)
-        else:
-            raise AssertionError("Expected reset failure after feedback")
-    assert store.feedback(feedback_task["task_id"]) == []
-    assert store.task(feedback_task["task_id"])["status"] == "waiting"
-    store.set_context(feedback_task["task_id"], "input_change", {"jd_report": {}, "diff": "changed JD"})
-    with patch("career_ops.tasks.current_apply_input", return_value="{}"), \
-         patch.object(BusinessStore, "reset_input", side_effect=ValueError("simulated JD reset failure")):
-        try:
-            resume_task(directory, feedback_task["task_id"], None, None, decision="accept-jd-change")
-        except ValueError as error:
-            assert "simulated JD reset failure" in str(error)
-        else:
-            raise AssertionError("Expected reset failure after JD choice")
-    assert store.context(feedback_task["task_id"], "input_change") == {"jd_report": {}, "diff": "changed JD"}
     store.close()
 
 print("workflow recovery: crash resume, commit reconciliation and job isolation passed")

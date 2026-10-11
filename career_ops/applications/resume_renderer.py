@@ -17,7 +17,7 @@ from career_ops.context import ROOT
 
 
 def render_resume(
-    task_id: str, version: int, artifact_root: Path, resume_json: Path,
+    task_id: str, artifact_root: Path, resume_json: Path,
     pdf_path: Path, profile: Path, candidate_name: str, company: str, role: str,
     timeout_seconds: int = 120,
 ) -> dict:
@@ -27,7 +27,7 @@ def render_resume(
         str(resume_json), str(pdf_path), f"--task-id={task_id}",
         f"--artifact-root={artifact_root}", f"--profile={profile}",
         f"--metadata={pdf_path.with_name('reactive-resume.json')}",
-        f"--version={version}", f"--company={company}", f"--role={role}",
+        f"--company={company}", f"--role={role}",
     ]
     try:
         result = subprocess.run(command, cwd=ROOT, text=True, capture_output=True, timeout=timeout_seconds)
@@ -53,9 +53,8 @@ def render_resume(
     except (OSError, json.JSONDecodeError) as error:
         raise ValueError("Reactive Resume metadata cannot be read") from error
     if (not isinstance(managed, dict) or managed.get("resume_id") != metadata["resumeId"]
-            or managed.get("slug") != f"career-ops-workflow-{task_id}"
-            or managed.get("last_artifact_version") != version):
-        raise ValueError("Reactive Resume metadata is not bound to this package version")
+            or managed.get("slug") != f"career-ops-workflow-{task_id}"):
+        raise ValueError("Reactive Resume metadata is not bound to this package")
     if not pdf_path.is_file() or pdf_path.stat().st_size < 100:
         raise ValueError("Reactive Resume PDF is missing or empty")
     try:

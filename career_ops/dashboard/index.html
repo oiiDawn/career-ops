@@ -38,9 +38,9 @@ header h1 { font-size: 16px; margin: 0; font-weight: 650; }
 .tab .count { font-size: 12px; margin-left: 4px; opacity: .8; }
 .spacer { flex: 1; }
 .updated { color: var(--muted); font-size: 12px; }
-button.ghost { border: 1px solid var(--line); background: var(--panel); color: var(--text); padding: 5px 10px;
-  border-radius: 6px; cursor: pointer; font: inherit; }
-button.ghost:hover { background: var(--hover); }
+button.ghost, a.ghost { border: 1px solid var(--line); background: var(--panel); color: var(--text); padding: 5px 10px;
+  border-radius: 6px; cursor: pointer; font: inherit; text-decoration: none; }
+button.ghost:hover, a.ghost:hover { background: var(--hover); }
 .filters { display: flex; gap: 8px; padding: 12px 24px; flex-wrap: wrap; align-items: center; }
 .filters input, .filters select, .record input, .record select { font: inherit; color: var(--text); background: var(--panel); border: 1px solid var(--line);
   border-radius: 6px; padding: 6px 8px; }
@@ -450,8 +450,8 @@ function jd(d) { return d.jd ? `<pre class="plain">${esc(d.jd)}</pre>` : '<p cla
 
 const ACTION_TEXT = {
   prepare: { running: "正在生成材料", failed: "生成材料失败", done: "materials",
-    banner: "正在生成：简历改动、Cover letter、Upskill、面试准备、反问问题…",
-    confirm: job => `为「${job.company} · ${job.role}」生成申请材料？\n\n会用你的简历、资料和该职位打分结果调用模型，生成简历改动、Cover letter、Upskill、面试准备和反问问题。\n只生成草稿，不会提交申请。` },
+    banner: "正在生成：简历 PDF、Cover letter、面试准备、Upskill、反问问题…",
+    confirm: job => `为「${job.company} · ${job.role}」生成申请材料？\n\n会用你的简历、资料和该职位打分结果调用模型，生成简历 PDF、Cover letter、面试准备、Upskill 和反问问题。\n不会提交申请。` },
   rescore: { running: "正在重新打分", failed: "重新打分失败", done: "report",
     banner: "正在用当前简历、资料和打分规则重新打分（复用已保存的 JD，不重新抓取）…",
     confirm: job => `用当前简历、资料和打分规则重新给「${job.company} · ${job.role}」打分？\n\n会调用模型并覆盖旧的打分报告；复用已保存的 JD，不重新抓取页面。` },
@@ -468,17 +468,14 @@ function actions(d) {
     return `<button class="primary" disabled>⏳ ${ACTION_TEXT[run.action].running}…</button><span class="sub">通常需要几分钟，可以关闭面板，完成后会自动刷新</span>`;
   }
   if (d.scan_outcome !== "jd_report") return `<span class="sub">没有可用的 JD 扫描结果，暂不能打分或生成材料</span>`;
-  if (task?.status === "waiting") {
-    return `${pill("draft")} <span class="sub">材料草稿待你审阅（${esc(task.reason || "waiting")}），见「投递材料」</span>`;
-  }
   if (!d.scores) return `${actionButton(d.id, "rescore", "开始打分")}<span class="sub">打分后才能生成申请材料</span>`;
   if (d.score_current === false) {
     return `${pill("stale")} ${actionButton(d.id, "rescore", "重新打分")}
       <button class="ghost" disabled title="分数过期，需先重新打分">生成申请材料</button>
       <span class="sub">简历、资料或打分规则在打分后有变更</span>`;
   }
-  const label = task?.status === "completed" ? "重新生成材料" : "生成申请材料";
-  return `${actionButton(d.id, "prepare", label)}<span class="sub">只生成草稿，不会提交申请</span>`;
+  const label = d.materials.length ? "重新生成材料" : "生成申请材料";
+  return `${actionButton(d.id, "prepare", label)}<span class="sub">不会提交申请</span>`;
 }
 
 function runBanner(d, action) {
@@ -497,9 +494,10 @@ function prepareBanner(d) {
   const banner = runBanner(d, "prepare");
   if (banner) return banner;
   if (task?.status === "waiting") {
-    const command = `.venv/bin/python -B -m career_ops task resume ${task.task_id}`;
-    return `<div class="banner"><strong>草稿待审阅</strong>（${esc(task.reason || "")}）。确认无误后运行：
-      <pre>${esc(command)} --decision confirm</pre>需要修改时运行：<pre>${esc(command)} --feedback "修改意见"</pre></div>`;
+    return `<div class="banner failed"><strong>上次生成未完成</strong>（${esc(task.reason || "")}），点击上方按钮重试。</div>`;
+  }
+  if (d.materials_current === false) {
+    return '<div class="banner failed">此材料基于旧版 JD、简历、资料或打分，建议点击上方「重新生成材料」。</div>';
   }
   return "";
 }
@@ -541,18 +539,17 @@ function refreshViews(id) {
 function materials(d) {
   const banner = prepareBanner(d);
   if (!d.materials.length) {
-    return `${banner}<p class="sub">暂无投递材料。点击上方「生成申请材料」生成简历改动、Cover letter、Upskill、面试准备和反问问题。</p>`;
+    return `${banner}<p class="sub">暂无投递材料。点击上方「生成申请材料」生成简历 PDF、Cover letter、面试准备、Upskill 和反问问题。</p>`;
   }
-  const current = d.materials.find(m => m.id === d.material) || d.materials.find(m => m.content) || d.materials[0];
-  const nav = d.materials.map(m =>
-    `<button class="ghost ${m.id === current.id ? "active" : ""}" data-material="${esc(m.id)}">${esc(m.label)} <span class="sub">${esc(m.package)}</span></button>`
-  ).join("");
-  const href = `/api/jobs/${d.id}/file?id=${encodeURIComponent(current.id)}`;
-  const head = `<div class="card"><h4>${esc(current.label)} <span class="sub">${esc(current.name)}</span>
-    ${current.exists ? `<a href="${href}" target="_blank" rel="noopener">打开原文件 ↗</a>` : '<span class="pill discard">文件缺失</span>'}</h4></div>`;
-  let body = '<p class="sub">该文件不是文本格式，请点击「打开原文件」查看。</p>';
-  if (current.content != null) body = current.name.endsWith(".md") ? md(current.content) : `<pre class="plain">${esc(current.content)}</pre>`;
-  return `${banner}<div class="material-nav">${nav}</div>${head}${body}`;
+  // Only the PDF opens outside the page; every Markdown file renders here.
+  const texts = d.materials.filter(m => m.content != null);
+  const current = texts.find(m => m.id === d.material) || texts[0];
+  const nav = d.materials.map(m => {
+    if (m.content != null) return `<button class="ghost ${m === current ? "active" : ""}" data-material="${esc(m.id)}">${esc(m.label)}</button>`;
+    if (!m.exists) return `<span class="pill discard">${esc(m.label)} 文件缺失</span>`;
+    return `<a class="ghost" href="/api/jobs/${d.id}/file?id=${encodeURIComponent(m.id)}" target="_blank" rel="noopener">${esc(m.label)} ↗</a>`;
+  }).join("");
+  return `${banner}<div class="material-nav">${nav}</div>${current ? md(current.content) : ""}`;
 }
 
 function interviews(d) {
@@ -609,8 +606,7 @@ function followupSummary(d) {
 
 function recordPanel(d) {
   if (!d.application_status) {
-    const linked = d.confirmed_package ? `<span class="sub">将关联已确认材料包 ${esc(d.confirmed_package)}</span>` : "";
-    return recordForm("submit", `标记已投递 ${linked}`, dateInput());
+    return recordForm("submit", "标记已投递", dateInput());
   }
   const options = d.status_options.map(v => `<option value="${v}">${esc(STATUS_TEXT[v] || v)}</option>`).join("");
   return followupSummary(d)

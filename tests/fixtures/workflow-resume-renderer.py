@@ -14,7 +14,6 @@ if failure_marker and not Path(failure_marker).exists():
     raise SystemExit(3)
 task_id = next(item.split("=", 1)[1] for item in sys.argv[3:] if item.startswith("--task-id="))
 metadata = Path(next(item.split("=", 1)[1] for item in sys.argv[3:] if item.startswith("--metadata=")))
-version = int(next(item.split("=", 1)[1] for item in sys.argv[3:] if item.startswith("--version=")))
 name = json.loads(source.read_text())["candidate"]["name"]
 label = name.replace("\\", "\\\\").replace("(", "\\(").replace(")", "\\)")
 stream = f"BT /F1 18 Tf 72 700 Td ({label}) Tj ET".encode("latin-1")
@@ -45,7 +44,6 @@ output.parent.mkdir(parents=True, exist_ok=True)
 output.write_bytes(pdf)
 metadata.write_text(json.dumps({
     "resume_id": f"fixture-{task_id}", "slug": "wrong-task" if os.environ.get("CAREER_OPS_RESUME_WRONG_METADATA") else f"career-ops-workflow-{task_id}",
-    "last_artifact_version": version,
 }))
 print(json.dumps({"resumeId": f"fixture-{task_id}", "outputPath": str(output.resolve()),
                   "metadataPath": str(metadata.resolve())}))

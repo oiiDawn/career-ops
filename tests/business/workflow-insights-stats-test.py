@@ -34,7 +34,7 @@ with tempfile.TemporaryDirectory() as temp:
         INSERT INTO application_lifecycle VALUES('1','rejected');
         INSERT INTO application_events VALUES('1','applied'),('1','responded'),('1','rejected');
         INSERT INTO application_activity VALUES('1','followup_sent');
-        INSERT INTO tasks VALUES('1','waiting','source_access_unknown'),('2','waiting','user_review');
+        INSERT INTO tasks VALUES('1','waiting','source_access_unknown');
         INSERT INTO scan_observations(opportunity_id,company,observed_on) VALUES(1,'Acme','2026-01-01'),(2,'Beta','2026-01-08');
         INSERT INTO scan_outcomes VALUES('added'),('skipped_expired');
         INSERT INTO source_health(source,status) VALUES('Acme','network'),('Acme','reachable'),('Beta','auth');
@@ -62,7 +62,6 @@ with tempfile.TemporaryDirectory() as temp:
     assert view["tracker"]["opportunities"] == 2
     assert view["tracker"]["by_application_status"]["rejected"] == 1
     assert view["tracker"]["waiting_for_evidence"] == 1
-    assert view["tracker"]["waiting_for_review"] == 1
     assert view["funnel"]["ever_applied"] == 1 and view["funnel"]["ever_responded"] == 1
     assert view["funnel"]["ever_interviewed"] == 0
     assert view["liveness"]["active_at_capture"] == 1

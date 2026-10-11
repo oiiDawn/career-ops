@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 
-import difflib
 from datetime import datetime, timezone
 import fcntl
 import hashlib
@@ -26,7 +25,7 @@ from career_ops.applications.apply_graph import apply_evaluate as run_apply
 from career_ops.context import ATTEMPT_CALLS, ATTEMPT_SECONDS, INPUT_ROOT, ROOT, WORKFLOW_VERSION
 from career_ops.evaluation.scan_graph import run_scan
 from career_ops.evaluation.score_graph import run_score
-from career_ops.input_contracts import apply_inputs, canonical_scan_input, canonical_score_input, digest, score_inputs, score_is_current, validate_resume_payload, verify_package_files
+from career_ops.input_contracts import apply_inputs, canonical_scan_input, canonical_score_input, digest, score_inputs, score_is_current, validate_resume_payload
 from career_ops.task_state import WorkflowState
 from career_ops.db import BusinessStore
 from career_ops.llm import DEADLINE, load_stub
@@ -36,34 +35,22 @@ from career_ops.tracing import traced
 
 def task_view(store: BusinessStore, task: sqlite3.Row) -> dict:
     """Return the stable JSON shape shared by start, show, list, resume and cancel."""
-    result = store.result(task["task_id"])
-    draft = store.draft(task["task_id"]) if task["module"] == "apply" and not result else None
-    reason = task["waiting_reason"]
-    if task["module"] == "apply" and task["status"] == "waiting":
-        actions = ["feedback", "confirm", "defer", "cancel"] if reason in ("user_review", "user_deferred", "input_changed") else ["feedback", "defer", "cancel"]
-        if reason == "jd_changed":
-            actions = ["accept-jd-change", "defer", "cancel"]
-    else:
-        actions = ["resume", "cancel"] if task["status"] == "waiting" else []
     return {
         "task_id": task["task_id"],
         "opportunity_id": task["opportunity_id"],
         "module": task["module"],
         "status": task["status"],
-        "reason": reason,
-        "artifact": result or draft,
+        "reason": task["waiting_reason"],
+        "artifact": store.result(task["task_id"]),
         "attempt": task["attempt"],
-        "allowed_actions": actions,
-        **({"input_change": store.context(task["task_id"], "input_change")} if reason == "jd_changed" else {}),
+        "allowed_actions": ["resume", "cancel"] if task["status"] == "waiting" else [],
     }
 
 
 def view(directory: Path, identifier: str) -> dict:
     store = BusinessStore(directory / "opportunities.db")
     try:
-        task = store.find_task(identifier)
-        refresh_apply_validity(store, task)
-        return task_view(store, store.task(task["task_id"]))
+        return task_view(store, store.find_task(identifier))
     finally:
         store.close()
 
@@ -71,10 +58,7 @@ def view(directory: Path, identifier: str) -> dict:
 def list_views(directory: Path) -> list[dict]:
     store = BusinessStore(directory / "opportunities.db")
     try:
-        tasks = store.list_tasks()
-        for task in tasks:
-            refresh_apply_validity(store, task)
-        return [task_view(store, store.task(task["task_id"])) for task in tasks]
+        return [task_view(store, task) for task in store.list_tasks()]
     finally:
         store.close()
 
@@ -85,22 +69,6 @@ def cancel_task(directory: Path, task_id: str) -> dict:
         return task_view(store, store.cancel(task_id))
     finally:
         store.close()
-
-
-def current_apply_input(store: BusinessStore, task: sqlite3.Row, jd_report: dict | None = None) -> str:
-    inputs = json.loads(task["input_payload"])
-    return apply_inputs(
-        jd_report or inputs["jd_report"], inputs["score_result"], store.feedback(task["task_id"])
-    )
-
-
-def refresh_apply_validity(store: BusinessStore, task: sqlite3.Row) -> None:
-    if task["module"] != "apply" or task["status"] not in ("running", "waiting"):
-        return
-    if store.context(task["task_id"], "input_change"):
-        store.wait(task["task_id"], "jd_changed")
-    elif digest(current_apply_input(store, task)) != task["input_hash"]:
-        store.wait(task["task_id"], "input_changed")
 
 
 class Runtime:
@@ -175,14 +143,7 @@ class Runtime:
         inputs = json.loads(task["input_payload"])
         if task["input_payload"].startswith("{"):
             if task["module"] == "apply":
-                result = self.run_model(
-                    "apply_evaluate",
-                    {
-                        "inputs": inputs,
-                        "previous_artifact": json.loads(state["draft"]) if state.get("has_prior_package") else None,
-                    },
-                    state,
-                )
+                result = self.run_model("apply_evaluate", {"inputs": inputs}, state)
                 artifact = result["artifact"]
                 return {
                     "outcome": "package", "draft": json.dumps(artifact, ensure_ascii=False, sort_keys=True),
@@ -260,16 +221,7 @@ class Runtime:
             if not isinstance(package[key], str) or not package[key].strip():
                 raise ValueError(f"Invalid application package: {key} must be a nonempty Markdown string")
         validate_resume_payload(package["resume_payload"])
-        current = self.store.draft(state["task_id"])
-        if current and current["input_hash"] == state["input_hash"] and current["package"] == package:
-            try:
-                verify_package_files(current, require_pdf=True)
-            except ValueError:
-                pass
-            else:
-                return {"waiting_reason": "user_review"}
-        version = (current["version"] if current else 0) + 1
-        root = self.fault_dir / "artifacts" / state["task_id"] / state["input_hash"] / f"package-v{version:03d}"
+        root = self.fault_dir / "artifacts" / state["task_id"] / state["input_hash"] / "package"
         root.mkdir(parents=True, exist_ok=True)
         names = {
             "resume_payload": "resume.json", "changes": "changes.md", "cover_letter": "cover-letter.md",
@@ -289,15 +241,14 @@ class Runtime:
             raise TimeoutError("time_budget_exhausted")
         pdf_path = root / "resume.pdf"
         metadata_path = root / "reactive-resume.json"
-        previous_metadata = current.get("files", {}).get("resume_metadata") if current else None
-        previous_metadata = previous_metadata or str(root.parents[1] / "reactive-resume.json")
-        if not metadata_path.exists() and Path(previous_metadata).is_file():
+        previous_metadata = root.parents[1] / "reactive-resume.json"
+        if not metadata_path.exists() and previous_metadata.is_file():
             shutil.copyfile(previous_metadata, metadata_path)
         started = time.monotonic()
         try:
             inputs = json.loads(self.store.task(state["task_id"])["input_payload"])
             pdf_receipt = render_resume(
-                state["task_id"], version, root.parents[1], Path(files["resume_payload"]),
+                state["task_id"], root.parents[1], Path(files["resume_payload"]),
                 pdf_path, INPUT_ROOT / "profile.yml",
                 package["resume_payload"]["candidate"]["name"],
                 inputs["jd_report"]["company"], inputs["jd_report"]["role"],
@@ -313,8 +264,7 @@ class Runtime:
                 for name, path in files.items()
             }, "package": package, "pdf_receipt": pdf_receipt,
         }
-        self.store.stage_draft(state, artifact)
-        return {"waiting_reason": "user_review"}
+        return {"draft": json.dumps(artifact, ensure_ascii=False, sort_keys=True)}
 
     def graph(self, checkpointer: SqliteSaver):
         graph = StateGraph(WorkflowState)
@@ -326,7 +276,7 @@ class Runtime:
         graph.add_conditional_edges("evaluate", self.route_evaluate, {"wait": "wait", "publish": "publish", "stage": "stage"})
         graph.add_edge("wait", END)
         graph.add_edge("publish", END)
-        graph.add_edge("stage", END)
+        graph.add_edge("stage", "publish")
         return graph.compile(checkpointer=checkpointer)
 
 
@@ -340,7 +290,6 @@ def initial_state(task: sqlite3.Row) -> WorkflowState:
         "waiting_reason": None,
         "material_hash": "",
         "tool_calls": 0,
-        "has_prior_package": False,
     }
 
 
@@ -430,7 +379,7 @@ def start_and_run(directory: Path, opportunity: str, module: str, input_text: st
         if not score_is_current(store.db, score["input_hash"], scan["artifact"]):
             store.close()
             raise ValueError("Current score is stale for the scan or candidate inputs")
-        input_text = apply_inputs(scan["artifact"], score, [])
+        input_text = apply_inputs(scan["artifact"], score)
     elif module == "apply":
         store.close()
         raise ValueError("apply requires score:<opportunity_id>")
@@ -725,108 +674,21 @@ def resume_task(
     task_id: str,
     input_text: str | None,
     crash_at: str | None,
-    *,
-    feedback: str | None = None,
-    decision: str | None = None,
 ) -> dict:
     store = BusinessStore(directory / "opportunities.db")
     task = store.task(task_id)
-    if task["module"] == "apply":
-        if task["status"] == "completed" and decision == "confirm":
-            store.confirm_apply(task_id, current_apply_input(store, task))
-            store.close()
-            return {"task_id": task_id, "status": "completed"}
-        if task["status"] in ("completed", "cancelled"):
-            store.close()
-            raise ValueError(f"Terminal task cannot resume: {task['status']}")
-        if input_text is not None:
-            report_input = canonical_score_input(input_text)
-            if not report_input.startswith("{"):
-                store.close()
-                raise ValueError("--input requires a jd_report_v1 JSON file")
-            report = json.loads(report_input)["jd_report"]
-            old = json.loads(task["input_payload"])["jd_report"]
-            if report["opportunity_id"] != task["opportunity_id"]:
-                store.close()
-                raise ValueError("CLI opportunity does not match the JD report")
-            difference = "\n".join(difflib.unified_diff(
-                old["jd"].splitlines(), report["jd"].splitlines(), fromfile="current", tofile="new", lineterm=""
-            ))
-            store.set_context(task_id, "input_change", {"jd_report": report, "diff": difference})
-            store.wait(task_id, "jd_changed")
-            result = task_view(store, store.task(task_id))
-            store.close()
-            return result
-        if decision == "defer":
-            store.wait(task_id, "user_deferred")
-            result = task_view(store, store.task(task_id))
-            store.close()
-            return result
-        if decision == "confirm":
-            current = current_apply_input(store, task)
-            store.confirm_apply(task_id, current)
-            store.close()
-            return {"task_id": task_id, "status": "completed"}
-        if decision == "accept-jd-change":
-            store.db.execute("BEGIN IMMEDIATE")
-            try:
-                task = store.task(task_id)
-                if task["status"] != "waiting":
-                    raise ValueError("Apply task is no longer waiting")
-                change = store.context(task_id, "input_change")
-                if not change:
-                    raise ValueError("No pending JD change")
-                input_text = current_apply_input(store, task, change["jd_report"])
-                store.clear_context(task_id, "input_change")
-                task = store.reset_input(task_id, input_text)
-                store.db.execute("COMMIT")
-            except Exception:
-                store.db.execute("ROLLBACK")
-                store.close()
-                raise
-            store.close()
-            return run_task(directory, task_id, start_state=initial_state(task), crash_at=crash_at)
-        if feedback is not None:
-            store.db.execute("BEGIN IMMEDIATE")
-            try:
-                task = store.task(task_id)
-                if task["status"] != "waiting":
-                    raise ValueError("Apply task is no longer waiting")
-                if store.context(task_id, "input_change"):
-                    raise ValueError("Resolve the pending JD change before feedback")
-                previous = store.draft(task_id)
-                store.add_feedback(task_id, feedback)
-                input_text = current_apply_input(store, task)
-                new_inputs = json.loads(input_text)
-                feedbacks = new_inputs.get("feedback", [])
-                reuse_previous = bool(previous and any(
-                    digest(json.dumps({**new_inputs, "feedback": feedbacks[:index]}, ensure_ascii=False,
-                                      sort_keys=True, separators=(",", ":"))) == previous["input_hash"]
-                    for index in range(len(feedbacks))
-                ))
-                task = store.reset_input(task_id, input_text)
-                store.db.execute("COMMIT")
-            except Exception:
-                store.db.execute("ROLLBACK")
-                store.close()
-                raise
-            store.close()
-            state = initial_state(task)
-            if reuse_previous:
-                state.update(
-                    draft=json.dumps(previous["package"], ensure_ascii=False, sort_keys=True),
-                    has_prior_package=True,
-                )
-            return run_task(directory, task_id, start_state=state, crash_at=crash_at)
-        if task["status"] == "waiting" and str(task["waiting_reason"] or "").startswith("failure:"):
-            store.resume_failed_checkpoint(task_id)
-            store.close()
-            return run_task(directory, task_id, crash_at=crash_at)
-        store.close()
-        raise ValueError("apply resume requires --feedback, --input, or --decision")
     if task["status"] in ("completed", "cancelled"):
         store.close()
         raise ValueError(f"Terminal task cannot resume: {task['status']}")
+    if task["module"] == "apply":
+        if input_text is not None:
+            store.close()
+            raise ValueError("An apply task takes no new input; run apply prepare again")
+        if task["status"] == "waiting" and str(task["waiting_reason"] or "").startswith("failure:"):
+            # Keep the checkpoint so a completed model call is not repeated.
+            store.resume_failed_checkpoint(task_id)
+            store.close()
+            return run_task(directory, task_id, crash_at=crash_at)
     if input_text is not None:
         input_text = canonical_scan_input(input_text) if task["module"] == "scan" else canonical_score_input(input_text)
         if task["module"] == "scan":

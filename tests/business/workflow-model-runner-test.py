@@ -82,18 +82,6 @@ assert "configured language.output" in package_prompts[0] and "JD language" not 
 assert package["artifact"] == complete_package
 assert package["tool_calls"] == 2
 
-revision_phases = []
-def revision_call(phase, *_args):
-    revision_phases.append(phase)
-    return {"questions": "# Corrected grounded questions"}, "revision-session"
-model_adapter.call_agent = revision_call
-try:
-    revised = runner.apply_evaluate({"inputs": {}, "previous_artifact": complete_package})
-finally:
-    model_adapter.call_agent = original_call_agent
-assert revision_phases == ["apply_evaluate"]
-assert revised["artifact"] == {**complete_package, "questions": "# Corrected grounded questions"}
-assert complete_package["questions"] == "Grounded questions"
 initial_drafts.cleanup()
 
 with tempfile.TemporaryDirectory(prefix="career-ops-apply-checkpoint-") as temporary:

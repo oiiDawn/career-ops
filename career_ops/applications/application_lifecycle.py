@@ -67,7 +67,6 @@ class ApplicationStore:
               action TEXT NOT NULL,
               source TEXT NOT NULL,
               payload TEXT NOT NULL,
-              package_result_key TEXT,
               created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
             );
             CREATE TABLE IF NOT EXISTS application_activity (
@@ -101,8 +100,8 @@ class ApplicationStore:
                 f"CREATE UNIQUE INDEX IF NOT EXISTS {table}_operation_id ON {table}(operation_id)"
             )
         event_columns = {row[1] for row in self.db.execute("PRAGMA table_info(application_events)")}
-        if "package_result_key" not in event_columns:
-            self.db.execute("ALTER TABLE application_events ADD COLUMN package_result_key TEXT")
+        if "package_result_key" in event_columns:
+            self.db.execute("ALTER TABLE application_events DROP COLUMN package_result_key")
         if "action" not in event_columns:
             self.db.execute("ALTER TABLE application_events ADD COLUMN action TEXT")
         activity_columns = {row[1] for row in self.db.execute("PRAGMA table_info(application_activity)")}
@@ -117,19 +116,6 @@ class ApplicationStore:
             "SELECT status FROM application_lifecycle WHERE opportunity_id=?", (opportunity_id,)
         ).fetchone()
         return row["status"] if row else None
-
-    def submitted_package_key(self, state: ApplicationState) -> str | None:
-        """Validate an explicitly identified submitted package, if supplied."""
-        requested = state["payload"].get("package_result_key")
-        if requested is None:
-            return None
-        if not isinstance(requested, str) or not self.db.execute(
-            """SELECT 1 FROM results WHERE result_key=? AND opportunity_id=? AND module='apply'
-               AND json_extract(payload,'$.outcome')='package_confirmed'""",
-            (requested, state["opportunity_id"]),
-        ).fetchone():
-            raise ValueError("package_result_key must identify a confirmed package for this opportunity")
-        return requested
 
     def replay(self, state: ApplicationState) -> dict | None:
         key = state["idempotency_key"]
@@ -205,7 +191,6 @@ class ApplicationStore:
                 raise ValueError("Application was already submitted")
             if not self.db.execute("SELECT 1 FROM opportunities WHERE id=?", (state["opportunity_id"],)).fetchone():
                 raise ValueError(f"Unknown opportunity: {state['opportunity_id']}")
-            self.submitted_package_key(state)
         elif action in {"transition", "outcome"}:
             target = OUTCOMES.get(value) if action == "outcome" else value
             if target not in STATUSES:
@@ -284,15 +269,12 @@ class ApplicationStore:
                         "UPDATE opportunities SET application_state='submitted' WHERE id=?", (opportunity_id,)
                     )
                 payload = {**state["payload"], **({"outcome": state["value"]} if state["action"] == "outcome" else {})}
-                package_result_key = None
-                if state["action"] == "submit":
-                    package_result_key = self.submitted_package_key(state)
                 self.db.execute(
                     """INSERT INTO application_events
-                       (operation_id,opportunity_id,from_status,to_status,action,source,payload,package_result_key)
-                       VALUES(?,?,?,?,?,?,?,?)""",
+                       (operation_id,opportunity_id,from_status,to_status,action,source,payload)
+                       VALUES(?,?,?,?,?,?,?)""",
                     (state["idempotency_key"], opportunity_id, current, target, state["action"], state["source"],
-                     json.dumps(payload, ensure_ascii=False, sort_keys=True), package_result_key),
+                     json.dumps(payload, ensure_ascii=False, sort_keys=True)),
                 )
                 result = {"status": target, "reused": False}
             self.db.execute("COMMIT")
@@ -306,8 +288,7 @@ class ApplicationStore:
         if not status:
             return None
         events = self.db.execute(
-            """SELECT from_status AS fromStatus,to_status AS toStatus,source,payload,
-                      package_result_key AS packageResultKey,created_at AS createdAt
+            """SELECT from_status AS fromStatus,to_status AS toStatus,source,payload,created_at AS createdAt
                FROM application_events WHERE opportunity_id=? ORDER BY id""",
             (opportunity_id,),
         ).fetchall()
@@ -328,12 +309,6 @@ class ApplicationStore:
         artifacts = self.db.execute(
             "SELECT kind,path,sha256 FROM artifacts WHERE opportunity_id=? ORDER BY id", (opportunity_id,)
         ).fetchall()
-        confirmed = self.db.execute(
-            """SELECT r.payload FROM application_events e JOIN results r ON r.result_key=e.package_result_key
-               WHERE e.opportunity_id=? AND e.to_status='applied' ORDER BY e.id LIMIT 1""",
-            (opportunity_id,),
-        ).fetchone()
-        package = json.loads(confirmed["payload"]).get("artifact", {}) if confirmed else {}
         return {
             "status": status,
             "opportunity": dict(opportunity) if opportunity else None,
@@ -341,12 +316,6 @@ class ApplicationStore:
             "activities": [decode(row) for row in activities],
             "followupDirectives": [decode(row) for row in directives],
             "artifacts": [dict(row) for row in artifacts],
-            "confirmedPackage": {
-                "version": package.get("version"),
-                "packageHash": package.get("package_hash"),
-                "files": package.get("files", {}),
-                "fileHashes": package.get("file_hashes", {}),
-            } if confirmed else None,
         }
 
     def views(self) -> list[dict]:

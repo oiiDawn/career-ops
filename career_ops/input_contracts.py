@@ -119,7 +119,7 @@ def canonical_scan_input(value: str) -> str:
     return json.dumps(inputs, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
 
 
-def apply_inputs(jd_report: dict, score_result: dict, feedback: list[str]) -> str:
+def apply_inputs(jd_report: dict, score_result: dict) -> str:
     score_inputs(jd_report)
     inputs = {
         "artifact_contract_version": 4,
@@ -141,7 +141,6 @@ def apply_inputs(jd_report: dict, score_result: dict, feedback: list[str]) -> st
             market: (RULES_ROOT / "markets" / market / "employment.md").read_text()
             for market in ("cn", "hk", "remote")
         },
-        "feedback": feedback,
     }
     return json.dumps(inputs, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
 
@@ -163,28 +162,3 @@ def validate_resume_payload(payload: dict) -> None:
     for entry in payload.get("skills", []):
         if "category" not in entry or "items" not in entry:
             raise ValueError("resume skills require category and items")
-
-
-def verify_package_files(draft: dict, *, require_pdf: bool) -> None:
-    files = draft.get("files", {})
-    required = {"resume_payload", "changes", "cover_letter", "upskill", "interview_prep", "questions"}
-    if require_pdf:
-        required |= {"resume_pdf", "resume_metadata"}
-    if not isinstance(files, dict) or set(files) != required:
-        raise ValueError("Current package file manifest is incomplete")
-    if require_pdf and (not isinstance(draft.get("pdf_receipt"), dict)
-                        or not isinstance(draft["pdf_receipt"].get("pages"), int)
-                        or draft["pdf_receipt"]["pages"] < 1):
-        raise ValueError("Current package has no validated resume PDF")
-    if not isinstance(draft.get("file_hashes"), dict) or set(draft["file_hashes"]) != required:
-        raise ValueError("Current package file manifest is incomplete")
-    artifact = {name: draft.get(name) for name in ("files", "file_hashes", "package", "pdf_receipt")}
-    if digest(json.dumps(artifact, ensure_ascii=False, sort_keys=True)) != draft.get("package_hash"):
-        raise ValueError("Current package manifest changed")
-    for name, path in files.items():
-        try:
-            current_hash = hashlib.sha256(Path(path).read_bytes()).hexdigest()
-        except OSError as error:
-            raise ValueError(f"Current package file is unavailable: {name}") from error
-        if current_hash != draft["file_hashes"][name]:
-            raise ValueError(f"Current package file changed: {name}")
