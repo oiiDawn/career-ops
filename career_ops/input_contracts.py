@@ -75,6 +75,7 @@ def score_is_current(connection, input_hash: str, report: dict) -> bool:
     if not all(isinstance(value.get("rubric"), str) for value in (stored, current)):
         return False
     for value in (stored, current):
+        value.pop("company_valid_until", None)
         value['rubric'] = jev.standards(value['rubric'], jev.DIMENSIONS)
         if isinstance(value.get("profile"), str):
             value["profile"] = scoring_profile(value["profile"])

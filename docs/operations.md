@@ -165,6 +165,8 @@ Company archives expire at the end of fixed 28-day windows anchored on 2026-10-1
 reuse facts, including empty results; new scopes collect only missing ranges. Changed research rules
 or expiry require new research. Scoring-rule changes only rerun Jev. Existing archived evidence is
 historical and does not become current merely because the caller extends a date.
+Expiry dates are retained in frozen inputs but excluded from score freshness comparisons: changing
+the expiry policy or crossing a window changes archive expiry, without itself making scores stale.
 
 Each nonempty dimension then receives one Jev request (multiple salary scopes share a request).
 The existing `.env` `TYPESAFE_API_KEY` authorizes Jev 1.13.0; only this scoring stage receives
