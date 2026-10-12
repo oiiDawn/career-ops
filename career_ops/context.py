@@ -47,6 +47,8 @@ def load_project_environment(root: Path) -> None:
 
 
 def company_valid_until() -> str:
-    """Expire shared evidence by Sunday, at most seven days, and bind formal inputs to that same window."""
+    """Bind shared evidence and formal inputs to the same fixed 28-day window."""
     today = date.today()
-    return (today + timedelta(days=6-today.weekday())).isoformat()
+    anchor = date(2026, 10, 12)
+    elapsed = (today - anchor).days
+    return (today + timedelta(days=27 - elapsed % 28)).isoformat()

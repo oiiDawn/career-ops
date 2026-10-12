@@ -161,7 +161,7 @@ GitLab with synthetic prompt-injection fixtures. This writes no business data. `
 permission/tool/leakage checks and facts for manual source-support and applicability review;
 passing structural checks does not mark claims as semantically verified.
 
-Company archives expire by Sunday (at most seven days). Exact scopes and unchanged research rules
+Company archives expire at the end of fixed 28-day windows anchored on 2026-10-12 (at most 28 days). Exact scopes and unchanged research rules
 reuse facts, including empty results; new scopes collect only missing ranges. Changed research rules
 or expiry require new research. Scoring-rule changes only rerun Jev. Existing archived evidence is
 historical and does not become current merely because the caller extends a date.
