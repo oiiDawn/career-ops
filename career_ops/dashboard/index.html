@@ -46,6 +46,7 @@ button.ghost:hover, a.ghost:hover { background: var(--hover); }
   border-radius: 6px; padding: 6px 8px; }
 .filters input[type=search] { width: 260px; }
 .filters label { color: var(--muted); font-size: 12px; display: flex; align-items: center; gap: 6px; }
+.filters.companies label { display: none; }
 main { padding: 0 24px 24px; }
 .table-wrap { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; overflow-x: auto; }
 table { width: 100%; border-collapse: collapse; }
@@ -57,6 +58,7 @@ th .arrow { font-size: 10px; margin-left: 2px; }
 tbody tr { cursor: pointer; }
 tbody tr:hover { background: var(--hover); }
 tbody tr.selected { background: var(--accent-soft); }
+tbody tr.expand, tbody tr.expand:hover { background: none; cursor: auto; }
 td.num { font-variant-numeric: tabular-nums; white-space: nowrap; }
 td .role { font-weight: 550; }
 td .sub { color: var(--muted); font-size: 12px; }
@@ -134,7 +136,7 @@ details summary { cursor: pointer; font-weight: 600; }
   <button class="ghost" id="refresh" title="重新读取数据库">刷新</button>
 </header>
 
-<section class="filters">
+<section class="filters" id="filters">
   <input type="search" id="q" placeholder="搜索公司 / 职位 / 地点 / ID">
   <label>决策 <select id="fAction"><option value="">全部</option><option value="focus">focus</option>
     <option value="deprioritize">deprioritize</option><option value="discard">discard</option><option value="none">未打分</option><option value="stale">分数过期</option></select></label>
@@ -167,11 +169,13 @@ details summary { cursor: pointer; font-weight: 600; }
 </aside>
 
 <script>
+const DIMS = { direction: "方向", company: "公司", culture: "文化", compensation: "薪酬" };
 const STAGES = [
   { key: "all", label: "全部" },
   { key: "scanned", label: "已扫描" },
   { key: "scored", label: "已打分" },
   { key: "applied", label: "已投递" },
+  { key: "companies", label: "公司" },
 ];
 const COLUMNS = [
   { key: "id", label: "ID", num: true },
@@ -184,6 +188,14 @@ const COLUMNS = [
   { key: "application_status", label: "投递" },
   { key: "created_at", label: "发现时间", cls: "hide-sm" },
   { key: "scored_at", label: "打分时间", cls: "hide-sm" },
+];
+const COMPANY_DIMS = ["company", "culture", "compensation"];
+const COMPANY_COLUMNS = [
+  { key: "name", label: "公司" },
+  ...COMPANY_DIMS.map(k => ({ key: k, label: DIMS[k], sortValue: c => c.means[k] })),
+  { key: "avg", label: "平均" },
+  { key: "jobCount", label: "岗位数" },
+  { key: "valid_until", label: "最早到期" },
 ];
 const DETAIL_TABS = [
   { key: "overview", label: "概览" },
@@ -198,12 +210,13 @@ const $ = id => document.getElementById(id);
 
 let jobs = [];
 let detail = null;
+let openCompany = null;
 const runs = {};
 const POLL_MS = 3000;
 let state = loadState();
 
 function loadState() {
-  const fallback = { stage: "all", sort: "id", dir: "desc", q: "", action: "", state: "", source: "", liveness: "", materials: false };
+  const fallback = { stage: "all", sort: "id", dir: "desc", csort: "avg", cdir: "desc", q: "", action: "", state: "", source: "", liveness: "", materials: false };
   try { return { ...fallback, ...JSON.parse(localStorage.getItem(STORAGE_KEY) || "{}") }; }
   catch { return fallback; }
 }
@@ -225,7 +238,6 @@ function safeUrl(url) { return /^https?:\/\//i.test(url || "") ? url : "#"; }
 function jobLink(job, text = "↗") {
   return `<a class="ext" href="${esc(safeUrl(job.url))}" target="_blank" rel="noopener noreferrer" onclick="event.stopPropagation()" title="打开职位链接">${text}</a>`;
 }
-const DIMS = { direction: "方向", company: "公司", culture: "文化", compensation: "薪酬" };
 // Mirrors decisions.worth_attention: every dimension >3, at least two >4. Confidence/sufficiency are informational.
 const WEAK = 0.6;
 function band(v) { return v == null ? "" : v > 4 ? "hi" : v > 3 ? "mid" : "lo"; }
@@ -242,15 +254,13 @@ function dims(scores, dimensions = {}) {
   if (!scores) return '<span class="sub">—</span>';
   return `<span class="dims">${Object.keys(DIMS).map(k => dimCell(k, { ...dimensions[k], score: scores[k] })).join("")}</span>`;
 }
+function scopeText(ref) { return Object.entries(ref.scope || {}).map(([a, b]) => `${a}=${b}`).join(", "); }
+function expired(ref) { return Boolean(ref.valid_until) && ref.valid_until < new Date().toISOString().slice(0, 10); }
 function dimSource(d, k) {
   const ref = (d.company_profiles || {})[k];
   if (!ref) return '<span class="sub">岗位 JD</span>';
   if (ref.source === "explicit_job_quotation") return "JD 明确薪资";
-  const scope = Object.entries(ref.scope || {}).map(([a, b]) => `${a}=${b}`).join(", ");
-  const expired = ref.valid_until && ref.valid_until < new Date().toISOString().slice(0, 10);
-  const shared = (d.profile_shared || {})[k];
-  return `${esc(scope)} <span class="sub">至 ${esc(ref.valid_until || "—")}</span>${expired ? " " + pill("expired") : ""}`
-    + (shared > 1 ? ` <a href="#" data-company="${esc(d.company)}">共用于 ${shared} 个岗位</a>` : "");
+  return `${esc(scopeText(ref))} <span class="sub">至 ${esc(ref.valid_until || "—")}</span>${expired(ref) ? " " + pill("expired") : ""}`;
 }
 function dimTable(d) {
   if (!d.scores) return "";
@@ -317,30 +327,99 @@ function filtered() {
     && (!state.materials || j.material_count > 0));
 }
 
-function sorted(list) {
-  const column = COLUMNS.find(c => c.key === state.sort) || COLUMNS[0];
+// The company view keeps its own sort so switching tabs does not reset the job list's.
+function sortKeys() { return state.stage === "companies" ? ["csort", "cdir"] : ["sort", "dir"]; }
+function sorted(list, columns) {
+  const [sortKey, dirKey] = sortKeys();
+  const column = columns.find(c => c.key === state[sortKey]) || columns[0];
   const value = column.sortValue || (j => j[column.key]);
-  const direction = state.dir === "asc" ? 1 : -1;
+  const direction = state[dirKey] === "asc" ? 1 : -1;
+  const tie = (a, b) => (b.id > a.id) - (b.id < a.id);
   return [...list].sort((a, b) => {
     const x = value(a), y = value(b);
-    if (x == null && y == null) return b.id - a.id;
+    if (x == null && y == null) return tie(a, b);
     if (x == null) return 1;
     if (y == null) return -1;
     const result = typeof x === "number" && typeof y === "number" ? x - y : String(x).localeCompare(String(y), "zh-CN");
-    return result * direction || b.id - a.id;
+    return result * direction || tie(a, b);
   });
 }
 
+function mean(values) { return values.length ? values.reduce((a, b) => a + b, 0) / values.length : null; }
+// Company-level ratings as the currently scored jobs reference them, one entry per company_id.
+function companies() {
+  const byId = new Map();
+  for (const job of jobs.filter(j => inStage(j, "scored"))) {
+    for (const k of COMPANY_DIMS) {
+      const ref = (job.company_profiles || {})[k];
+      if (!ref?.company_id || !ref.profile_id) continue;
+      if (!byId.has(ref.company_id)) byId.set(ref.company_id, { names: new Set(), jobs: new Map(), profiles: new Map() });
+      const company = byId.get(ref.company_id);
+      company.names.add(job.company);
+      company.jobs.set(job.id, job);
+      // A profile is re-rated once it expires; jobs scored earlier still carry the old rating, so keep the newest.
+      const seen = company.profiles.get(ref.profile_id);
+      const rating = seen && !((ref.valid_until || "") > (seen.valid_until || "")) ? seen
+        : { ...(job.dimensions || {})[k], ...ref, dim: k, score: (job.scores || {})[k] ?? null };
+      company.profiles.set(ref.profile_id, { ...rating, jobCount: (seen?.jobCount || 0) + 1 });
+    }
+  }
+  return [...byId].map(([id, c]) => {
+    const profiles = [...c.profiles.values()].sort((a, b) =>
+      COMPANY_DIMS.indexOf(a.dim) - COMPANY_DIMS.indexOf(b.dim) || scopeText(a).localeCompare(scopeText(b)));
+    const means = Object.fromEntries(COMPANY_DIMS.map(k => [k, mean(profiles.filter(p => p.dim === k && p.score != null).map(p => p.score))]));
+    return {
+      id, name: [...c.names].sort().join(" / "), jobs: [...c.jobs.values()].sort((a, b) => b.id - a.id), jobCount: c.jobs.size, profiles, means,
+      avg: mean(Object.values(means).filter(v => v != null)),
+      valid_until: profiles.map(p => p.valid_until).filter(Boolean).sort()[0] || null,
+    };
+  });
+}
+function companyDimCell(company, k) {
+  const scored = company.profiles.filter(p => p.dim === k && p.score != null);
+  if (scored.length < 2) return dimCell(k, scored[0] || { score: null, reason: company.profiles.find(p => p.dim === k)?.reason || "no_profile" });
+  const scores = scored.map(p => p.score).sort((a, b) => a - b);
+  return `<span class="dim ${band(scores[0])} ${scored.some(weak) ? "weak" : ""}" title="${esc(scored.map(p => `${scopeText(p)}: ${p.score.toFixed(2)}`).join("\n"))}">${scores[0].toFixed(2)}–${scores.at(-1).toFixed(2)} ×${scored.length}</span>`;
+}
+function companyDetail(company) {
+  return `<div class="section-title">公司级评分</div>
+    <table class="dim-table"><thead><tr><th>维度</th><th>适用范围</th><th>分数</th><th>置信度</th><th>充分度</th><th>有效期</th><th>岗位数</th></tr></thead><tbody>
+    ${company.profiles.map(p => `<tr class="expand"><td>${DIMS[p.dim]}</td><td>${esc(scopeText(p))}</td><td>${dimCell(p.dim, p)}${p.score == null ? ` <span class="sub">${esc(p.reason || "")}</span>` : ""}</td>
+      <td class="num">${pct(p.confidence)}</td><td class="num">${pct(p.evidence_sufficiency)}</td>
+      <td class="num">${esc(p.valid_until || "—")}${expired(p) ? " " + pill("expired") : ""}</td><td class="num">${p.jobCount}</td></tr>`).join("")}
+    </tbody></table>
+    <div class="section-title">引用岗位</div>
+    <table class="dim-table"><tbody>${company.jobs.map(j => `<tr data-id="${j.id}">
+      <td class="num">${j.id}</td><td><span class="role">${esc(j.role)}</span>${jobLink(j)}</td><td>${esc(j.location || "—")}</td>
+      <td>${dims(j.scores, j.dimensions)}</td><td>${pill(j.action)}</td><td>${pill(j.application_status)}</td></tr>`).join("")}</tbody></table>`;
+}
+function companyRows(all) {
+  const q = state.q.trim().toLowerCase();
+  return sorted(all.filter(c => !q || c.name.toLowerCase().includes(q)), COMPANY_COLUMNS).map(c => `
+    <tr data-company-id="${esc(c.id)}" class="${openCompany === c.id ? "selected" : ""}">
+      <td><span class="role">${esc(c.name)}</span></td>
+      ${COMPANY_DIMS.map(k => `<td>${companyDimCell(c, k)}</td>`).join("")}
+      <td class="num">${c.avg == null ? "—" : c.avg.toFixed(2)}</td>
+      <td class="num">${c.jobCount}</td>
+      <td class="num">${esc(c.valid_until || "—")}${expired(c) ? " " + pill("expired") : ""}</td>
+    </tr>${openCompany === c.id ? `<tr class="expand"><td colspan="${COMPANY_COLUMNS.length}">${companyDetail(c)}</td></tr>` : ""}`);
+}
+
 function render() {
+  const companyView = state.stage === "companies";
+  const allCompanies = companies();
+  const [sortKey, dirKey] = sortKeys();
   $("stageTabs").innerHTML = STAGES.map(s =>
-    `<button class="tab ${state.stage === s.key ? "active" : ""}" data-stage="${s.key}">${s.label}<span class="count">${jobs.filter(j => inStage(j, s.key)).length}</span></button>`
+    `<button class="tab ${state.stage === s.key ? "active" : ""}" data-stage="${s.key}">${s.label}<span class="count">${s.key === "companies" ? allCompanies.length : jobs.filter(j => inStage(j, s.key)).length}</span></button>`
   ).join("");
-  $("thead").innerHTML = COLUMNS.map(c =>
-    `<th data-sort="${c.key}" class="${c.cls || ""} ${state.sort === c.key ? "sorted" : ""}">${c.label}${state.sort === c.key ? `<span class="arrow">${state.dir === "asc" ? "▲" : "▼"}</span>` : ""}</th>`
+  $("thead").innerHTML = (companyView ? COMPANY_COLUMNS : COLUMNS).map(c =>
+    `<th data-sort="${c.key}" class="${c.cls || ""} ${state[sortKey] === c.key ? "sorted" : ""}">${c.label}${state[sortKey] === c.key ? `<span class="arrow">${state[dirKey] === "asc" ? "▲" : "▼"}</span>` : ""}</th>`
   ).join("");
-  const list = sorted(filtered());
+  $("filters").classList.toggle("companies", companyView);
+  const list = companyView ? companyRows(allCompanies) : sorted(filtered(), COLUMNS);
   $("empty").hidden = list.length > 0;
-  $("rows").innerHTML = list.map(j => `
+  $("empty").textContent = companyView ? "没有符合条件的公司" : "没有符合条件的职位";
+  $("rows").innerHTML = companyView ? list.join("") : list.map(j => `
     <tr data-id="${j.id}" class="${detail && detail.id === j.id ? "selected" : ""}">
       <td class="num">${j.id}</td>
       <td><div class="role">${esc(j.role)}${jobLink(j)}</div><div class="sub">${esc(j.company)} · ${esc(j.source)}${j.material_count ? " · 📎 材料" : ""}${runs[j.id]?.status === "running" ? ` · ⏳ ${ACTION_TEXT[runs[j.id].action].running}` : ""}</div></td>
@@ -667,16 +746,17 @@ function timelineItems(d) {
 }
 
 document.addEventListener("click", event => {
-  const target = event.target.closest("[data-stage],[data-sort],tr[data-id],[data-tab],[data-material],[data-action],[data-company]");
+  const target = event.target.closest("[data-stage],[data-sort],tr[data-id],tr[data-company-id],[data-tab],[data-material],[data-action]");
   if (!target) return;
-  if (target.dataset.company) { event.preventDefault(); state.q = $("q").value = target.dataset.company; closeJob(); }
-  else if (target.dataset.action) startAction(Number(target.dataset.job), target.dataset.action);
+  if (target.dataset.action) startAction(Number(target.dataset.job), target.dataset.action);
   else if (target.dataset.stage) { state.stage = target.dataset.stage; render(); }
   else if (target.dataset.sort) {
-    state.dir = state.sort === target.dataset.sort && state.dir === "desc" ? "asc" : "desc";
-    state.sort = target.dataset.sort;
+    const [sortKey, dirKey] = sortKeys();
+    state[dirKey] = state[sortKey] === target.dataset.sort && state[dirKey] === "desc" ? "asc" : "desc";
+    state[sortKey] = target.dataset.sort;
     render();
-  } else if (target.dataset.id) openJob(Number(target.dataset.id), state.stage === "applied" ? "materials" : state.stage === "scored" ? "report" : "overview");
+  } else if (target.dataset.companyId) { openCompany = openCompany === target.dataset.companyId ? null : target.dataset.companyId; render(); }
+  else if (target.dataset.id) openJob(Number(target.dataset.id), state.stage === "applied" ? "materials" : state.stage === "scored" ? "report" : "overview");
   else if (target.dataset.tab) { detail.tab = target.dataset.tab; renderDetail(); }
   else if (target.dataset.material) { detail.material = target.dataset.material; renderDetail(); }
 });
