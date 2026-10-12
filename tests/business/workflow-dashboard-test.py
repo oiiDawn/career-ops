@@ -73,7 +73,8 @@ with tempfile.TemporaryDirectory() as temporary:
         INSERT INTO opportunities(id,url,company,role,source,state,application_state) VALUES
           (1,'https://example.com/1','Acme','Scanned Engineer','search','discovered','none'),
           (2,'https://example.com/2','Beta','Scored Engineer','provider','evaluated','none'),
-          (3,'https://example.com/3','Gamma','Applied Engineer','provider','evaluated','submitted');
+          (3,'https://example.com/3','Gamma','Applied Engineer','provider','evaluated','submitted'),
+          (4,'https://example.com/4','Delta','Excluded Engineer','provider','ineligible','none');
         INSERT INTO application_lifecycle(opportunity_id,status) VALUES('3','applied');
         INSERT INTO application_events(operation_id,opportunity_id,to_status,action,source,payload) VALUES('op','3','applied','submit','user','{"notes":"ok"}');
         INSERT INTO evaluations(opportunity_id,report_hash) VALUES(2,'h'),(3,'h');
@@ -96,6 +97,9 @@ with tempfile.TemporaryDirectory() as temporary:
         db.execute("INSERT INTO results VALUES(?,?,?,?,?,?)", (f"score-{opportunity}", f"score-{opportunity}", opportunity, "score", input_hash, json.dumps(scored)))
         if opportunity == "2":
             current_apply_hash = digest(apply_inputs(jd_report(opportunity), scored))
+    # Job 4 was scored before a later scan excluded it; the retained score must not list it as scored.
+    db.execute("INSERT INTO results VALUES(?,?,?,?,?,?)", ("score-4", "score-4", "4", "score", "h", json.dumps(
+        {"outcome": "score", "input_hash": "h", "artifact": {"score": score}})))
     # Job 3 keeps a superseded package and a newer one whose inputs have since changed; job 2's package is current.
     packages = (
         ("apply-3-old", "3", "old", {"upskill": str(directory / "secret.md")}),
@@ -119,7 +123,7 @@ with tempfile.TemporaryDirectory() as temporary:
     try:
         assert "<title>Career Ops Dashboard</title>" in fetch(base, "/")
         jobs = {job["id"]: job for job in fetch(base, "/api/jobs")}
-        assert [jobs[i]["stage"] for i in (1, 2, 3)] == ["scanned", "scored", "applied"]
+        assert [jobs[i]["stage"] for i in (1, 2, 3, 4)] == ["scanned", "scored", "applied", "scanned"]
         assert "score" not in jobs[2] and jobs[2]["action"] == "deprioritize" and "score" not in jobs[1]
         assert jobs[2]["dimensions"]["culture"]["reason"] == "no_matching_valid_profile"
         assert jobs[2]["profile_expired"] and jobs[2]["profile_shared"] == {"company": 2} and not jobs[1]["profile_expired"]
@@ -163,7 +167,7 @@ with tempfile.TemporaryDirectory() as temporary:
         assert runner.started == [(2, "prepare"), (1, "rescore")]
         assert fetch(base, "/api/jobs/2/run")["run"]["action"] == "prepare" and fetch(base, "/api/jobs/3/run")["run"] is None
         assert {job["id"]: job["run"] for job in fetch(base, "/api/jobs")} == {
-            1: {"action": "rescore", "status": "running"}, 2: {"action": "prepare", "status": "running"}, 3: None}
+            1: {"action": "rescore", "status": "running"}, 2: {"action": "prepare", "status": "running"}, 3: None, 4: None}
         assert fetch(base, "/api/jobs/3")["apply_task"] == {"task_id": "apply-3", "status": "completed", "reason": None}
     finally:
         server.shutdown()

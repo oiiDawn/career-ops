@@ -87,7 +87,8 @@ def _profile_expired(profiles: dict) -> bool:
 def _stage(row: sqlite3.Row, lifecycle: dict | None, score: dict | None) -> str:
     if lifecycle or row["application_state"] == "submitted":
         return "applied"
-    return "scored" if score is not None else "scanned"
+    # A later scan can exclude a job that was already scored; its retained score no longer counts.
+    return "scored" if score is not None and row["state"] != "ineligible" else "scanned"
 
 
 def list_jobs(db: sqlite3.Connection) -> list[dict]:
