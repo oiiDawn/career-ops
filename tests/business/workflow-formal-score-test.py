@@ -139,6 +139,14 @@ with tempfile.TemporaryDirectory() as temp:
         assert coded['jobs'][0]['scopes']['compensation']['region'] == 'China'
         city_only = g.public_bundle({**jd, 'location_evidence':'Beijing'}, directory, '2026-10-11')
         assert city_only['jobs'][0]['scopes']['compensation']['region'] == 'China'
+        # Location spellings seen in retained scans; an uncounted or cross-border posting stays unknown.
+        for place, region in (('Hong Kong SAR', 'Hong Kong'), ('Hong Kong Island', 'Hong Kong'),
+                              ('Shanghai Hongkou, CN - AIA Group Office', 'China'), ('Shanghai, CN-AIA China', 'China'),
+                              ('PRC, Shanghai', 'China'), ('北京', 'China'), ('重庆/成都', 'China'),
+                              ('Beijing Yizhuang', 'China'), ('2 Locations', 'unknown'), ('Hong Kong SAR; China', 'unknown')):
+            spelled = g.public_bundle({**jd, 'location_evidence':place}, directory, '2026-10-11')['jobs'][0]['scopes']
+            assert spelled['culture']['region'] == region, (place, spelled['culture']['region'])
+            assert (spelled['compensation']['currency'] == 'unknown') == (region == 'unknown')
         # Same employer, same country and seniority share one compensation scope across titles and cities.
         shared = [g.public_bundle({**jd, 'role':role, 'location_evidence':place}, directory, '2026-10-11')['jobs'][0]['scopes']
                   for role, place in (('AI Engineer_BD', 'China, Jiangsu, Suzhou'), ('数据挖掘工程师（大模型方向）_XC', 'China, Shanghai, Shanghai'),

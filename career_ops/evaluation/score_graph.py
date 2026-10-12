@@ -84,7 +84,7 @@ def public_bundle(jd: dict, directory: Path, valid_until: str) -> dict:
         entity = {'company_id': pipeline.jev.digest({'employer': employer, 'identity_url': identity_url})[:24],
                   'name': jd['company'], 'identity_url': identity_url}
 
-    aliases = {'CN': 'China', 'China': 'China', '中国': 'China', 'HK': 'Hong Kong',
+    aliases = {'CN': 'China', 'China': 'China', '中国': 'China', 'PRC': 'China', 'HK': 'Hong Kong',
                'Hong Kong': 'Hong Kong', '香港': 'Hong Kong', 'US': 'United States',
                'United States': 'United States', 'GB': 'United Kingdom',
                'United Kingdom': 'United Kingdom', 'SG': 'Singapore', 'Singapore': 'Singapore'}
@@ -103,17 +103,18 @@ def public_bundle(jd: dict, directory: Path, valid_until: str) -> dict:
             if isinstance(country, dict):
                 country = country.get('name', '')
         elif isinstance(location, str):
-            parts = [part.strip() for part in location.split(',')]
-            country = next((aliases[part] for part in parts if part in aliases), '')
+            parts = [part.strip() for part in re.split(r'[,/]', location)]
+            # ATS sites prefix or suffix the office name to the country code: "CN-Jiaozi ...", "CN - AIA Group Office".
+            tokens = parts + [part.split('-', 1)[0].strip() for part in parts]
+            country = next((aliases[token] for token in tokens if token in aliases), '')
             if not country:
-                prefix = parts[0].split('-', 1)[0]
-                country = aliases.get(prefix, '')
+                # ponytail: bare city names seen in scans; add a city here when a new one shows up as unknown.
+                country = ('Hong Kong' if re.search(r'Hong Kong|香港', location) else 'China' if re.search(
+                    r"Beijing|Shanghai|Suzhou|Chengdu|Shenzhen|Guangzhou|Xi'an|Hangzhou|Nanjing|Chongqing"
+                    r'|北京|上海|苏州|成都|深圳|广州|西安|杭州|南京|重庆', location) else '')
         else:
             continue
         country = aliases.get(country, country)
-        if not country and isinstance(location, str) and location.strip() in {
-                'Beijing', 'Shanghai', 'Suzhou', 'Chengdu', 'Shenzhen', 'Guangzhou', "Xi'an"}:
-            country = 'China'
         if country:
             countries.add(country)
     country = next(iter(countries)) if len(countries) == 1 else 'unknown'
