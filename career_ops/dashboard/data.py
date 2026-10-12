@@ -132,16 +132,6 @@ def list_jobs(db: sqlite3.Connection) -> list[dict]:
             "material_count": materials.get(key, 0),
             "apply_task": apply_tasks.get(key),
         })
-    # Profile IDs derive from scope alone, so sharing is per company.
-    shared: dict[tuple, int] = {}
-    for job in jobs:
-        for ref in job["company_profiles"].values():
-            if ref.get("profile_id"):
-                key = (ref.get("company_id"), ref["profile_id"])
-                shared[key] = shared.get(key, 0) + 1
-    for job in jobs:
-        job["profile_shared"] = {dim: shared[(ref.get("company_id"), ref["profile_id"])]
-                                 for dim, ref in job["company_profiles"].items() if ref.get("profile_id")}
     return jobs
 
 

@@ -248,9 +248,7 @@ function dimSource(d, k) {
   if (ref.source === "explicit_job_quotation") return "JD 明确薪资";
   const scope = Object.entries(ref.scope || {}).map(([a, b]) => `${a}=${b}`).join(", ");
   const expired = ref.valid_until && ref.valid_until < new Date().toISOString().slice(0, 10);
-  const shared = (d.profile_shared || {})[k];
-  return `${esc(scope)} <span class="sub">至 ${esc(ref.valid_until || "—")}</span>${expired ? " " + pill("expired") : ""}`
-    + (shared > 1 ? ` <a href="#" data-company="${esc(d.company)}">共用于 ${shared} 个岗位</a>` : "");
+  return `${esc(scope)} <span class="sub">至 ${esc(ref.valid_until || "—")}</span>${expired ? " " + pill("expired") : ""}`;
 }
 function dimTable(d) {
   if (!d.scores) return "";
@@ -667,10 +665,9 @@ function timelineItems(d) {
 }
 
 document.addEventListener("click", event => {
-  const target = event.target.closest("[data-stage],[data-sort],tr[data-id],[data-tab],[data-material],[data-action],[data-company]");
+  const target = event.target.closest("[data-stage],[data-sort],tr[data-id],[data-tab],[data-material],[data-action]");
   if (!target) return;
-  if (target.dataset.company) { event.preventDefault(); state.q = $("q").value = target.dataset.company; closeJob(); }
-  else if (target.dataset.action) startAction(Number(target.dataset.job), target.dataset.action);
+  if (target.dataset.action) startAction(Number(target.dataset.job), target.dataset.action);
   else if (target.dataset.stage) { state.stage = target.dataset.stage; render(); }
   else if (target.dataset.sort) {
     state.dir = state.sort === target.dataset.sort && state.dir === "desc" ? "asc" : "desc";
