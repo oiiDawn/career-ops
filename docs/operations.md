@@ -282,3 +282,9 @@ Before future deployment changes, take consistent SQLite backups and verify the
 installed script and timezone. Never delete based on old scan-report liveness
 fields. Uncertain checks retry at the next scheduled run or via manual `--apply`;
 they do not block other workflows, and no separate retry timer is installed.
+
+Local cleanup on 2026-10-16 removed completed liveness experiment scripts,
+temporary probes and duplicate progress outputs. Raw source captures, experiment
+inputs/results, acceptance records and pre-deletion database backups remain.
+The removed-file inventory and hashes are in
+`data/maintenance/liveness/local-cleanup-20261016.json`.

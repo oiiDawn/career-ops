@@ -116,13 +116,19 @@ The experiment never writes observations, closes URLs or deletes opportunities.
 The existing production schedules were not changed. Primary artifacts are under
 `data/experiments/liveness-llm-20261016/`:
 
-- `capture.mjs`, `capture-*.json`, `manifest.json`: collector, raw captures and cohort.
-- `compare.py`, `prompt.txt`, `experiment.json`, `input-*.json`: exact experiment implementation and inputs.
+- `capture-*.json`, `manifest.json`: raw captures and cohort.
+- `prompt.txt`, `experiment.json`, `input-*.json`: exact prompt, run configuration and inputs.
 - `raw-*.txt`, `calls-*/*.json`, `result-*.json`, `results.json`: returned text,
   attempt usage/errors and original strict-schema results. Truncated/timeout calls
   retain diagnostics and available usage rather than a complete usable response.
-- `reference.json`, `summarize.py`, `summary.json`: evidence-review reference and
+- `reference.json`, `summary.json`: evidence-review reference and
   final audit, including metadata-only failures and the unsupported closure.
 
 The four metadata-only failures are recovered from retained raw output during
 offline analysis; no model call or production fallback is involved.
+
+The completed one-off collector, comparison and summary scripts and their duplicate
+progress logs were removed during local cleanup on 2026-10-16. Captures, inputs,
+returned outputs and final analysis remain intact. The cleanup inventory and
+removed-file hashes are retained in
+`data/maintenance/liveness/local-cleanup-20261016.json`.
