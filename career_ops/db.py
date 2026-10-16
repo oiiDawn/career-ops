@@ -11,6 +11,7 @@ from career_ops.evaluation.report import dimension_scores
 from career_ops.context import WORKFLOW_VERSION
 from career_ops.input_contracts import canonical_scan_input, digest, scan_is_current, score_inputs, score_is_current
 from career_ops.task_state import WorkflowState
+from career_ops.liveness import require_open
 
 
 class BusinessStore:
@@ -200,6 +201,7 @@ class BusinessStore:
         self.db.close()
 
     def start(self, opportunity_id: str, module: str, input_text: str, *, re_evaluate: bool = False) -> dict:
+        require_open(self.db, opportunity_id)
         input_hash = digest(input_text)
         reused = self.db.execute(
             "SELECT task_id FROM results WHERE opportunity_id=? AND module=? AND input_hash=?",
@@ -229,6 +231,7 @@ class BusinessStore:
             return {"task_id": waiting["task_id"], "status": waiting["status"], "reused": False}
         self.db.execute("BEGIN IMMEDIATE")
         try:
+            require_open(self.db, opportunity_id)
             active = self.db.execute(
                 "SELECT task_id,module,status,input_hash FROM tasks WHERE opportunity_id=? AND status='running'",
                 (opportunity_id,),
@@ -334,6 +337,7 @@ class BusinessStore:
 
     def reset_input(self, task_id: str, input_text: str) -> sqlite3.Row:
         row = self.task(task_id)
+        require_open(self.db, row["opportunity_id"])
         if row["status"] != "waiting":
             raise ValueError(f"Only a waiting task can resume; task is {row['status']}")
         input_hash = digest(input_text)
@@ -355,6 +359,7 @@ class BusinessStore:
 
     def resume_current(self, task_id: str) -> sqlite3.Row:
         row = self.task(task_id)
+        require_open(self.db, row["opportunity_id"])
         if row["status"] != "waiting":
             raise ValueError(f"Only a waiting task can resume; task is {row['status']}")
         updated = self.db.execute("UPDATE tasks SET status='running',waiting_reason=NULL,attempt=attempt+1,attempt_elapsed_seconds=0,attempt_tool_calls=0 WHERE task_id=? AND status='waiting'", (task_id,))
@@ -363,6 +368,7 @@ class BusinessStore:
         return self.task(task_id)
 
     def resume_failed_checkpoint(self, task_id: str) -> sqlite3.Row:
+        require_open(self.db, self.task(task_id)["opportunity_id"])
         updated = self.db.execute(
             "UPDATE tasks SET status='running',waiting_reason=NULL WHERE task_id=? "
             "AND status='waiting' AND waiting_reason LIKE 'failure:%'", (task_id,),
@@ -440,6 +446,7 @@ class BusinessStore:
         self.db.execute("BEGIN IMMEDIATE")
         try:
             current = self.task(state["task_id"])
+            require_open(self.db, current["opportunity_id"])
             if current["status"] != "running" or current["input_hash"] != state["input_hash"]:
                 raise ValueError("Task is no longer running with the current input")
             self.db.execute(

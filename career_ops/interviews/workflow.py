@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import argparse
 import fcntl
+
+from career_ops.liveness import execution_lock, require_open
 import json
 import os
 from pathlib import Path
@@ -360,7 +362,14 @@ def run_task(directory: Path, task_id: str, *, resume_checkpoint: bool = False, 
             fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
         except BlockingIOError as error:
             raise ValueError(f"Interview task is already executing: {task_id}") from error
-        return _run_task(directory, task_id, resume_checkpoint=resume_checkpoint, review_existing=review_existing)
+        store = InterviewStore(directory / "opportunities.db")
+        try:
+            opportunity_id = store.task(task_id)["opportunity_id"]
+            require_open(store.db, opportunity_id)
+        finally:
+            store.close()
+        with execution_lock(directory, opportunity_id):
+            return _run_task(directory, task_id, resume_checkpoint=resume_checkpoint, review_existing=review_existing)
 
 
 def _run_task(directory: Path, task_id: str, *, resume_checkpoint: bool = False, review_existing: bool = False) -> dict:

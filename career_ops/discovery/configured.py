@@ -395,7 +395,11 @@ def _publish_decision(directory: Path, decision: dict, capture, run_id: str | No
                 offer["scan_jd"] = {"text": snapshot_value["text"], "final_url": snapshot_value["url"],
                                     "retrieved_at": snapshot_value["retrieved_at"],
                                     "content_hash": hashlib.sha256(snapshot_value["text"].encode()).hexdigest()}
-            store.ingest(offer, offer["source"], observed_on=decision["today"])
+            if store.ingest(offer, offer["source"], observed_on=decision["today"]) is None:
+                decision["summary"]["newAdded"] -= 1
+                decision["summary"]["dupes"] += 1
+                decision["result"]["added"] -= 1
+                decision["result"]["filtered"]["dupes"] += 1
         for offer in decision["cooldown_offers"]:
             store.scan_outcome(offer, offer["status"])
         for offer, status in decision["verification_outcomes"]:

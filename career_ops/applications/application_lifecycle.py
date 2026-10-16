@@ -8,6 +8,7 @@ import uuid
 from datetime import date
 from pathlib import Path
 from career_ops.context import ROOT, INPUT_ROOT
+from career_ops.liveness import require_open
 from typing import Literal, TypedDict
 
 
@@ -225,6 +226,7 @@ class ApplicationStore:
             if replay:
                 self.db.execute("COMMIT")
                 return replay
+            require_open(self.db, state["opportunity_id"])
             self.validate(state)
             opportunity_id = state["opportunity_id"]
             if state["action"] in {"schedule", "retire", "reopen"}:

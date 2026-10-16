@@ -9,7 +9,8 @@ from pathlib import Path
 import sqlite3
 import unicodedata
 
-from career_ops.liveness import SCHEMA as LIVENESS_SCHEMA
+from career_ops.liveness import SCHEMA as LIVENESS_SCHEMA, closed_url
+from career_ops.discovery.dedup import url_key
 
 
 SCHEMA = """
@@ -128,7 +129,7 @@ class DiscoveryStore:
     def close(self) -> None:
         self.db.close()
 
-    def ingest(self, offer: dict, source: str, *, observed_on: str | None = None) -> dict:
+    def ingest(self, offer: dict, source: str, *, observed_on: str | None = None) -> dict | None:
         """Reuse URL or company-role identity, retaining first source evidence."""
         url, company, role = (str(offer.get(key) or "").strip() for key in ("url", "company", "title"))
         if not url or not company or not role:
@@ -140,7 +141,10 @@ class DiscoveryStore:
         if fingerprint is None and isinstance(description, str) and description:
             fingerprint = hashlib.sha256(description.encode()).hexdigest()[:16]
         payload = {**offer, "description": description, "fingerprint": fingerprint}
+        self.db.execute("BEGIN IMMEDIATE")
         with self.db:
+            if closed_url(self.db, url):
+                return None
             self.db.execute("INSERT OR IGNORE INTO opportunities(url,company,role,identity,source) VALUES(?,?,?,?,?)",
                             (url, company, role, identity, source))
             row = self.db.execute("SELECT id,url FROM opportunities WHERE url=?", (url,)).fetchone()
@@ -171,6 +175,9 @@ class DiscoveryStore:
         if not isinstance(url, str) or not url:
             raise ValueError("Scan outcome requires URL")
         with self.db:
+            if any(url_key(row[0]) == url_key(url) and json.loads(row[1]).get('maintenance_closed')
+                   for row in self.db.execute("SELECT url,payload FROM scan_outcomes WHERE status='skipped_expired'")):
+                return
             self.db.execute("INSERT INTO scan_outcomes(url,status,payload) VALUES(?,?,?) "
                             "ON CONFLICT(url) DO UPDATE SET status=excluded.status,payload=excluded.payload",
                             (url, status, _json({key: value for key, value in offer.items() if key != "url"})))

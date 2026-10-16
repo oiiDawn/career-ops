@@ -228,8 +228,9 @@ def publish_reverse_offers(store: DiscoveryStore, final: list[dict], run_id: str
                            health: list[dict], *, md_out: Path | None, since_days: float,
                            liveness: bool) -> tuple[Path | None, str | None]:
     """Retain offers and one run, then write the optional digest."""
-    for offer in final:
-        store.ingest(offer, offer["source"])
+    retained = [offer for offer in final if store.ingest(offer, offer["source"]) is not None]
+    final[:] = retained
+    summary['found'] = len(final)
     store.scan_run_once("global", run_id, summary, health)
     digest_path, digest_error = None, None
     if md_out and final:

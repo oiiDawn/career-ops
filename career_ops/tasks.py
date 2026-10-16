@@ -28,6 +28,7 @@ from career_ops.evaluation.score_graph import run_score
 from career_ops.input_contracts import apply_inputs, canonical_scan_input, canonical_score_input, digest, score_inputs, score_is_current, validate_resume_payload
 from career_ops.task_state import WorkflowState
 from career_ops.db import BusinessStore
+from career_ops.liveness import execution_lock, require_open
 from career_ops.llm import DEADLINE, load_stub
 from career_ops.model import USAGE
 from career_ops.tracing import traced
@@ -313,6 +314,7 @@ def _run_task(
         if task["workflow_version"] != WORKFLOW_VERSION:
             store.wait(task_id, "workflow_version_incompatible")
             return {"task_id": task_id, "status": "waiting", "reason": "workflow_version_incompatible"}
+        require_open(store.db, task["opportunity_id"])
         runtime = Runtime(store, directory, crash_at)
         name = "prescreen" if task["module"] == "scan" else task["module"]
         config = traced({"configurable": {"thread_id": f"{task_id}:{task['attempt']}"}}, name, task_id)
@@ -332,7 +334,8 @@ def _run_task(
         store.wait(task_id, str(error))
         return {"task_id": task_id, "status": "waiting", "reason": str(error)}
     except Exception as error:
-        if store.task(task_id)["status"] == "running":
+        remaining = store.db.execute("SELECT status FROM tasks WHERE task_id=?", (task_id,)).fetchone()
+        if remaining and remaining["status"] == "running":
             store.wait(task_id, f"failure:{type(error).__name__}")
         raise
     finally:
@@ -354,7 +357,13 @@ def run_task(
             fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
         except BlockingIOError as error:
             raise ValueError(f"Task is already executing: {task_id}") from error
-        return _run_task(directory, task_id, start_state=start_state, crash_at=crash_at)
+        store = BusinessStore(directory / "opportunities.db")
+        try:
+            opportunity_id = store.task(task_id)["opportunity_id"]
+        finally:
+            store.close()
+        with execution_lock(directory, opportunity_id):
+            return _run_task(directory, task_id, start_state=start_state, crash_at=crash_at)
 
 
 def start_and_run(directory: Path, opportunity: str, module: str, input_text: str, crash_at: str | None, re_evaluate: bool = False) -> dict:

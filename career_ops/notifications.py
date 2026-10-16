@@ -16,6 +16,7 @@ from langgraph.checkpoint.sqlite import SqliteSaver
 from langgraph.graph import END, START, StateGraph
 
 from career_ops.db import BusinessStore
+from career_ops.liveness import execution_lock, require_open
 from career_ops.input_contracts import digest, score_is_current
 from career_ops.evaluation.decisions import worth_attention
 from career_ops.evaluation.report import DIMENSIONS, LABELS
@@ -37,6 +38,10 @@ def thread_title(opportunity_id: str, report_hash: str, company: str, role: str,
 
 def eligible_report(store: BusinessStore, opportunity_id: str) -> dict | None:
     """Read the current formal result, not a draft, historical score or shortlist row."""
+    try:
+        require_open(store.db, opportunity_id)
+    except ValueError:
+        return None
     row = store.db.execute(
         "SELECT r.input_hash,r.payload,t.input_payload,e.report_hash,e.dimension_scores,l.status AS eligibility "
         "FROM results r "
@@ -105,6 +110,11 @@ def discord_sender(payload: dict) -> None:
 
 
 def deliver(directory: Path, opportunity_id: str, sender: Callable[[dict], None]) -> dict:
+    with execution_lock(directory, opportunity_id):
+        return _deliver(directory, opportunity_id, sender)
+
+
+def _deliver(directory: Path, opportunity_id: str, sender: Callable[[dict], None]) -> dict:
     """The business row is authoritative; graph replay never repeats a send attempt."""
     store = BusinessStore(directory / "opportunities.db")
     try:

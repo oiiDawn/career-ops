@@ -3,8 +3,14 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
+from contextlib import contextmanager
+import fcntl
+import hashlib
 import json
+from pathlib import Path
 import sqlite3
+
+from career_ops.discovery.dedup import url_key
 
 
 SCHEMA = """
@@ -19,6 +25,54 @@ CREATE TABLE IF NOT EXISTS liveness_observations (
 );
 CREATE INDEX IF NOT EXISTS latest_liveness ON liveness_observations(opportunity_id,id);
 """
+
+
+def closed_url(db: sqlite3.Connection, url: str) -> bool:
+    if not db.execute("SELECT 1 FROM sqlite_master WHERE name='scan_outcomes'").fetchone():
+        return False
+    return any(url_key(row[0]) == url_key(url) for row in db.execute(
+        "SELECT url FROM scan_outcomes WHERE status='skipped_expired'"))
+
+
+def require_open(db: sqlite3.Connection, opportunity_id: str) -> None:
+    """Check business identity at write boundaries; standalone workflow stores have no postings."""
+    if not db.execute("SELECT 1 FROM sqlite_master WHERE name='opportunities'").fetchone():
+        return
+    row = db.execute('SELECT url FROM opportunities WHERE id=?', (opportunity_id,)).fetchone()
+    if not row or closed_url(db, row[0]):
+        raise ValueError(f'Opportunity is removed or confirmed closed: {opportunity_id}')
+
+
+@contextmanager
+def execution_lock(directory: Path, opportunity_id: str):
+    """Serialize deletion with model/file/network work for one opportunity only."""
+    key = hashlib.sha256(str(opportunity_id).encode()).hexdigest()
+    locks = directory / '.locks'
+    locks.mkdir(parents=True, exist_ok=True)
+    with (locks / f'opportunity-{key}.lock').open('a') as lock:
+        fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        yield
+
+
+def explicit_closure(observation: dict) -> bool:
+    """Only posting-bound positive closure evidence authorizes destructive maintenance."""
+    if observation.get('result') != 'expired':
+        return False
+    evidence, code = observation.get('evidence', {}), observation.get('code', '')
+    if observation.get('via_api'):
+        if evidence.get('posting_url') != observation.get('url'):
+            return False
+        if code in {'greenhouse_api_gone', 'workday_api_gone'}:
+            return evidence.get('status') in {404, 410}
+        return (code == 'linkedin_closed_marker' and evidence.get('status') == 200
+                and evidence.get('excerpt', '').lower() in
+                {'no longer accepting applications', 'not currently accepting applications'})
+    if (evidence.get('source_url') != observation.get('url')
+            or url_key(evidence.get('final_url')) != url_key(observation.get('url'))):
+        return False
+    return ((code == 'http_gone' and evidence.get('status') in {404, 410})
+            or (code == 'expired_body' and evidence.get('status') == 200
+                and bool(evidence.get('excerpt'))))
 
 
 def save_observation(db: sqlite3.Connection, opportunity: dict, observation: dict) -> bool:

@@ -6,6 +6,8 @@ import hashlib
 import json
 from pathlib import Path
 import sqlite3
+
+from career_ops.liveness import require_open
 import uuid
 
 
@@ -100,6 +102,7 @@ class InterviewStore:
         input_hash = digest(input_payload)
         self.db.execute("BEGIN IMMEDIATE")
         try:
+            require_open(self.db, opportunity_id)
             existing = self.db.execute(
                 "SELECT * FROM interview_tasks WHERE opportunity_id=? AND session_key=? AND kind=? AND input_hash=?",
                 (str(opportunity_id), session_key, kind, input_hash),

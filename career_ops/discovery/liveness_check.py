@@ -95,7 +95,8 @@ def observe(urls: list[str], *, headed_fallback: bool, throttle_ms: int,
 def maintain(directory: Path, *, headed_fallback: bool, throttle_ms: int) -> dict:
     """Persist each posting independently; errors never change eligibility or scoring."""
     from career_ops.discovery.store import DiscoveryStore
-    from career_ops.liveness import save_observation
+    from career_ops.liveness import save_observation, explicit_closure, closed_url
+    from career_ops.opportunity_cleanup import cleanup_pending, delete_closed, submitted
 
     store = DiscoveryStore(directory / "opportunities.db")
     locks = directory / ".locks"
@@ -106,19 +107,42 @@ def maintain(directory: Path, *, headed_fallback: bool, throttle_ms: int) -> dic
                 fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
             except BlockingIOError:
                 return {"status": "busy", "observations": [], "errors": []}
+            cleanup_errors = cleanup_pending(store.db, directory)
+            for pending in store.db.execute("SELECT url,payload FROM scan_outcomes WHERE status='skipped_expired'").fetchall():
+                payload = json.loads(pending['payload'])
+                if not payload.get('pending_opportunity'):
+                    continue
+                current = store.db.execute('SELECT id,url,created_at FROM opportunities WHERE id=? AND url=?',
+                                           (payload['pending_opportunity'], pending['url'])).fetchone()
+                if current:
+                    evidence = store.db.execute("SELECT payload FROM liveness_observations WHERE opportunity_id=? "
+                                                "AND result='expired' ORDER BY id DESC LIMIT 1", (current['id'],)).fetchone()
+                    if evidence:
+                        try:
+                            delete_closed(store.db, directory, dict(current), json.loads(evidence[0]))
+                        except (OSError, ValueError, sqlite3.Error) as error:
+                            cleanup_errors.append(str(error))
             rows = {row["url"]: dict(row) for row in store.db.execute(
                 "SELECT id,url,created_at FROM opportunities WHERE state IN "
                 "('discovered','evaluating','eligible','evaluated') AND application_state IN ('none','preparing')"
             )}
-            observations, errors, completed = [], [], set()
+            rows = {url: row for url, row in rows.items() if not submitted(store.db, row["id"]) and not closed_url(store.db, url)}
+            observations, errors, completed = [], cleanup_errors, set()
 
             def persist(observation):
                 url = observation["url"]
                 completed.add(url)
                 try:
+                    confirmed = explicit_closure(observation)
+                    if observation.get('result') == 'expired' and not confirmed:
+                        observation = {**observation, 'result': 'uncertain'}
                     if save_observation(store.db, rows[url], observation):
                         observations.append(observation)
-                except (ValueError, KeyError, sqlite3.Error) as error:
+                        if confirmed:
+                            status = delete_closed(store.db, directory, rows[url], observation)
+                            if status == 'cleanup_pending':
+                                errors.append(f'{url}: physical cleanup pending')
+                except (OSError, ValueError, KeyError, sqlite3.Error) as error:
                     errors.append(f"{url}: {error}")
 
             try:
