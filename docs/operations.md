@@ -200,6 +200,10 @@ and closure text, SmartRecruiters application links and Mercedes-Benz custom
 buttons. Hidden or disabled controls cannot establish activity. Inconclusive
 pages receive up to six extra seconds to hydrate; generic missing-page messages
 remain uncertain because Workday also displays them after permission failures.
+Each retry reads the main document and same-origin posting frames together. The
+classifier returns its matched closure excerpt directly; browser collection does
+not maintain a second closure rule list. Generic closure dates or application
+closure text without a posting-specific assertion cannot authorize deletion.
 
 The maintenance command stores observations in `data/opportunities.db` and reports
 per-posting results/errors as JSON. Normal uncertain observations and successful

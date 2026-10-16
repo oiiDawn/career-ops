@@ -10,10 +10,8 @@ import { BROWSER_LIKE_USER_AGENT } from '../shared/user-agent.mjs';
 
 const NAVIGATE_TIMEOUT_MS = 15_000;
 const HYDRATION_WAIT_MS = 2_000;
-// Upper bound on the extra wait for a same-origin child frame to populate, and
-// the poll interval inside it. Only spent when such a frame exists at all.
-const FRAME_CONTENT_TIMEOUT_MS = 6_000;
-const FRAME_CONTENT_POLL_MS = 500;
+const CONTENT_TIMEOUT_MS = 6_000;
+const CONTENT_POLL_MS = 500;
 
 /**
  * Same-origin test used to decide whether a child frame is part of the posting
@@ -239,6 +237,63 @@ export async function validateUrlSecurity(urlString) {
   }
 }
 
+/** Read rendered text and enabled application controls from one document. */
+function readLivenessContent() {
+  const linkedin = /(^|\.)linkedin\.com$/.test(location.hostname);
+  const smartrecruiters = location.hostname === 'jobs.smartrecruiters.com';
+  const candidates = Array.from(
+    document.querySelectorAll('a, button, input[type="submit"], input[type="button"], [role="button"], [href][aria-label]')
+  );
+
+  const applyControls = candidates
+    .filter((element) => {
+      if (element.closest('nav, header, footer')) return false;
+      if (element.closest('[aria-hidden="true"]')) return false;
+      if (element.matches(':disabled, [disabled], [aria-disabled="true"]')) return false;
+
+      const style = window.getComputedStyle(element);
+      if (style.display === 'none' || style.visibility === 'hidden') return false;
+
+      return Array.from(element.getClientRects()).some((rect) => rect.width > 0 && rect.height > 0);
+    })
+    .map((element) => {
+      if ((linkedin && element.matches('[data-modal="job-details-topcard-apply-modal"], [data-tracking-control-name="public_jobs_apply-link-onsite"]'))
+          || (smartrecruiters && element.matches('a[data-sr-track="apply"][href*="/oneclick-ui/company/"]'))) return 'Apply';
+      const label = [
+        element.innerText,
+        element.value,
+        element.getAttribute('aria-label'),
+        element.getAttribute('title'),
+      ]
+        .filter(Boolean)
+        .join(' ')
+        .replace(/\s+/g, ' ')
+        .trim();
+
+      return label;
+    })
+    .filter(Boolean);
+  return { finalUrl: location.href, bodyText: document.body?.innerText ?? '', applyControls };
+}
+
+/** Read the main document and same-origin posting frames together on every attempt. */
+async function readSnapshot(page) {
+  const snapshot = await page.evaluate(readLivenessContent);
+  snapshot.pendingFrames = false;
+  for (const frame of page.frames()) {
+    if (frame === page.mainFrame() || !sameOrigin(frame.url(), snapshot.finalUrl)) continue;
+    try {
+      const content = await frame.evaluate(readLivenessContent);
+      snapshot.bodyText += '\n' + content.bodyText;
+      snapshot.applyControls.push(...content.applyControls);
+      snapshot.pendingFrames ||= !content.bodyText.trim();
+    } catch {
+      snapshot.pendingFrames = true;
+    }
+  }
+  return snapshot;
+}
+
 export async function checkUrlLiveness(page, url, { extraSettleMs = 0 } = {}) {
   const guardError = rejectPrivateOrInvalid(url);
   if (guardError) {
@@ -304,153 +359,18 @@ export async function checkUrlLiveness(page, url, { extraSettleMs = 0 } = {}) {
     // for the headed retry, where a JS anti-bot interstitial needs a moment to clear.
     await page.waitForTimeout(HYDRATION_WAIT_MS + extraSettleMs);
 
-    const finalUrl = page.url();
-    let bodyText = await page.evaluate(() => document.body?.innerText ?? '');
-    const extractApplyControls = () => {
-      const linkedin = /(^|\.)linkedin\.com$/.test(location.hostname);
-      const smartrecruiters = location.hostname === 'jobs.smartrecruiters.com';
-      const mercedes = location.hostname === 'jobs.mercedes-benz.com';
-      const candidates = Array.from(
-        document.querySelectorAll('a, button, input[type="submit"], input[type="button"], [role="button"]' + (mercedes ? ', wb-button' : ''))
-      );
-
-      return candidates
-        .filter((element) => {
-          if (element.closest('nav, header, footer')) return false;
-          if (element.closest('[aria-hidden="true"]')) return false;
-          if (element.matches(':disabled, [disabled], [aria-disabled="true"]')) return false;
-
-          const style = window.getComputedStyle(element);
-          if (style.display === 'none' || style.visibility === 'hidden') return false;
-          if (!element.getClientRects().length) return false;
-
-          return Array.from(element.getClientRects()).some((rect) => rect.width > 0 && rect.height > 0);
-        })
-        .map((element) => {
-          if ((linkedin && element.matches('[data-modal="job-details-topcard-apply-modal"], [data-tracking-control-name="public_jobs_apply-link-onsite"]'))
-              || (smartrecruiters && element.matches('a[data-sr-track="apply"][href*="/oneclick-ui/company/"]'))) return 'Apply';
-          const label = [
-            element.innerText,
-            element.value,
-            element.getAttribute('aria-label'),
-            element.getAttribute('title'),
-          ]
-            .filter(Boolean)
-            .join(' ')
-            .replace(/\s+/g, ' ')
-            .trim();
-
-          return label;
-        })
-        .filter(Boolean);
-    };
-
-    let applyControls = await page.evaluate(extractApplyControls);
-    let frameText = '';
-
-    // Some ATS render the whole posting inside a same-origin iframe and leave the
-    // top-level document as an empty shell. iCIMS is the reference case: measured
-    // 2026-08-14, the outer document of a LIVE posting held 13 characters and no
-    // apply control, so classifyLiveness reached `insufficient_content` and called
-    // it expired. 92 live postings were closed that way in one sweep, and a false
-    // `expired` is the expensive direction — it is written to scan-history as
-    // skipped_expired and dedup-filters the job out of every later scan.
-    //
-    // Reading same-origin child frames cannot resurrect a dead posting: a removed
-    // iCIMS job answers HTTP 410 at the top level (verified on two fabricated job
-    // ids and one genuinely dead posting), so it short-circuits on status long
-    // before any content check, and its error frame carries zero apply controls.
-    // The frame ATTACHES fast but FILLS late. Measured on iCIMS 2026-08-14: the
-    // same-origin child frame is present at 2000ms with 0 characters and only
-    // populates between 3000 and 4000ms, so reading it at HYDRATION_WAIT_MS gets
-    // an empty document and changes nothing. Poll until it has content, bounded.
-    // The cost is only paid on pages that actually have a same-origin child
-    // frame, so the ATS that render inline are unaffected.
-    // Frame aggregation is an enhancement, never a requirement. Callers may pass
-    // a lightweight page object that only implements goto/url/evaluate — the
-    // test doubles in test-all.mjs do — and such a caller must keep getting the
-    // top-level verdict rather than a navigation_error.
-    const supportsFrames = typeof page?.frames === 'function' && typeof page?.mainFrame === 'function';
-
-    const childFrames = () =>
-      !supportsFrames
-        ? []
-        : page.frames().filter((frame) => {
-            if (frame === page.mainFrame()) return false;
-            try {
-              return sameOrigin(frame.url() || '', finalUrl); // excludes about:blank, ads, tag managers
-            } catch {
-              return false;
-            }
-          });
-
-    // A 404/410 is decided by the status line alone, so no amount of frame
-    // content can change it. Without this, a dead posting whose error page also
-    // renders into an iframe pays the poll while that error page fills, purely
-    // to be told what the status already said. Measured on two dead iCIMS
-    // postings: 5822ms and 3314ms end to end, the spread being poll iterations.
-    //
-    // The status rule is NOT restated here. classifyLiveness owns it, so this
-    // asks it and keys off the code it returns; a duplicated `status === 410`
-    // would be a second copy of that rule waiting to drift.
-    const topLevelVerdict = classifyLiveness({ status, requestedUrl: url, finalUrl, bodyText, applyControls });
-    if (topLevelVerdict.code === 'http_gone') {
-      return { ...topLevelVerdict, evidence: { source_url: url, final_url: finalUrl, status } };
-    }
-
-    if (childFrames().length > 0) {
-      const deadline = Date.now() + FRAME_CONTENT_TIMEOUT_MS;
-      // Wait for EVERY qualifying frame, not merely the first one to fill: with
-      // two same-origin frames the posting could otherwise be read while still
-      // empty. Measured across five iCIMS tenants there is exactly one
-      // qualifying frame per page, so in practice this is the same loop.
-      for (;;) {
-        let anyEmpty = false;
-        for (const frame of childFrames()) {
-          try {
-            const probe = await frame.evaluate(() => document.body?.innerText ?? '');
-            if (!probe.trim()) anyEmpty = true;
-          } catch {
-            // detached mid-poll; try again on the next tick
-          }
-        }
-        if (!anyEmpty || Date.now() >= deadline) break;
-        await page.waitForTimeout(FRAME_CONTENT_POLL_MS);
-      }
-    }
-
-    for (const frame of childFrames()) {
-      try {
-        const text = await frame.evaluate(() => document.body?.innerText ?? '');
-        if (text && text.trim()) frameText += '\n' + text;
-        applyControls = applyControls.concat(await frame.evaluate(extractApplyControls));
-      } catch {
-        // detached or cross-origin mid-read; the top-level reading still stands
-      }
-    }
-
-    if (page && page._blockedByGuard) {
-      return { result: 'uncertain', code: page._blockedByGuard.code, reason: page._blockedByGuard.reason };
-    }
-
-    let verdict = classifyLiveness({
-      status,
-      requestedUrl: url,
-      finalUrl,
-      bodyText: bodyText + frameText,
-      applyControls,
-    });
-    if (status === 200 && ['no_apply_control', 'insufficient_content'].includes(verdict.code)) {
-      for (let attempt = 0; attempt < 12 && ['no_apply_control', 'insufficient_content'].includes(verdict.code); attempt++) {
-        await page.waitForTimeout(500);
-        bodyText = await page.evaluate(() => document.body?.innerText ?? '');
-        applyControls = await page.evaluate(extractApplyControls);
-        verdict = classifyLiveness({ status, requestedUrl: url, finalUrl: page.url(), bodyText: bodyText + frameText, applyControls });
-      }
+    for (let attempt = 0; ; attempt++) {
+      const snapshot = await readSnapshot(page);
       if (page._blockedByGuard) return { result: 'uncertain', ...page._blockedByGuard };
+      const verdict = classifyLiveness({ status, requestedUrl: url, ...snapshot });
+      const inconclusive = ['no_apply_control', 'insufficient_content'].includes(verdict.code);
+      if (status !== 200 || attempt >= CONTENT_TIMEOUT_MS / CONTENT_POLL_MS
+          || (!snapshot.pendingFrames && !inconclusive)) {
+        return { ...verdict, evidence: { ...verdict.evidence,
+          source_url: url, final_url: snapshot.finalUrl, status } };
+      }
+      await page.waitForTimeout(CONTENT_POLL_MS);
     }
-    const banner = (bodyText + frameText).match(/(?:no longer|not currently) accepting applications|已停止接受求职申请|不再接受應徵|(?:this (?:job|position|role)).{0,60}(?:closed|expired|no longer available)|(?:position|job).{0,60}has been filled/i);
-    return { ...verdict, evidence: { source_url: url, final_url: page.url(), status, excerpt: banner?.[0] || '' } };
   } catch (err) {
     if (page && page._blockedByGuard) {
       return { result: 'uncertain', code: page._blockedByGuard.code, reason: page._blockedByGuard.reason };

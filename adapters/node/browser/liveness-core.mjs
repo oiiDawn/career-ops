@@ -28,9 +28,6 @@ const HARD_EXPIRED_PATTERNS = [
   /this (position|role|job) (is )?no longer/i,
   /this job (listing )?is closed/i,
   /job (listing )?not found/i,
-  /applications?\s+(?:(?:have|are|is)\s+)?closed/i,
-  /closed on \d{1,2}\s+(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)/i,
-  /closed on (?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)\w*\s+\d{1,2}/i,
   /diese stelle (ist )?(nicht mehr|bereits) besetzt/i,
   // French closure banners. Spelled accent-free on purpose: normalizeForMatch
   // strips diacritics, so "expiree" here matches "expirée" on the page.
@@ -158,7 +155,8 @@ export function classifyLiveness({ status = 0, requestedUrl = '', finalUrl = '',
     if (/^https:\/\/(?:[\w-]+\.)?linkedin\.com\//i.test(requestedUrl) && hasApplyControl(applyControls)) {
       return { result: 'uncertain', code: 'linkedin_signals_disagree', reason: 'Closure and application controls conflict' };
     }
-    return { result: 'expired', code: 'expired_body', reason: `pattern matched: ${expiredBody.source}` };
+    return { result: 'expired', code: 'expired_body', reason: `pattern matched: ${expiredBody.source}`,
+      evidence: { excerpt: bodyText.match(expiredBody)[0] } };
   }
 
   if (/the page you are looking for doesn.t exist/i.test(bodyText)) {
