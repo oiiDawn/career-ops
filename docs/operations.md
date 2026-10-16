@@ -252,8 +252,9 @@ reported. Same-URL reopening requires an explicit manual recheck and clearing th
 closed outcome before re-ingestion; merely inspecting a URL does not clear it.
 
 The dedicated entrypoint is `scripts/career-ops-liveness.sh`, installed identically
-under `~/.hermes/scripts/`. Hermes job `9c81e6e28ec3` was enabled on 2026-10-16
-at 06:00 and 18:00 Asia/Shanghai, with this repository as working directory,
+under `~/.hermes/scripts/`. Hermes job `9c81e6e28ec3` runs once daily
+at 05:00 Asia/Shanghai, one hour before the 06:00 discovery run,
+with this repository as working directory,
 `no-agent` execution and local output. `hermes cron doctor` passed for all three
 active jobs; existing discovery and scoring schedules were preserved.
 
