@@ -67,6 +67,24 @@ function isSafeValue(v) {
 //                  is still genuinely live elsewhere (see the `lever` entry).
 const ATS_PROVIDERS = [
   {
+    id: 'hkstp',
+    match(u) {
+      if (u.hostname !== 'talentjobseeker.hkstp.org') return null;
+      const match = u.pathname.match(/^\/job\/(\d+)\/[^/]+\/?$/);
+      return match ? { id: match[1] } : null;
+    },
+    api: ({ id }) => `https://talentjobseeker.hkstp.org/api/position/${id}`,
+    api404Authoritative: false,
+    async interpret(res, { id }) {
+      const { data } = await res.json();
+      const now = Date.now();
+      if (String(data?.id) !== id || data.status !== 'active'
+          || !(Date.parse(data.publish_at) <= now && now < Date.parse(data.expire_at))) return null;
+      return { result: 'active', code: 'hkstp_api_active',
+        reason: 'The matching HKSTP posting is active within its publication period' };
+    },
+  },
+  {
     id: 'smartrecruiters',
     match(u) {
       if (u.hostname !== 'jobs.smartrecruiters.com') return null;

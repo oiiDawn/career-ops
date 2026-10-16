@@ -195,7 +195,9 @@ then a headless browser; no model is called. Each observation is committed as it
 arrives, so a later failed URL or collector crash cannot erase earlier results.
 
 SmartRecruiters requires a matching posting ID, explicit public/active fields and
-a matching application URL. Browser checks recognize localized LinkedIn controls
+a matching application URL. HKSTP requires a matching posting ID, explicit active
+status and a current publication period; API failures cannot establish closure.
+Browser checks recognize localized LinkedIn controls
 and closure text, SmartRecruiters application links and Mercedes-Benz custom
 buttons. Hidden or disabled controls cannot establish activity. Inconclusive
 pages receive up to six extra seconds to hydrate; generic missing-page messages
