@@ -67,6 +67,25 @@ function isSafeValue(v) {
 //                  is still genuinely live elsewhere (see the `lever` entry).
 const ATS_PROVIDERS = [
   {
+    id: 'smartrecruiters',
+    match(u) {
+      if (u.hostname !== 'jobs.smartrecruiters.com') return null;
+      const match = u.pathname.match(/^\/([^/]+)\/(\d+)(?:-[^/]*)?\/?$/);
+      return match ? { company: match[1], id: match[2] } : null;
+    },
+    api: ({ company, id }) => `https://api.smartrecruiters.com/v1/companies/${company}/postings/${id}`,
+    api404Authoritative: false,
+    async interpret(res, { company, id }) {
+      const posting = await res.json();
+      if (String(posting?.id) !== id || posting.active !== true || posting.visibility !== 'PUBLIC') return null;
+      const apply = new URL(posting.applyUrl);
+      if (apply.protocol !== 'https:' || apply.hostname !== 'jobs.smartrecruiters.com'
+          || !apply.pathname.startsWith(`/${company}/${id}-`)) return null;
+      return { result: 'active', code: 'smartrecruiters_api_active',
+        reason: 'The matching public posting is active and provides an application URL' };
+    },
+  },
+  {
     id: 'greenhouse',
     // boards.greenhouse.io/{board}/jobs/{id} · job-boards[.eu].greenhouse.io/{board}/jobs/{id}
     match(u) {
@@ -190,7 +209,7 @@ const ATS_PROVIDERS = [
 // (`<figcaption class="closed-job__flavor--closed">No longer accepting
 // applications</figcaption>`) and drops the apply control. A live posting shows one
 // of two apply controls: the on-site button, or the off-site sign-in modal.
-const LINKEDIN_CLOSED_MARKER = /(?:No longer|Not currently) accepting applications/i;
+const LINKEDIN_CLOSED_MARKER = /(?:No longer|Not currently) accepting applications|已停止接受求职申请|不再接受應徵/i;
 const LINKEDIN_APPLY_CONTROL = /public_jobs_apply-link-onsite|job-details-topcard-apply-modal/;
 
 /**

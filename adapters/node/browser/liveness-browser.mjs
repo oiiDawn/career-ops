@@ -305,16 +305,20 @@ export async function checkUrlLiveness(page, url, { extraSettleMs = 0 } = {}) {
     await page.waitForTimeout(HYDRATION_WAIT_MS + extraSettleMs);
 
     const finalUrl = page.url();
-    const bodyText = await page.evaluate(() => document.body?.innerText ?? '');
+    let bodyText = await page.evaluate(() => document.body?.innerText ?? '');
     const extractApplyControls = () => {
+      const linkedin = /(^|\.)linkedin\.com$/.test(location.hostname);
+      const smartrecruiters = location.hostname === 'jobs.smartrecruiters.com';
+      const mercedes = location.hostname === 'jobs.mercedes-benz.com';
       const candidates = Array.from(
-        document.querySelectorAll('a, button, input[type="submit"], input[type="button"], [role="button"]')
+        document.querySelectorAll('a, button, input[type="submit"], input[type="button"], [role="button"]' + (mercedes ? ', wb-button' : ''))
       );
 
       return candidates
         .filter((element) => {
           if (element.closest('nav, header, footer')) return false;
           if (element.closest('[aria-hidden="true"]')) return false;
+          if (element.matches(':disabled, [disabled], [aria-disabled="true"]')) return false;
 
           const style = window.getComputedStyle(element);
           if (style.display === 'none' || style.visibility === 'hidden') return false;
@@ -323,6 +327,8 @@ export async function checkUrlLiveness(page, url, { extraSettleMs = 0 } = {}) {
           return Array.from(element.getClientRects()).some((rect) => rect.width > 0 && rect.height > 0);
         })
         .map((element) => {
+          if ((linkedin && element.matches('[data-modal="job-details-topcard-apply-modal"], [data-tracking-control-name="public_jobs_apply-link-onsite"]'))
+              || (smartrecruiters && element.matches('a[data-sr-track="apply"][href*="/oneclick-ui/company/"]'))) return 'Apply';
           const label = [
             element.innerText,
             element.value,
@@ -427,15 +433,24 @@ export async function checkUrlLiveness(page, url, { extraSettleMs = 0 } = {}) {
       return { result: 'uncertain', code: page._blockedByGuard.code, reason: page._blockedByGuard.reason };
     }
 
-    const verdict = classifyLiveness({
+    let verdict = classifyLiveness({
       status,
       requestedUrl: url,
       finalUrl,
       bodyText: bodyText + frameText,
       applyControls,
     });
-    const banner = (bodyText + frameText).match(/(?:no longer|not currently) accepting applications|(?:this (?:job|position|role)).{0,60}(?:closed|expired|no longer available)|(?:position|job).{0,60}has been filled/i);
-    return { ...verdict, evidence: { source_url: url, final_url: finalUrl, status, excerpt: banner?.[0] || '' } };
+    if (status === 200 && ['no_apply_control', 'insufficient_content'].includes(verdict.code)) {
+      for (let attempt = 0; attempt < 12 && ['no_apply_control', 'insufficient_content'].includes(verdict.code); attempt++) {
+        await page.waitForTimeout(500);
+        bodyText = await page.evaluate(() => document.body?.innerText ?? '');
+        applyControls = await page.evaluate(extractApplyControls);
+        verdict = classifyLiveness({ status, requestedUrl: url, finalUrl: page.url(), bodyText: bodyText + frameText, applyControls });
+      }
+      if (page._blockedByGuard) return { result: 'uncertain', ...page._blockedByGuard };
+    }
+    const banner = (bodyText + frameText).match(/(?:no longer|not currently) accepting applications|已停止接受求职申请|不再接受應徵|(?:this (?:job|position|role)).{0,60}(?:closed|expired|no longer available)|(?:position|job).{0,60}has been filled/i);
+    return { ...verdict, evidence: { source_url: url, final_url: page.url(), status, excerpt: banner?.[0] || '' } };
   } catch (err) {
     if (page && page._blockedByGuard) {
       return { result: 'uncertain', code: page._blockedByGuard.code, reason: page._blockedByGuard.reason };

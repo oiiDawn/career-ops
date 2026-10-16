@@ -1,9 +1,4 @@
-// Portals write closure banners with typographic punctuation and accents:
-// WTTJ renders "Cette offre n’est plus disponible." with U+2019, not ASCII "'".
-// A pattern spelled with a plain apostrophe silently never matches, so a clearly
-// expired posting fell through to `no_apply_control` → uncertain → never filtered.
-// Normalize once at the entry point and spell every pattern below in the
-// normalized alphabet: ASCII quotes, no diacritics, collapsed whitespace.
+/** Classify posting-bound HTTP, closure and application evidence without network access. */
 function normalizeForMatch(text = '') {
   if (typeof text !== 'string') return '';
   return text
@@ -29,10 +24,10 @@ const HARD_EXPIRED_PATTERNS = [
   /this job has expired/i,
   /job posting has expired/i,
   /(?:no longer|not currently) accepting applications/i,
+  /已停止接受求职申请|不再接受應徵/,
   /this (position|role|job) (is )?no longer/i,
   /this job (listing )?is closed/i,
   /job (listing )?not found/i,
-  /the page you are looking for doesn.t exist/i,
   /applications?\s+(?:(?:have|are|is)\s+)?closed/i,
   /closed on \d{1,2}\s+(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)/i,
   /closed on (?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)\w*\s+\d{1,2}/i,
@@ -160,7 +155,14 @@ export function classifyLiveness({ status = 0, requestedUrl = '', finalUrl = '',
 
   const expiredBody = firstMatch(HARD_EXPIRED_PATTERNS, bodyText);
   if (expiredBody) {
+    if (/^https:\/\/(?:[\w-]+\.)?linkedin\.com\//i.test(requestedUrl) && hasApplyControl(applyControls)) {
+      return { result: 'uncertain', code: 'linkedin_signals_disagree', reason: 'Closure and application controls conflict' };
+    }
     return { result: 'expired', code: 'expired_body', reason: `pattern matched: ${expiredBody.source}` };
+  }
+
+  if (/the page you are looking for doesn.t exist/i.test(bodyText)) {
+    return { result: 'uncertain', code: 'page_unavailable', reason: 'Generic missing-page message does not establish posting closure' };
   }
 
   // A dead permalink that 301s to a generic search/listing page still shows

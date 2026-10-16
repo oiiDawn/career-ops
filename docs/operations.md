@@ -194,6 +194,13 @@ cannot be combined with diagnostic URLs or files. It uses public ATS APIs first,
 then a headless browser; no model is called. Each observation is committed as it
 arrives, so a later failed URL or collector crash cannot erase earlier results.
 
+SmartRecruiters requires a matching posting ID, explicit public/active fields and
+a matching application URL. Browser checks recognize localized LinkedIn controls
+and closure text, SmartRecruiters application links and Mercedes-Benz custom
+buttons. Hidden or disabled controls cannot establish activity. Inconclusive
+pages receive up to six extra seconds to hydrate; generic missing-page messages
+remain uncertain because Workday also displays them after permission failures.
+
 The maintenance command stores observations in `data/opportunities.db` and reports
 per-posting results/errors as JSON. Normal uncertain observations and successful
 closures are not command failures. Collection/storage/cleanup errors are reported

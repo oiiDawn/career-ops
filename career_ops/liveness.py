@@ -69,7 +69,8 @@ def explicit_closure(observation: dict) -> bool:
             return evidence.get('status') in {404, 410}
         return (code == 'linkedin_closed_marker' and evidence.get('status') == 200
                 and isinstance(evidence.get('excerpt'), str) and evidence['excerpt'].lower() in
-                {'no longer accepting applications', 'not currently accepting applications'})
+                {'no longer accepting applications', 'not currently accepting applications',
+                 '已停止接受求职申请', '不再接受應徵'})
     if (evidence.get('source_url') != observation.get('url')
             or url_key(evidence.get('final_url')) != url_key(observation.get('url'))):
         return False
