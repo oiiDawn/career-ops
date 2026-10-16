@@ -48,9 +48,17 @@ stale frame accumulation, duplicate closure matcher and Mercedes-specific branch
 are removed. Generic `Applications closed` and `Closed on DATE` phrases alone no
 longer establish posting closure.
 
+The installed Hermes wrapper then completed a production run against all 209
+candidates with no run errors: 165 active, 42 uncertain, 2 deleted. All original
+43 targets have verified persisted outcomes (13 active, 28 uncertain, 2 deleted).
+Independent backup comparison passed integrity, foreign-key, submitted-application,
+shared-company-rating, frozen-score and cleanup checks. Source hashes stayed
+unchanged during execution. The installed wrapper matches the repository wrapper,
+and Hermes doctor passed for all three active jobs. Full acceptance evidence is
+in `data/maintenance/liveness/2026-10-16-fixed-run/validation.json`.
+
 Verdict: Ship.
 
 Lean: 82 source lines removed net across the browser reader and classifier.
 
-Not checked: unrelated repository workflows were not audited; live acceptance is
-recorded separately from these isolated regression checks.
+Not checked: unrelated repository workflows were not audited.

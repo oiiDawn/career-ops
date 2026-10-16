@@ -249,6 +249,18 @@ Results and validation are in `data/maintenance/liveness/2026-10-16-first-run.js
 and `2026-10-16-first-run-validation.json`; consistent pre-run SQLite backups are
 under `data/backups/liveness-first-run-20261016T084211/`.
 
+After the [Ponytail review](research/posting-liveness-ponytail-review-2026-10-16.md),
+the installed Hermes entrypoint was manually run with revision `a5658d1a` on
+2026-10-16. All 209 current candidates were checked: 165 active, 42 uncertain,
+and 2 explicitly closed and deleted. The original 43 uncertain postings now have
+13 active, 28 uncertain and 2 deleted (opportunities 154 and 354). Validation
+confirmed all 43 persisted outcomes, database integrity, no dangling deleted-job
+references or pending cleanup, and unchanged submitted applications/shared evidence.
+Results, preflight source hashes and validation are retained under
+`data/maintenance/liveness/2026-10-16-fixed-run/`; the consistent pre-run backups
+are under `data/backups/liveness-fixed-run-20261016T101520/`. The cron remains
+active on the same repository workdir and wrapper; doctor passed after the run.
+
 Before future deployment changes, take consistent SQLite backups and verify the
 installed script and timezone. Never delete based on old scan-report liveness
 fields. Uncertain checks retry at the next scheduled run or via manual `--apply`;
