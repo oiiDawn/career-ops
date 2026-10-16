@@ -220,3 +220,9 @@ const API = `https://www.linkedin.com/jobs-guest/jobs/api/jobPosting/${ID}`;
   check('the liveness collector consults the API rung before the browser rung',
     apiAt > -1 && browserAt > -1 && apiAt < browserAt, `api=${apiAt} browser=${browserAt}`);
 }
+
+{
+  const closed = classifyLinkedInPosting('<figcaption>Not currently accepting applications</figcaption>');
+  check('the observed LinkedIn closure wording is explicit evidence',
+    closed.result === 'expired' && closed.evidence.excerpt === 'Not currently accepting applications');
+}

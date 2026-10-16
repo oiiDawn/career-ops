@@ -389,7 +389,7 @@ export async function checkUrlLiveness(page, url, { extraSettleMs = 0 } = {}) {
     // would be a second copy of that rule waiting to drift.
     const topLevelVerdict = classifyLiveness({ status, requestedUrl: url, finalUrl, bodyText, applyControls });
     if (topLevelVerdict.code === 'http_gone') {
-      return topLevelVerdict;
+      return { ...topLevelVerdict, evidence: { source_url: url, final_url: finalUrl, status } };
     }
 
     if (childFrames().length > 0) {
@@ -427,13 +427,15 @@ export async function checkUrlLiveness(page, url, { extraSettleMs = 0 } = {}) {
       return { result: 'uncertain', code: page._blockedByGuard.code, reason: page._blockedByGuard.reason };
     }
 
-    return classifyLiveness({
+    const verdict = classifyLiveness({
       status,
       requestedUrl: url,
       finalUrl,
       bodyText: bodyText + frameText,
       applyControls,
     });
+    const banner = (bodyText + frameText).match(/(?:no longer|not currently) accepting applications|(?:this (?:job|position|role)).{0,60}(?:closed|expired|no longer available)|(?:position|job).{0,60}has been filled/i);
+    return { ...verdict, evidence: { source_url: url, final_url: finalUrl, status, excerpt: banner?.[0] || '' } };
   } catch (err) {
     if (page && page._blockedByGuard) {
       return { result: 'uncertain', code: page._blockedByGuard.code, reason: page._blockedByGuard.reason };

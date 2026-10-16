@@ -9,6 +9,8 @@ from pathlib import Path
 import sqlite3
 import unicodedata
 
+from career_ops.liveness import SCHEMA as LIVENESS_SCHEMA
+
 
 SCHEMA = """
 PRAGMA foreign_keys=ON;
@@ -95,7 +97,7 @@ class DiscoveryStore:
         self.db = sqlite3.connect(path)
         self.db.row_factory = sqlite3.Row
         self.db.execute("PRAGMA busy_timeout=5000")
-        self.db.executescript(SCHEMA)
+        self.db.executescript(SCHEMA + LIVENESS_SCHEMA)
         self._migrate()
 
     def _migrate(self) -> None:

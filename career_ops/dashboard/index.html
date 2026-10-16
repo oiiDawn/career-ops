@@ -488,9 +488,10 @@ function overview(d) {
   const rows = [
     ["职位链接", `<a href="${esc(safeUrl(d.url))}" target="_blank" rel="noopener noreferrer">${esc(d.url)}</a>`],
     ["公司", esc(d.company)], ["来源", esc(d.source)], ["地点", esc(d.location || "—")],
-    ["流程状态", pill(d.state)], ["存活", `${pill(d.liveness)} <span class="sub">${esc(artifact.liveness_reason || "")}</span>`],
+    ["流程状态", pill(d.state)], ["存活", `${pill(d.liveness)} <span class="sub">${esc(d.liveness_reason || "")}</span>`],
     ["预筛", pill(d.prescreen)], ["资格", pill(d.eligibility)],
     ["决策", pill(d.action)],
+    ["活跃检查时间", esc(d.liveness_checked_at || "—")], ["上次确认活跃", esc(d.liveness_last_active_at || "—")],
     ["发现时间", esc(d.created_at)], ["抓取时间", esc(d.captured_at || "—")], ["打分时间", esc(d.scored_at || "—")],
     ["投递状态", `${pill(d.application_status)} <span class="sub">${esc(d.application_updated_at || "")}</span>`],
   ];

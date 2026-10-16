@@ -1,8 +1,13 @@
-"""Select current opportunities and report read-only liveness checks."""
+"""Check current postings independently and optionally maintain their business observations."""
 
 from __future__ import annotations
 
 import argparse
+from datetime import datetime, timezone
+import fcntl
+import os
+import selectors
+import time
 import json
 from pathlib import Path
 import sqlite3
@@ -37,24 +42,97 @@ def input_urls(args: argparse.Namespace) -> list[str]:
     return current_urls(args.directory / "opportunities.db")
 
 
-def observe(urls: list[str], *, headed_fallback: bool, throttle_ms: int) -> list[dict]:
-    """Use the retained Node API/browser readers as one bounded collection tool."""
-    with tempfile.TemporaryDirectory(prefix="career-ops-liveness-") as directory:
-        source, target = Path(directory) / "input.json", Path(directory) / "output.json"
+def observe(urls: list[str], *, headed_fallback: bool, throttle_ms: int,
+            on_observation: Callable[[dict], None] | None = None) -> list[dict]:
+    """Commit streamed progress before a later URL or collector process can fail."""
+    observations = []
+    with tempfile.TemporaryDirectory(prefix="career-ops-liveness-") as temporary:
+        source = Path(temporary) / "input.json"
         source.write_text(json.dumps({"urls": urls, "headed_fallback": headed_fallback,
                                       "throttle_ms": throttle_ms}))
-        timeout = max(900, len(urls) * (120 + 2 * throttle_ms / 1000) + 60)
-        command = ["node", str(ROOT / "adapters/node/browser/_liveness-observe.mjs"), str(source), str(target)]
-        result = subprocess.run(command, cwd=ROOT, capture_output=True, text=True, timeout=timeout)
-        if result.returncode or not target.is_file():
-            raise RuntimeError((result.stderr or result.stdout).strip() or "Liveness collection failed")
-        observations = json.loads(target.read_text())["results"]
-    if (not isinstance(observations, list) or len(observations) != len(urls)
-            or any(row.get("url") != url or row.get("result") not in {"active", "expired", "uncertain"}
-                   or not isinstance(row.get("via_api"), bool)
-                   for row, url in zip(observations, urls))):
-        raise ValueError("Liveness collection returned invalid observations")
+        command = ["node", str(ROOT / "adapters/node/browser/_liveness-observe.mjs"), str(source)]
+        with tempfile.TemporaryFile() as errors, subprocess.Popen(
+            command, cwd=ROOT, stdout=subprocess.PIPE, stderr=errors,
+        ) as process, selectors.DefaultSelector() as selector:
+            selector.register(process.stdout, selectors.EVENT_READ)
+            buffer = b""
+            deadline = time.monotonic() + max(900, len(urls) * (120 + 2 * throttle_ms / 1000) + 60)
+            try:
+                while selector.get_map():
+                    remaining = deadline - time.monotonic()
+                    if remaining <= 0:
+                        raise TimeoutError("Liveness collector exceeded its time budget")
+                    if not selector.select(min(remaining, 1)):
+                        continue
+                    chunk = os.read(process.stdout.fileno(), 65536)
+                    if not chunk:
+                        selector.unregister(process.stdout)
+                        break
+                    buffer += chunk
+                    while b"\n" in buffer:
+                        line, buffer = buffer.split(b"\n", 1)
+                        observation = json.loads(line)
+                        index = len(observations)
+                        if (index >= len(urls) or not isinstance(observation, dict)
+                                or observation.get("url") != urls[index]
+                                or observation.get("result") not in {"active", "expired", "uncertain"}
+                                or not isinstance(observation.get("via_api"), bool)):
+                            raise ValueError("Invalid liveness collector observation")
+                        observations.append(observation)
+                        if on_observation:
+                            on_observation(observation)
+                process.wait(timeout=max(0.1, deadline - time.monotonic()))
+                if process.returncode or buffer or len(observations) != len(urls):
+                    errors.seek(0)
+                    raise RuntimeError(errors.read().decode(errors="replace")[-2000:] or "Incomplete liveness collection")
+            finally:
+                if process.poll() is None:
+                    process.kill()
+                    process.wait()
     return observations
+
+
+def maintain(directory: Path, *, headed_fallback: bool, throttle_ms: int) -> dict:
+    """Persist each posting independently; errors never change eligibility or scoring."""
+    from career_ops.discovery.store import DiscoveryStore
+    from career_ops.liveness import save_observation
+
+    store = DiscoveryStore(directory / "opportunities.db")
+    locks = directory / ".locks"
+    locks.mkdir(exist_ok=True)
+    try:
+        with (locks / "liveness.lock").open("a") as lock:
+            try:
+                fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            except BlockingIOError:
+                return {"status": "busy", "observations": [], "errors": []}
+            rows = {row["url"]: dict(row) for row in store.db.execute(
+                "SELECT id,url,created_at FROM opportunities WHERE state IN "
+                "('discovered','evaluating','eligible','evaluated') AND application_state IN ('none','preparing')"
+            )}
+            observations, errors, completed = [], [], set()
+
+            def persist(observation):
+                url = observation["url"]
+                completed.add(url)
+                try:
+                    if save_observation(store.db, rows[url], observation):
+                        observations.append(observation)
+                except (ValueError, KeyError, sqlite3.Error) as error:
+                    errors.append(f"{url}: {error}")
+
+            try:
+                observe(list(rows), headed_fallback=headed_fallback, throttle_ms=throttle_ms,
+                        on_observation=persist)
+            except (OSError, ValueError, RuntimeError, subprocess.SubprocessError) as error:
+                errors.append(str(error))
+                for url in rows.keys() - completed:
+                    persist({"url": url, "result": "uncertain", "code": "collection_error",
+                             "checked_at": datetime.now(timezone.utc).isoformat(), "via_api": False,
+                             "reason": str(error)[:500], "evidence": {}})
+            return {"status": "partial" if errors else "completed", "observations": observations, "errors": errors}
+    finally:
+        store.close()
 
 
 def check(*, select_urls: Callable[[], list[str]], reader: Callable[[list[str]], list[dict]]) -> dict:
@@ -74,12 +152,15 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Check current opportunity URLs without changing business state")
     parser.add_argument("--directory", type=Path, default=ROOT / "data")
     parser.add_argument("--file", type=Path)
+    parser.add_argument("--apply", action="store_true", help="Maintain observations for current stored postings")
     parser.add_argument("--no-fallback", action="store_true")
     parser.add_argument("--throttle")
     parser.add_argument("urls", nargs="*")
     args = parser.parse_args(argv)
     if args.file and args.urls:
         parser.error("--file cannot be combined with URLs")
+    if args.apply and (args.file or args.urls):
+        parser.error("--apply requires database-backed selection, without URLs or --file")
     try:
         throttle_ms = int(args.throttle) if args.throttle is not None else 0
     except ValueError:
@@ -88,6 +169,10 @@ def main(argv: list[str] | None = None) -> int:
         parser.error("--throttle must be nonnegative")
     if args.throttle is not None and throttle_ms == 0:
         throttle_ms = 5000
+    if args.apply:
+        result = maintain(args.directory, headed_fallback=not args.no_fallback, throttle_ms=throttle_ms)
+        print(json.dumps(result, ensure_ascii=False))
+        return int(bool(result["errors"]))
     notes = []
     if not args.no_fallback:
         notes.append("headed fallback on challenge")

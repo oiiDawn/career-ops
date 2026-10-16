@@ -190,7 +190,7 @@ const ATS_PROVIDERS = [
 // (`<figcaption class="closed-job__flavor--closed">No longer accepting
 // applications</figcaption>`) and drops the apply control. A live posting shows one
 // of two apply controls: the on-site button, or the off-site sign-in modal.
-const LINKEDIN_CLOSED_MARKER = /No longer accepting applications/i;
+const LINKEDIN_CLOSED_MARKER = /(?:No longer|Not currently) accepting applications/i;
 const LINKEDIN_APPLY_CONTROL = /public_jobs_apply-link-onsite|job-details-topcard-apply-modal/;
 
 /**
@@ -213,12 +213,13 @@ const LINKEDIN_APPLY_CONTROL = /public_jobs_apply-link-onsite|job-details-topcar
  */
 export function classifyLinkedInPosting(html) {
   if (typeof html !== 'string' || html.length === 0) return null;
-  const closed = LINKEDIN_CLOSED_MARKER.test(html);
+  const closed = html.match(LINKEDIN_CLOSED_MARKER);
   const apply = LINKEDIN_APPLY_CONTROL.test(html);
   if (closed && !apply) {
     return {
       result: 'expired',
       code: 'linkedin_closed_marker',
+      evidence: { excerpt: closed[0] },
       reason: 'LinkedIn shows "No longer accepting applications" and no apply control',
     };
   }
@@ -360,13 +361,18 @@ export async function checkLivenessViaApi(url) {
 
     if (res.status === 404 || res.status === 410) {
       if (!api404Authoritative) return null; // inconclusive → let Playwright check the real page
-      return { result: 'expired', code: `${ats}_api_gone`, reason: `ATS API ${res.status} — posting removed` };
+      return { result: 'expired', code: `${ats}_api_gone`, reason: `ATS API ${res.status} — posting removed`,
+        evidence: { source_url: apiUrl, posting_url: url, status: res.status, provider: ats } };
     }
     if (res.status === 200) {
       // Org-level APIs (Ashby) inspect the body to confirm THIS posting; per-job
       // APIs (Greenhouse, Lever) treat a 200 as proof the posting is live.
-      if (interpret) return await interpret(res, parts);
-      return { result: 'active', code: `${ats}_api_ok`, reason: 'ATS API returns the posting (live)' };
+      if (interpret) {
+        const verdict = await interpret(res, parts);
+        return verdict && { ...verdict, evidence: { ...verdict.evidence, source_url: apiUrl, posting_url: url, status: res.status, provider: ats } };
+      }
+      return { result: 'active', code: `${ats}_api_ok`, reason: 'ATS API returns the posting (live)',
+        evidence: { source_url: apiUrl, posting_url: url, status: res.status, provider: ats } };
     }
     return null; // 429/5xx/other → inconclusive, fall back to the browser check
   } catch {

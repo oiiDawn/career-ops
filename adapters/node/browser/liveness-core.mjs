@@ -28,7 +28,7 @@ const HARD_EXPIRED_PATTERNS = [
   /\b(?:job|jobs|position|role|posting|opening|vacancy|requisition|req|listing)\b[\s\S]{0,60}?(?<!\b(?:application|form)\s)has been filled\b(?!\s+out)/i,
   /this job has expired/i,
   /job posting has expired/i,
-  /no longer accepting applications/i,
+  /(?:no longer|not currently) accepting applications/i,
   /this (position|role|job) (is )?no longer/i,
   /this job (listing )?is closed/i,
   /job (listing )?not found/i,

@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from career_ops.liveness import current_observations
+
 from datetime import date
 import json
 from pathlib import Path
@@ -95,6 +97,7 @@ def list_jobs(db: sqlite3.Connection) -> list[dict]:
     """One row per opportunity with its current stage, score and application status."""
     scans, scores = _latest_results(db, "scan"), _latest_results(db, "score")
     lifecycle = _lifecycle(db)
+    liveness = current_observations(db)
     eligibility = {str(row["opportunity_id"]): row["status"] for row in db.execute("SELECT opportunity_id,status FROM eligibility")}
     evaluations = {str(row["opportunity_id"]): dict(row) for row in db.execute("SELECT * FROM evaluations")}
     materials = _material_counts(db)
@@ -114,7 +117,8 @@ def list_jobs(db: sqlite3.Connection) -> list[dict]:
             "stage": _stage(row, application, score_result),
             "scan_outcome": (scan or {}).get("outcome"),
             "location": scan_artifact.get("location_evidence"),
-            "liveness": scan_artifact.get("liveness"),
+            **liveness.get(key, {"liveness": "uncertain", "liveness_checked_at": None,
+                                 "liveness_last_active_at": None, "liveness_reason": "尚未检查"}),
             "captured_at": scan_artifact.get("captured_at"),
             "prescreen": (scan_artifact.get("prescreen") or {}).get("status"),
             "capability_counts": core_counts(scan_artifact) if capability_rows(scan_artifact) else None,

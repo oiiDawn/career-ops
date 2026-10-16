@@ -40,3 +40,9 @@ _Avoid_: fingerprint (when a content hash is meant)
 
 **Candidate preference**:
 A personal priority or threshold used to score an opportunity's attractiveness. Preferences affect scoring, not the collection or description of public employer facts.
+
+**Posting liveness**:
+Whether a specific job posting is accepting applications at the time it is checked: active, closed, or uncertain. An accessible page or readable job description alone does not establish that applications are accepted; an inaccessible or inconclusive source leaves liveness uncertain.
+
+**Liveness observation**:
+A time-specific finding about a posting's liveness, supported by source evidence. It does not establish the outcome of an application already submitted or guarantee that the posting remains open afterward.
