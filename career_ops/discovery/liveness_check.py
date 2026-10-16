@@ -23,7 +23,7 @@ from career_ops.context import ROOT
 
 
 def current_urls(database: Path) -> list[str]:
-    """Map Pending, Scored and Awaiting Confirmation to current business rows."""
+    """Select unsubmitted candidate URLs, including already evaluated postings."""
     with sqlite3.connect(f"file:{database.resolve()}?mode=ro", uri=True) as connection:
         rows = connection.execute(
             "SELECT url FROM opportunities "
@@ -126,24 +126,40 @@ def maintain(directory: Path, *, headed_fallback: bool, throttle_ms: int) -> dic
                 "SELECT id,url,created_at FROM opportunities WHERE state IN "
                 "('discovered','evaluating','eligible','evaluated') AND application_state IN ('none','preparing')"
             )}
-            rows = {url: row for url, row in rows.items() if not submitted(store.db, row["id"]) and not closed_url(store.db, url)}
+            rows = {url: row for url, row in rows.items()
+                    if not submitted(store.db, row["id"])
+                    and not closed_url(store.db, url, maintenance_only=True)}
             observations, errors, completed = [], cleanup_errors, set()
 
             def persist(observation):
                 url = observation["url"]
                 completed.add(url)
+                saved = False
                 try:
+                    if observation.get("code") == "collection_error":
+                        errors.append(f"{url}: {observation.get('reason', 'collection failed')}")
                     confirmed = explicit_closure(observation)
                     if observation.get('result') == 'expired' and not confirmed:
                         observation = {**observation, 'result': 'uncertain'}
-                    if save_observation(store.db, rows[url], observation):
+                    saved = save_observation(store.db, rows[url], observation)
+                    if saved:
                         observations.append(observation)
                         if confirmed:
                             status = delete_closed(store.db, directory, rows[url], observation)
+                            observation["maintenance_status"] = status
                             if status == 'cleanup_pending':
                                 errors.append(f'{url}: physical cleanup pending')
                 except (OSError, ValueError, KeyError, sqlite3.Error) as error:
                     errors.append(f"{url}: {error}")
+                    if not saved:
+                        failed = {"url": url, "result": "uncertain", "code": "invalid_observation",
+                                  "checked_at": datetime.now(timezone.utc).isoformat(), "via_api": False,
+                                  "reason": str(error)[:500], "evidence": {}}
+                        try:
+                            if save_observation(store.db, rows[url], failed):
+                                observations.append(failed)
+                        except (OSError, ValueError, sqlite3.Error) as failure:
+                            errors.append(f"{url}: {failure}")
 
             try:
                 observe(list(rows), headed_fallback=headed_fallback, throttle_ms=throttle_ms,
@@ -173,7 +189,7 @@ def main(argv: list[str] | None = None) -> int:
     load_dotenv(ROOT / ".env", override=False)
     argv = list(sys.argv[1:] if argv is None else argv)
     argv = ["--throttle=5000" if value == "--throttle" else value for value in argv]
-    parser = argparse.ArgumentParser(description="Check current opportunity URLs without changing business state")
+    parser = argparse.ArgumentParser(description="Check posting liveness; --apply maintains current stored postings")
     parser.add_argument("--directory", type=Path, default=ROOT / "data")
     parser.add_argument("--file", type=Path)
     parser.add_argument("--apply", action="store_true", help="Maintain observations for current stored postings")

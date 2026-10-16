@@ -44,8 +44,10 @@ with TemporaryDirectory() as temporary:
     report.write_text('exclusive report')
     shared = directory / 'artifacts' / 'shared.md'
     shared.write_text('shared')
+    alias = directory / 'artifacts' / 'shared-alias.md'
+    alias.symlink_to(shared.name)
     with discovery.db:
-        for row, path in ((target, report), (target, shared), (protected, shared)):
+        for row, path in ((target, report), (target, shared), (protected, alias)):
             discovery.db.execute('INSERT INTO artifacts(opportunity_id,kind,path,sha256) VALUES(?,?,?,?)',
                                  (row['id'], str(path), str(path), 'hash'))
         discovery.db.execute("INSERT INTO application_lifecycle(opportunity_id,status) VALUES(?,'applied')", (str(protected['id']),))
@@ -84,5 +86,39 @@ with TemporaryDirectory() as temporary:
     discovery.close()
     applications.close()
     interviews.close()
+
+with TemporaryDirectory() as temporary:
+    from langgraph.checkpoint.base import empty_checkpoint
+    from langgraph.checkpoint.sqlite import SqliteSaver
+
+    directory = Path(temporary)
+    discovery = DiscoveryStore(directory / 'opportunities.db')
+    store = BusinessStore(directory / 'opportunities.db')
+    discovery.ingest({'url': 'https://www.linkedin.com/jobs/view/12', 'company': 'Example', 'title': 'Old'}, 'test')
+    target = dict(discovery.db.execute('SELECT * FROM opportunities').fetchone())
+    task = store.start('1', 'scan', '{}')
+    old_thread = task['task_id'] + ':1'
+    with SqliteSaver.from_conn_string(str(directory / 'workflow-checkpoints.db')) as saver:
+        saver.setup()
+        config = saver.put({'configurable': {'thread_id': old_thread, 'checkpoint_ns': ''}}, empty_checkpoint(), {}, {})
+        saver.put_writes(config, [('value', 'old')], 'node')
+    try:
+        with patch('career_ops.opportunity_cleanup._cleanup', side_effect=OSError('process interrupted after commit')):
+            delete_closed(discovery.db, directory, target, closure(target))
+    except OSError:
+        pass
+    else:
+        raise AssertionError('Injected crash did not occur')
+    fresh = discovery.ingest({'url': 'https://example.org/new', 'company': 'Example', 'title': 'New'}, 'test')
+    assert fresh['id'] == target['id']
+    new_thread = 'notification:1:new-report'
+    with SqliteSaver.from_conn_string(str(directory / 'workflow-checkpoints.db')) as saver:
+        saver.put({'configurable': {'thread_id': new_thread, 'checkpoint_ns': ''}}, empty_checkpoint(), {}, {})
+    assert not cleanup_pending(discovery.db, directory)
+    with sqlite3.connect(directory / 'workflow-checkpoints.db') as snapshots:
+        assert snapshots.execute('SELECT DISTINCT thread_id FROM checkpoints').fetchall() == [(new_thread,)]
+        assert not snapshots.execute('SELECT 1 FROM writes WHERE thread_id=?', (old_thread,)).fetchone()
+    store.close()
+    discovery.close()
 
 print('opportunity cleanup: explicit evidence, active lock, submitted/shared protection and crash recovery passed')

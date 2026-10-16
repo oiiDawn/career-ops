@@ -67,7 +67,9 @@ Reports, captured sources, frozen payloads, PDFs, package manifests, and stored
 absolute artifact references retain their existing physical locations and bytes.
 They are not moved into a cosmetic new layout. Historical working directories
 remain where referenced by checkpoint state or manifests. New operation paths
-must not overwrite those artifacts.
+must not overwrite those artifacts. Explicitly authorized closure maintenance
+removes exclusively owned artifacts of confirmed-closed, unsubmitted postings;
+shared evidence and candidate source documents remain protected.
 
 Hermes invokes `scripts/career-ops-scan.sh` and `scripts/career-ops-score.sh`;
 installed copies under `~/.hermes/scripts/` must match. Scan collects discovery;
@@ -89,6 +91,7 @@ task's trace. `scripts/check.py` disables tracing; an offline Langfuse never
 blocks a workflow.
 
 JD capture cache lives at `data/cache/scan-jds/` and is reused for at most 24 hours.
+Intact identity-bound retained JD evidence is reused by evaluation regardless of age; the cache expiry does not trigger a liveness recheck.
 Retained source evidence belongs to the business store and referenced artifacts.
 Unreferenced acceptance output, expired captures and old tracker-import batches
 are removed without an archive.
@@ -96,7 +99,7 @@ are removed without an archive.
 ## Company research and scoring
 
 Run `.venv/bin/python -B -m career_ops task start score ID scan:ID --re-evaluate`
-for a retained active JD. A deterministic lookup reuses retained employer identities and constructs region/grade scopes from official location fields and explicit role titles, without a model call. Missing fields remain unknown; ambiguous retained identities stop scoring. New employers use the posting host as an identity lead and the posting URL as a research seed.
+for a retained complete JD. A deterministic lookup reuses retained employer identities and constructs region/grade scopes from official location fields and explicit role titles, without a model call. Missing fields remain unknown; ambiguous retained identities stop scoring. New employers use the posting host as an identity lead and the posting URL as a research seed.
 One Codex CLI task researches all missing company/culture/compensation scopes together, using
 `gpt-6.1-sol`, low reasoning and live web search, with a 900-second process deadline.
 The CLI must be installed and authenticated with `codex login` under the scheduler's user.
@@ -181,3 +184,51 @@ are `deprioritize`, and confirmed hard failures remain `discard`. Confidence and
 informational and never trigger automatic review or fallback. Full scoring also includes employer lookup, direction and report generation; the 900-second cap applies to each Codex research task.
 
 Recommendation-only policy edits do not invalidate numeric scores. Stored scoring inputs remain byte-hash verified; freshness compares the scoring rubric independently of its two recommendation paragraphs. A report format change keeps no compatibility for earlier reports; re-evaluation writes them anew. Current decisions and Dashboard derive the current policy from retained scores.
+
+## Independent posting liveness
+
+`system liveness` remains read-only, including explicit URL and `--file` diagnostics.
+`system liveness --apply --no-fallback --throttle=5000` maintains the current
+unsubmitted candidate pool, including already scored opportunities. `--apply`
+cannot be combined with diagnostic URLs or files. It uses public ATS APIs first,
+then a headless browser; no model is called. Each observation is committed as it
+arrives, so a later failed URL or collector crash cannot erase earlier results.
+
+The maintenance command stores observations in `data/opportunities.db` and reports
+per-posting results/errors as JSON. Normal uncertain observations and successful
+closures are not command failures. Collection/storage/cleanup errors are reported
+after other work is processed and produce a nonzero exit. An overlapping maintenance
+run returns `busy` without affecting other workflows.
+
+Dashboard liveness comes from these observations, with check time and last active
+confirmation displayed. Missing results, checks older than 24 hours, and newly failed
+checks display as uncertain. None of these conditions blocks evaluation, material
+preparation or notifications. A complete, identity-bound JD is still required;
+posting availability and JD evidence completeness are separate responsibilities.
+Historical reports and frozen payloads are not rewritten or bulk rescored.
+
+Explicit posting-bound closure initiates deletion of an unsubmitted opportunity
+and its exclusive reports, drafts, captures and execution records. Submitted
+applications, candidate source files and shared company evidence are protected.
+Generic listing redirects, missing Apply controls, search absence and access
+failures cannot authorize deletion. Running work is not interrupted: confirmed
+closure prevents new work, and cleanup retries after the active execution releases
+its opportunity lock. `maintenance_status` distinguishes deletion, deferred work
+and pending physical cleanup in a newly checked closed posting's output.
+
+Closed URLs retain a minimal `skipped_expired` outcome for write-time discovery
+suppression. A new URL is still discoverable. Physical files and workflow checkpoint
+threads cannot be committed atomically with the business database: a temporary
+manifest in the closed outcome permits retry at the next maintenance run. Shared
+references are rechecked before deleting files; unowned paths are preserved and
+reported. Same-URL reopening requires an explicit manual recheck and clearing the
+closed outcome before re-ingestion; merely inspecting a URL does not clear it.
+
+The dedicated entrypoint is `scripts/career-ops-liveness.sh`. Its intended Hermes
+schedule is 06:00 and 18:00 Asia/Shanghai, with the repository as working directory.
+This implementation adds the script but does not install or change live Hermes
+jobs. Before deployment, back up the SQLite database consistently, verify the
+installed script and timezone, and inspect fresh read-only closure evidence on a
+database copy. Never delete based on old scan-report liveness fields. Failures
+retry at the next scheduled run or via manual `--apply`; no separate retry timer
+is installed.

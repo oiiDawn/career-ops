@@ -5,6 +5,7 @@ import json
 import os
 from pathlib import Path
 import sys
+import subprocess
 from tempfile import TemporaryDirectory
 from unittest.mock import patch
 
@@ -46,6 +47,27 @@ with TemporaryDirectory() as temporary:
     assert view['liveness'] == 'uncertain' and view['liveness_last_active_at']
     assert not save_observation(store.db, {**opportunity, 'url': 'https://example.org/changed'},
                                 {**failure, 'url': 'https://example.org/changed'})
+    def malformed_reader(urls, *, on_observation, **_options):
+        for index, url in enumerate(urls):
+            on_observation({**failure, 'url': url, 'code': {} if index == 0 else 'api_ok',
+                            'result': 'expired' if index == 0 else 'active'})
+        return []
+
+    with patch('career_ops.discovery.liveness_check.observe', side_effect=malformed_reader):
+        malformed = maintain(directory, headed_fallback=False, throttle_ms=0)
+    assert malformed['status'] == 'partial' and malformed['errors']
+    assert current_observations(store.db)['1']['liveness'] == 'uncertain'
+    assert current_observations(store.db)['2']['liveness'] == 'active'
+    fixture.write_text("globalThis.fetch = async url => new Response('{}', {status: url.endsWith('/2') ? 404 : 200});\n")
+    run = subprocess.run([sys.executable, '-B', '-m', 'career_ops', 'system', 'liveness', '--apply',
+                          '--no-fallback', '--directory', str(directory)], cwd=ROOT,
+                         env={**os.environ, 'NODE_OPTIONS': f'--import={fixture}'},
+                         capture_output=True, text=True, timeout=20)
+    assert run.returncode == 0, (run.stdout, run.stderr)
+    assert json.loads(run.stdout)['status'] == 'completed'
+    assert store.db.execute('SELECT id FROM opportunities').fetchall()[0][0] == 1
+    assert store.db.execute('SELECT COUNT(*) FROM opportunities').fetchone()[0] == 1
+    assert store.db.execute("SELECT status FROM scan_outcomes WHERE url LIKE '%/2'").fetchone()[0] == 'skipped_expired'
     store.close()
 
 print('liveness maintenance: committed streaming progress, isolated failure and freshness passed')

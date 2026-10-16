@@ -1,6 +1,6 @@
 # Periodic posting liveness: implementation plan
 
-Status: technical proposal, 2026-10-16. Business decisions are recorded in [ADR 0003](adr/0003-posting-liveness-is-maintained-independently.md). No runtime or scheduler changes are part of this document.
+Status: implementation reference, 2026-10-16. Business decisions are recorded in [ADR 0003](adr/0003-posting-liveness-is-maintained-independently.md). The runtime and dedicated script are implemented; live scheduler installation remains separate. See [operations](operations.md#independent-posting-liveness).
 
 ## Outcome and ownership
 
@@ -8,9 +8,9 @@ Hermes invokes a dedicated command at 06:00 and 18:00 Asia/Shanghai. Python sele
 
 An absent, stale or failed liveness check never gates evaluation, application preparation, recommendations or notifications. Missing or invalid JD evidence can still prevent evaluation for its own reason. Explicitly confirmed closure is the only liveness result that changes business workflows: it initiates deletion of an unsubmitted opportunity.
 
-## Verified implementation surfaces
+## Baseline and implementation surfaces
 
-| Surface | Current implementation | Required change |
+| Surface | Inspected baseline | Implementation change |
 | --- | --- | --- |
 | Selection and command | `career_ops/discovery/liveness_check.py`: selects candidate URLs, prints results, writes nothing | Retain read-only checking; add explicit persisted maintenance mode |
 | Collection | `adapters/node/browser/_liveness-observe.mjs`: reuses API/browser readers, writes one final JSON batch, drops observation codes | Emit validated per-posting results as they complete, including evidence and codes |

@@ -141,7 +141,8 @@ class DiscoveryStore:
         if fingerprint is None and isinstance(description, str) and description:
             fingerprint = hashlib.sha256(description.encode()).hexdigest()[:16]
         payload = {**offer, "description": description, "fingerprint": fingerprint}
-        self.db.execute("BEGIN IMMEDIATE")
+        if not self.db.in_transaction:
+            self.db.execute("BEGIN IMMEDIATE")
         with self.db:
             if closed_url(self.db, url):
                 return None

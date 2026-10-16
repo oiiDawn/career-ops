@@ -83,10 +83,17 @@ def _manifest(db, directory, opportunity):
 def _shared(db, path):
     """Check surviving registered and embedded artifact references before removing a subtree."""
     present = tables(db)
+    if 'artifacts' in present:
+        target = path.resolve()
+        for row in db.execute('SELECT path FROM artifacts'):
+            reference = Path(row[0]).resolve()
+            if reference.is_relative_to(target) or target.is_relative_to(reference):
+                return True
     for table, column in (('artifacts', 'path'), ('results', 'payload'), ('tasks', 'input_payload'),
                           ('task_context', 'payload'), ('interview_tasks', 'input_payload'),
                           ('interview_drafts', 'artifact'), ('interview_results', 'artifact'),
-                          ('workflow_source_evidence', 'payload'), ('source_evidence', 'payload')):
+                          ('workflow_source_evidence', 'payload'), ('source_evidence', 'payload'),
+                          ('company_ratings', 'payload_json')):
         if table in present and db.execute(f'SELECT 1 FROM {table} WHERE instr({column},?)>0 LIMIT 1',
                                           (str(path),)).fetchone():
             return True
