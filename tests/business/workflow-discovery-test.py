@@ -30,20 +30,19 @@ row = {
     }),
 }
 source = discovered_scan_source(row)
-assert source["jd"] == jd and source["liveness"] == "active"
+assert source["jd"] == jd
 assert source["capture_method"] == "browser_snapshot"
 assert source["location_evidence"] == "Hong Kong"
-assert discovered_scan_source({**row, "capture_payload": row["capture_payload"].replace("123", "456")})["liveness"] == "uncertain"
+assert discovered_scan_source({**row, "capture_payload": row["capture_payload"].replace("123", "456")})["jd"] == ""
 stale = json.loads(row["capture_payload"])
 stale["scan_jd"]["retrieved_at"] = (datetime.now(timezone.utc) - timedelta(days=2)).isoformat()
-assert discovered_scan_source({**row, "capture_payload": json.dumps(stale)})["liveness"] == "uncertain"
+assert discovered_scan_source({**row, "capture_payload": json.dumps(stale)})["jd"] == jd
 fresh = {"status": "captured", "url": url, "text": jd + " Updated", "retrieved_at": captured_at}
 with patch("career_ops.tasks.capture_jd", return_value=fresh) as browser:
     recovered = current_discovered_scan_source({**row, "capture_payload": json.dumps(stale)}, Path("/tmp/scan"))
-assert browser.call_count == 1 and recovered["liveness"] == "active"
-assert recovered["jd"] == fresh["text"]
+assert browser.call_count == 0 and recovered["jd"] == jd
 with patch("career_ops.tasks.capture_jd", return_value=None):
-    assert current_discovered_scan_source({**row, "capture_payload": json.dumps(stale)}, Path("/tmp/scan"))["liveness"] == "uncertain"
+    assert current_discovered_scan_source({**row, "capture_payload": json.dumps(stale)}, Path("/tmp/scan"))["jd"] == jd
 with patch("career_ops.discovery.configured.subprocess.run", return_value=subprocess.CompletedProcess([], 0, stdout=json.dumps({"snapshot": fresh}))) as browser:
     assert capture_jd(Path("/tmp/scan"), url) == fresh
 assert browser.call_args.args[0][1].endswith("adapters/node/browser/scan-jd.mjs")
@@ -65,12 +64,12 @@ sap_row = {**row, "url": sap, "capture_payload": json.dumps({
     "url": sap, "scan_jd": {"text": jd, "retrieved_at": captured_at,
                             "final_url": sap.rstrip("/"), "content_hash": hashlib.sha256(jd.encode()).hexdigest()},
 })}
-assert discovered_scan_source(sap_row)["liveness"] == "active"
+assert discovered_scan_source(sap_row)["jd"] == jd
 ibm_row = {**row, "url": ibm, "capture_payload": json.dumps({
     "url": ibm, "scan_jd": {"text": jd, "retrieved_at": captured_at,
                             "final_url": localized, "content_hash": hashlib.sha256(jd.encode()).hexdigest()},
 })}
-assert discovered_scan_source(ibm_row)["liveness"] == "active"
+assert discovered_scan_source(ibm_row)["jd"] == jd
 with patch("career_ops.discovery.configured.subprocess.run", return_value=subprocess.CompletedProcess([], 0, stdout="not-json")):
     assert capture_jd(Path("/tmp/scan"), url) is None
 

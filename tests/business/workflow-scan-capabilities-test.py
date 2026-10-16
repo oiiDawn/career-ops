@@ -20,7 +20,7 @@ with tempfile.TemporaryDirectory() as temp:
                      "match": "gap", "evidence": "JD requires Terraform"}]
     evidence = {
         "company": "Acme", "role": "Engineer", "complete_jd": True,
-        "liveness": "active", "liveness_reason": "official capture active", "assessment_complete": True,
+        "assessment_complete": True,
         "location": {"status": "pass", "reason": "local", "evidence": "JD"},
         "employment": {"status": "pass", "reason": "full-time", "evidence": "JD"},
         "compensation": {"status": "unknown", "reason": "not posted", "evidence": "JD"},
@@ -32,7 +32,7 @@ with tempfile.TemporaryDirectory() as temp:
     model_adapter.call_agent = lambda *_args: (evidence, "session")
     source = {"opportunity_id": "1", "url": "https://acme.example/jobs/1", "company": "Acme",
               "role": "Engineer", "jd": "Build Terraform infrastructure", "captured_at": "2026-01-01",
-              "capture_method": "official_job_page", "liveness_evidence": {"status": 200}}
+              "capture_method": "official_job_page", "capture_evidence": {"status": 200}}
     try:
         result = run_scan({"source": source, "cv": "CV", "profile": "profile",
                            "targeting": "targeting", "rules": "rules"}, Path(temp))

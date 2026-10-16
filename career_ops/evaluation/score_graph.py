@@ -176,7 +176,7 @@ def _complete_sections(assessment: dict, jd: dict, sources: dict, research: dict
         "a gap that materially weakens the application may be named once under risks. Interview preparation is out of scope. "
         "Research facts and their open questions are added to the report by the program; do not copy them. "
         "Structured location_evidence is official location evidence; do not claim the city is undisclosed when present. "
-        "A browser_snapshot liveness_reason records a page capture; do not claim no snapshot exists. "
+        "A browser_snapshot capture_method records a page capture; do not claim no snapshot exists. "
         "Do not repeat existing fields, change dimension scores, or infer any score. Generic market salary statistics or other employers in candidate materials cannot replace applicable company pay evidence. Initial recommendations use only the four dimension scores (all >3 and at least two >4); confidence and sufficiency are informational, not gates. Explain missing and uncertain facts without blocking recommendations on sufficiency.\n"
         + pipeline.research.EVIDENCE_RULES + "\n"
         + json.dumps({"jd_report": jd, "candidate_sources": sources, "research": research,
@@ -283,8 +283,9 @@ def run_score(inputs: dict, draft_root: Path, root: Path) -> dict:
         sources.update({f'writing{n}': content for n, content in enumerate(values.get('writing_samples', {}).values(), 1)})
         packet = {'url': jd['url'], 'root': str(root if directory.is_relative_to(root) else draft_root.parent),
                   'directory': str(directory), 'fingerprint': key, 'sources': sources}
-        evidence = {'company': jd['company'], 'role': jd['role'], 'complete_jd': True, 'liveness': 'active',
-                    'liveness_reason': jd.get('liveness_reason', 'Retained active posting'),
+        evidence = {'company': jd['company'], 'role': jd['role'], 'complete_jd': True,
+                    'capture_method': jd.get('capture_method', 'unknown'),
+                    'capture_evidence': jd.get('capture_evidence', {}),
                     'location_evidence': jd.get('location_evidence'), 'employment_evidence': jd.get('employment_evidence'),
                     'captured_at': jd.get('captured_at'), 'prescreen': jd['prescreen'], 'jd': jd['jd'],
                     **{name: jd.get(name) for name in ('capabilities', 'years', 'credentials')}}
@@ -308,7 +309,7 @@ def run_score(inputs: dict, draft_root: Path, root: Path) -> dict:
         result = render_report(state['packet'], state['evidence'], state['assessment'])
         return {'outcome': 'score', 'artifact': {'type': 'score', 'report': result['report'],
             'report_sha256': result['report_sha256'], 'draft_directory': str(directory),
-            'liveness_reason': state['evidence']['liveness_reason'], 'score': result['scores'],
+            'capture_method': state['evidence'].get('capture_method', 'unknown'), 'score': result['scores'],
             'scoring_model': 'attractiveness-v4', 'dimensions': state['assessment']['dimensions'],
             'company_profiles': state['assessment']['company_profiles'],
             'company_ratings': state['assessment']['company_ratings'],

@@ -29,7 +29,7 @@ def run(phase, payload):
                 "role": source["role"],
                 "jd": source["jd"],
                 "captured_at": source["captured_at"],
-                "liveness": source["liveness"],
+                "capture_method": source.get("capture_method", "unknown"),
                 "prescreen": {"status": "pass", "unknowns": ["compensation"]},
             },
             "tool_calls": 1,

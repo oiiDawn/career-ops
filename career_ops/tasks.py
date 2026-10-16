@@ -152,8 +152,8 @@ class Runtime:
                     "tool_calls": result["tool_calls"],
                 }
             if task["module"] == "scan":
-                if inputs["source"]["liveness"] == "uncertain":
-                    return {"waiting_reason": "source_access_unknown"}
+                if not inputs["source"]["jd"].strip():
+                    return {"waiting_reason": "jd_evidence_missing"}
                 result = self.run_model("scan_evaluate", {"inputs": inputs}, state)
                 if result.get("waiting_reason"):
                     return {"waiting_reason": result["waiting_reason"], "tool_calls": result["tool_calls"]}
@@ -442,7 +442,7 @@ def same_posting_url(requested: str, final: str) -> bool:
 
 
 def discovered_scan_source(opportunity: sqlite3.Row, refreshed: dict | None = None) -> dict:
-    """Build one scan input only from a current, identity-bound source capture."""
+    """Build a scan input from intact, identity-bound JD evidence regardless of check freshness."""
     opportunity_id = str(opportunity["id"])
     capture = json.loads(opportunity["capture_payload"]) if opportunity["capture_payload"] else {}
     snapshot = (
@@ -455,47 +455,46 @@ def discovered_scan_source(opportunity: sqlite3.Row, refreshed: dict | None = No
     jd = snapshot.get("text") or opportunity["content"] or ""
     captured_at = snapshot.get("retrieved_at") or metadata.get("retrieved_at", "")
     try:
-        capture_age = (datetime.now(timezone.utc) - datetime.fromisoformat(captured_at.replace("Z", "+00:00"))).total_seconds()
+        valid_capture_time = datetime.fromisoformat(captured_at.replace("Z", "+00:00")) <= datetime.now(timezone.utc)
     except (TypeError, ValueError):
-        capture_age = float("inf")
-    current_snapshot = (
+        valid_capture_time = False
+    verified_snapshot = (
         (refreshed is not None or (capture.get("url") or metadata.get("url")) == opportunity["url"])
         and same_posting_url(opportunity["url"], snapshot.get("final_url"))
         and isinstance(snapshot.get("text"), str)
         and snapshot.get("content_hash") == digest(snapshot["text"])
-        and 0 <= capture_age < 86400
+        and valid_capture_time
     )
-    current_capture = current_snapshot or (
+    verified_capture = verified_snapshot or (
         metadata.get("method") in {"workday_cxs_api", "oraclecloud_detail_api", "smartrecruiters_detail_api", "successfactors_job_page", "phenom_job_page", "beesite_job_page", "ikea_job_page", "jibeapply_job_page", "avature_job_page", "eightfold_job_page", "mtr_taleo_job_page", "official_job_page", "browser_snapshot"}
         and metadata.get("status") == 200
         and metadata.get("url") == opportunity["url"]
         and metadata.get("content_hash") == digest(jd)
-        and 0 <= capture_age < 86400
+        and valid_capture_time
     )
     evidence = (
         {"method": "browser_snapshot", "status": "captured", "url": opportunity["url"],
          "final_url": snapshot.get("final_url"), "content_hash": snapshot.get("content_hash")}
-        if current_snapshot else metadata if current_capture else {"reason": "No current verified source capture"}
+        if verified_snapshot else metadata if verified_capture else {"reason": "No verified source capture"}
     )
     return {
         "schema_version": "scan_input_v1", "opportunity_id": opportunity_id,
         "source_contract_version": 3,
         "url": opportunity["url"], "company": opportunity["company"], "role": opportunity["role"],
         "captured_at": captured_at or opportunity["captured_at"] or time.strftime("%Y-%m-%dT%H:%M:%SZ"),
-        "capture_method": "browser_snapshot" if current_snapshot else metadata.get("method", "unknown"),
-        "liveness": "active" if current_capture else "uncertain",
-        "liveness_evidence": evidence,
+        "capture_method": "browser_snapshot" if verified_snapshot else metadata.get("method", "unknown"),
+        "capture_evidence": evidence,
         "location_evidence": capture.get("structured_posting", {}).get("jobLocation")
             or capture.get("jobPostingInfo", {}).get("location") or capture.get("location"),
         "employment_evidence": capture.get("structured_posting", {}).get("employmentType"),
-        "jd": jd,
+        "jd": jd if verified_capture else "",
     }
 
 
 def current_discovered_scan_source(opportunity: sqlite3.Row, directory: Path) -> dict:
-    """Keep stale or missing evidence Unknown unless one guarded refresh succeeds."""
+    """Reuse intact JD evidence; fetch only when no usable source capture exists."""
     source = discovered_scan_source(opportunity)
-    if source["liveness"] == "active":
+    if source["jd"].strip():
         return source
     refreshed = capture_jd(directory, opportunity["url"])
     return discovered_scan_source(opportunity, refreshed) if refreshed else source
@@ -515,21 +514,20 @@ def scan_discovered(directory: Path, opportunity_id: str, re_evaluate: bool = Fa
         if re_evaluate:
             refreshed = capture_jd(directory, row["url"], fresh=True)
             source = discovered_scan_source(row, refreshed)
-            if not refreshed or source["liveness"] != "active" or source["captured_at"] != refreshed["retrieved_at"]:
-                source = {**source, "liveness": "uncertain", "liveness_evidence": {"reason": "Fresh posting capture unavailable"}}
         else:
             source = current_discovered_scan_source(row, directory)
         waiting = store.db.execute(
             "SELECT task_id,input_hash FROM tasks WHERE opportunity_id=? AND module='scan' "
-            "AND status='waiting' AND waiting_reason='source_access_unknown' ORDER BY rowid DESC LIMIT 1",
+            "AND status='waiting' AND waiting_reason IN ('source_access_unknown','jd_evidence_missing') ORDER BY rowid DESC LIMIT 1",
             (opportunity_id,),
         ).fetchone()
     finally:
         store.close()
     input_text = json.dumps(source, ensure_ascii=False)
     if waiting:
-        if source["liveness"] == "active" and digest(canonical_scan_input(input_text)) != waiting["input_hash"]:
-            return resume_task(directory, waiting["task_id"], input_text, None)
+        if source["jd"].strip():
+            changed = digest(canonical_scan_input(input_text)) != waiting["input_hash"]
+            return resume_task(directory, waiting["task_id"], input_text if changed else None, None)
         return view(directory, waiting["task_id"])
     return start_and_run(directory, opportunity_id, "scan", input_text, None, re_evaluate)
 
@@ -579,12 +577,14 @@ def _advance_evaluation(directory: Path) -> dict:
         if not store.db.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='opportunities'").fetchone():
             return {"status": "idle", "reason": "scanner_store_not_initialized"}
         capture_select, page_join = discovery_query(store)
+        closed_filter = ("NOT EXISTS (SELECT 1 FROM scan_outcomes c WHERE c.url=o.url AND c.status='skipped_expired' AND json_extract(c.payload,'$.maintenance_closed')=1)"
+                         if store.db.execute("SELECT 1 FROM sqlite_master WHERE name='scan_outcomes'").fetchone() else "1")
         opportunity = store.db.execute(
             f"""
             SELECT o.id,o.url,o.company,o.role,p.content,p.captured_at,{capture_select} AS capture_payload
             FROM opportunities o
             {page_join}
-            WHERE NOT EXISTS (
+            WHERE {closed_filter} AND NOT EXISTS (
               SELECT 1 FROM results r
               WHERE r.opportunity_id=CAST(o.id AS TEXT) AND r.module='score'
             )
@@ -598,12 +598,12 @@ def _advance_evaluation(directory: Path) -> dict:
             AND NOT EXISTS (
               SELECT 1 FROM tasks t
               WHERE t.opportunity_id=CAST(o.id AS TEXT) AND t.status='waiting'
-                AND NOT (t.module='scan' AND t.waiting_reason='source_access_unknown')
+                AND NOT (t.module='scan' AND t.waiting_reason IN ('source_access_unknown','jd_evidence_missing'))
                 AND NOT (t.waiting_reason LIKE 'failure:%' AND t.attempt<2)
             )
             ORDER BY EXISTS(
               SELECT 1 FROM tasks t WHERE t.opportunity_id=CAST(o.id AS TEXT)
-                AND t.status='waiting' AND t.module='scan' AND t.waiting_reason='source_access_unknown'
+                AND t.status='waiting' AND t.module='scan' AND t.waiting_reason IN ('source_access_unknown','jd_evidence_missing')
             ), EXISTS(
               SELECT 1 FROM tasks t WHERE t.opportunity_id=CAST(o.id AS TEXT)
                 AND t.status='waiting' AND t.waiting_reason LIKE 'failure:%'
@@ -617,8 +617,6 @@ def _advance_evaluation(directory: Path) -> dict:
             ), ''), o.id LIMIT 1
             """
         ).fetchone()
-        # Untried postings sort first. Once only failure retries and unconfirmed sources remain, stale scores go ahead
-        # of them: an unconfirmed source can wait indefinitely and must not hold re-evaluation back.
         deferred = opportunity and store.db.execute(
             "SELECT 1 FROM tasks WHERE opportunity_id=? AND status='waiting'", (str(opportunity["id"]),),
         ).fetchone()
@@ -627,6 +625,10 @@ def _advance_evaluation(directory: Path) -> dict:
                 if item["valid"] or item["stale_reason"] != "candidate_or_policy_inputs_changed":
                     continue
                 candidate = item["opportunity_id"]
+                try:
+                    require_open(store.db, candidate)
+                except ValueError:
+                    continue
                 scan = store.module_result(candidate, "scan")
                 if not scan or scan["outcome"] != "jd_report" or store.db.execute(
                     "SELECT 1 FROM tasks WHERE opportunity_id=? AND status IN ('running','waiting')", (candidate,)
@@ -655,17 +657,19 @@ def _advance_evaluation(directory: Path) -> dict:
         if active["status"] == "waiting" and active["waiting_reason"].startswith("failure:"):
             result = resume_task(directory, active["task_id"], None, None)
             return {"status": "advanced", "opportunity_id": opportunity_id, "task": result}
-        if active["status"] == "waiting" and active["module"] == "scan" and active["waiting_reason"] == "source_access_unknown":
+        if active["status"] == "waiting" and active["module"] == "scan" and active["waiting_reason"] in {"source_access_unknown", "jd_evidence_missing"}:
             source = current_discovered_scan_source(opportunity, directory)
             input_text = json.dumps(source, ensure_ascii=False)
-            if source["liveness"] != "active" or digest(canonical_scan_input(input_text)) == active["input_hash"]:
+            if not source["jd"].strip():
                 store = BusinessStore(directory / "opportunities.db")
                 try:
+                    store.wait(active["task_id"], "jd_evidence_missing")
                     store.set_context(active["task_id"], "source_probe", {"at": datetime.now(timezone.utc).isoformat()})
                 finally:
                     store.close()
-                return {"status": "waiting", "opportunity_id": opportunity_id, "reason": "source_access_unknown"}
-            result = resume_task(directory, active["task_id"], input_text, None)
+                return {"status": "waiting", "opportunity_id": opportunity_id, "reason": "jd_evidence_missing"}
+            changed = digest(canonical_scan_input(input_text)) != active["input_hash"]
+            result = resume_task(directory, active["task_id"], input_text if changed else None, None)
             return {"status": "advanced", "opportunity_id": opportunity_id, "task": result}
         result = run_task(directory, active["task_id"])
         return {"status": "advanced", "opportunity_id": opportunity_id, "task": result}

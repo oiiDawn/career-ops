@@ -20,7 +20,7 @@ with tempfile.TemporaryDirectory() as temporary:
 
 scan_attempts = []
 scan_responses = iter(({"jobs": []}, {"complete_jd": False, **dict.fromkeys((
-    "company", "role", "liveness", "liveness_reason", "assessment_complete",
+    "company", "role", "assessment_complete",
     "location", "employment", "compensation", "company_size", "years",
     "capabilities", "credentials",
 ))}))
@@ -33,7 +33,7 @@ assert result["complete_jd"] is False
 for years, expected in [(0, None), (None, None), (3, 3), (False, False)]:
     evidence = adapter.attach_evidence({
         **dict.fromkeys((
-            "company", "role", "complete_jd", "liveness", "liveness_reason",
+            "company", "role", "complete_jd",
             "assessment_complete", "capabilities", "credentials", "location",
             "employment", "compensation", "company_size",
         )),

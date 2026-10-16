@@ -27,11 +27,12 @@ CREATE INDEX IF NOT EXISTS latest_liveness ON liveness_observations(opportunity_
 """
 
 
-def closed_url(db: sqlite3.Connection, url: str) -> bool:
+def closed_url(db: sqlite3.Connection, url: str, *, maintenance_only: bool = False) -> bool:
     if not db.execute("SELECT 1 FROM sqlite_master WHERE name='scan_outcomes'").fetchone():
         return False
-    return any(url_key(row[0]) == url_key(url) for row in db.execute(
-        "SELECT url FROM scan_outcomes WHERE status='skipped_expired'"))
+    return any(url_key(row[0]) == url_key(url)
+               and (not maintenance_only or json.loads(row[1]).get('maintenance_closed'))
+               for row in db.execute("SELECT url,payload FROM scan_outcomes WHERE status='skipped_expired'"))
 
 
 def require_open(db: sqlite3.Connection, opportunity_id: str) -> None:
@@ -39,7 +40,7 @@ def require_open(db: sqlite3.Connection, opportunity_id: str) -> None:
     if not db.execute("SELECT 1 FROM sqlite_master WHERE name='opportunities'").fetchone():
         return
     row = db.execute('SELECT url FROM opportunities WHERE id=?', (opportunity_id,)).fetchone()
-    if not row or closed_url(db, row[0]):
+    if not row or closed_url(db, row[0], maintenance_only=True):
         raise ValueError(f'Opportunity is removed or confirmed closed: {opportunity_id}')
 
 
@@ -56,16 +57,18 @@ def execution_lock(directory: Path, opportunity_id: str):
 
 def explicit_closure(observation: dict) -> bool:
     """Only posting-bound positive closure evidence authorizes destructive maintenance."""
-    if observation.get('result') != 'expired':
+    if not isinstance(observation, dict) or observation.get('result') != 'expired':
         return False
     evidence, code = observation.get('evidence', {}), observation.get('code', '')
+    if not isinstance(evidence, dict) or not isinstance(code, str):
+        return False
     if observation.get('via_api'):
         if evidence.get('posting_url') != observation.get('url'):
             return False
         if code in {'greenhouse_api_gone', 'workday_api_gone'}:
             return evidence.get('status') in {404, 410}
         return (code == 'linkedin_closed_marker' and evidence.get('status') == 200
-                and evidence.get('excerpt', '').lower() in
+                and isinstance(evidence.get('excerpt'), str) and evidence['excerpt'].lower() in
                 {'no longer accepting applications', 'not currently accepting applications'})
     if (evidence.get('source_url') != observation.get('url')
             or url_key(evidence.get('final_url')) != url_key(observation.get('url'))):
@@ -82,11 +85,13 @@ def save_observation(db: sqlite3.Connection, opportunity: dict, observation: dic
             or not isinstance(observation.get('via_api'), bool)
             or not isinstance(observation.get('code'), str)
             or not observation['code']
-            or not isinstance(observation.get('evidence'), dict)):
+            or not isinstance(observation.get('evidence'), dict)
+            or not isinstance(observation.get('checked_at'), str)):
         raise ValueError('Invalid liveness observation')
     checked = datetime.fromisoformat(observation['checked_at'].replace('Z', '+00:00'))
     if checked.tzinfo is None:
         raise ValueError('Liveness observation needs a timezone')
+    checked = checked.astimezone(timezone.utc)
     db.execute('BEGIN IMMEDIATE')
     try:
         current = db.execute('SELECT url,created_at FROM opportunities WHERE id=?', (opportunity['id'],)).fetchone()

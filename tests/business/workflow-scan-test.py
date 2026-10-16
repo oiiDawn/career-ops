@@ -90,11 +90,11 @@ with tempfile.TemporaryDirectory(prefix="career-ops-scan-") as temporary:
         text=True, capture_output=True,
     )
     assert invalid_envelope.returncode == 1 and "not a workflow envelope" in invalid_envelope.stderr
-    invalid_liveness = subprocess.run(
-        [str(PYTHON), str(ROOT / "tests/fixtures/workflow-cli.py"), "--directory", str(directory), "task", "start", "scan", "inline", json.dumps({**json.loads(source.read_text()), "liveness": "closed"})],
+    invalid_jd = subprocess.run(
+        [str(PYTHON), str(ROOT / "tests/fixtures/workflow-cli.py"), "--directory", str(directory), "task", "start", "scan", "inline", json.dumps({**json.loads(source.read_text()), "jd": {"text": "not a JD string"}})],
         text=True, capture_output=True,
     )
-    assert invalid_liveness.returncode == 1 and "JD or liveness is invalid" in invalid_liveness.stderr
+    assert invalid_jd.returncode == 1 and "JD is invalid" in invalid_jd.stderr
 
     database = sqlite3.connect(directory / "opportunities.db")
     assert database.execute("SELECT count(*) FROM workflow_source_evidence").fetchone()[0] == 2
@@ -115,11 +115,11 @@ with tempfile.TemporaryDirectory(prefix="career-ops-scan-") as temporary:
         "opportunity_id": "job-2",
         "url": "https://example.com/jobs/2",
         "liveness": "uncertain",
-        "jd": "Access denied",
+        "jd": "",
     }))
     waiting = run(directory, "task", "start", "scan", "job-2", str(blocked))
     assert waiting["status"] == "waiting"
-    assert waiting["reason"] == "source_access_unknown"
+    assert waiting["reason"] == "jd_evidence_missing"
     recovered_source = directory / "recovered.json"
     recovered_source.write_text(json.dumps({
         **json.loads(blocked.read_text()),
@@ -333,14 +333,14 @@ with tempfile.TemporaryDirectory(prefix="career-ops-cron-stale-") as temporary:
     with patch("career_ops.tasks.capture_jd", return_value=None), \
          patch("career_ops.tasks.start_and_run", return_value={"status": "waiting"}) as start:
         scan_discovered(directory, "1", True)
-        assert json.loads(start.call_args.args[3])["liveness"] == "uncertain"
+        assert not json.loads(start.call_args.args[3])["jd"]
     fresh = {"status": "captured", "url": report["url"], "text": "Current official JD.",
              "retrieved_at": datetime.now(timezone.utc).isoformat()}
     with patch("career_ops.tasks.capture_jd", return_value=fresh), \
          patch("career_ops.tasks.start_and_run", return_value={"status": "completed"}) as start:
         scan_discovered(directory, "1", True)
         source = json.loads(start.call_args.args[3])
-        assert source["liveness"] == "active" and source["jd"] == fresh["text"]
+        assert source["jd"] == fresh["text"]
         assert source["captured_at"] == fresh["retrieved_at"]
     # A stale score is re-evaluated before a failed task is retried or an unconfirmed source is probed again.
     store = BusinessStore(directory / "opportunities.db")
@@ -354,7 +354,7 @@ with tempfile.TemporaryDirectory(prefix="career-ops-cron-stale-") as temporary:
     # A started scan reports only its task; the outcome is read from the task view, as a manual evaluation does.
     rescanned = {"task_id": "rescan", "status": "waiting"}
     with patch("career_ops.tasks.scan_discovered", return_value=rescanned), \
-         patch("career_ops.tasks.view", return_value={"task_id": "rescan", "status": "waiting", "reason": "source_access_unknown"}) as viewed, \
+         patch("career_ops.tasks.view", return_value={"task_id": "rescan", "status": "waiting", "reason": "jd_evidence_missing"}) as viewed, \
          patch("career_ops.tasks.capture_jd", return_value=None), \
          patch("career_ops.tasks.start_and_run") as start:
         assert cron_score(directory) == {"status": "waiting", "opportunity_id": "1", "task": viewed.return_value}
@@ -387,7 +387,7 @@ with tempfile.TemporaryDirectory(prefix="career-ops-cron-stale-") as temporary:
     database.commit()
     database.close()
     with patch("career_ops.tasks.capture_jd", return_value=None):
-        assert cron_score(directory) == {"status": "waiting", "opportunity_id": "2", "reason": "source_access_unknown"}
+        assert cron_score(directory) == {"status": "waiting", "opportunity_id": "2", "reason": "jd_evidence_missing"}
 
 with tempfile.TemporaryDirectory(prefix="career-ops-cron-rescanned-") as temporary:
     directory = Path(temporary)

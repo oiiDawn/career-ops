@@ -30,14 +30,14 @@ def scan_is_current(stored: str, current: str) -> bool:
 
 def score_inputs(report: dict) -> str:
     """Bind a JD report to every module-level policy and candidate input."""
-    required = {"schema_version", "opportunity_id", "url", "company", "role", "jd", "captured_at", "liveness", "prescreen"}
+    required = {"schema_version", "opportunity_id", "url", "company", "role", "jd", "captured_at", "prescreen"}
     missing = sorted(required - report.keys())
     if missing:
         raise ValueError("JD report missing: " + ", ".join(missing))
     if report["schema_version"] != "jd_report_v1":
         raise ValueError("Unsupported JD report schema")
-    if report["liveness"] != "active" or not str(report["jd"]).strip():
-        raise ValueError("A complete active JD report is required")
+    if not isinstance(report["jd"], str) or not report["jd"].strip():
+        raise ValueError("A complete JD report is required")
     if not all(str(report[key]).strip() for key in ("opportunity_id", "url", "company", "role", "captured_at")):
         raise ValueError("JD report identity and capture fields cannot be empty")
     if not isinstance(report["prescreen"], dict) or report["prescreen"].get("status") not in {"pass", "fail", "incomplete", "uncertain"}:
@@ -99,7 +99,7 @@ def canonical_scan_input(value: str) -> str:
         raise ValueError("scan requires a scan_input_v1 JSON file or object") from error
     if not isinstance(source, dict) or "source" in source:
         raise ValueError("scan input must be one scan_input_v1 object, not a workflow envelope")
-    required = {"schema_version", "opportunity_id", "url", "company", "role", "jd", "captured_at", "liveness"}
+    required = {"schema_version", "opportunity_id", "url", "company", "role", "jd", "captured_at"}
     missing = sorted(required - source.keys())
     if missing:
         raise ValueError("Scan input missing: " + ", ".join(missing))
@@ -107,8 +107,8 @@ def canonical_scan_input(value: str) -> str:
         raise ValueError("Unsupported scan input schema")
     if any(not isinstance(source[key], str) or not source[key].strip() for key in ("opportunity_id", "url", "company", "role", "captured_at")):
         raise ValueError("Scan input identity and capture fields must be nonempty strings")
-    if not isinstance(source["jd"], str) or source["liveness"] not in {"active", "uncertain"}:
-        raise ValueError("Scan input JD or liveness is invalid")
+    if not isinstance(source["jd"], str):
+        raise ValueError("Scan input JD is invalid")
     inputs = {
         "scan_policy_version": SCAN_POLICY_VERSION,
         "source": source,

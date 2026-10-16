@@ -53,13 +53,13 @@ At most one retry per failed URL; no repeated alternate-method loops. Preserve f
 
 EVIDENCE = '''The supplied source_capture names its capture method and contains posting evidence from the given URL.
 Extract full responsibilities and qualifications from its JD, not a search snippet. Do not navigate again.
-Assess liveness only from the stated capture method, retrieval time and direct evidence; an old JD or API text alone is not a browser snapshot. If incomplete or blocked, return liveness=uncertain and complete_jd=false.
+Assess JD completeness from the retained text. If it is incomplete or an access/error page, return complete_jd=false. Posting availability is maintained independently; do not assess it.
 official_job_page, successfactors_job_page, phenom_job_page, beesite_job_page, ikea_job_page, jibeapply_job_page, avature_job_page, and eightfold_job_page mean HTTP reads of official HTML pages; workday_cxs_api, oraclecloud_detail_api, and smartrecruiters_detail_api mean HTTP reads of official JSON APIs; only browser_snapshot means Playwright. Never call HTTP evidence browser evidence.
 Use structured location_evidence and employment_evidence when supplied; they are part of the official posting capture even if the JD prose omits them.
-Return these TOP-LEVEL fields: company,role,complete_jd,liveness,liveness_reason,assessment_complete,
+Return these TOP-LEVEL fields: company,role,complete_jd,assessment_complete,
 location,employment,compensation,company_size,years,capabilities,credentials.
 The program assembles the canonical prescreen record; do not nest fields inside prescreen or gates.
-complete_jd and assessment_complete are booleans. liveness is active|expired|uncertain.
+complete_jd and assessment_complete are booleans.
 Each location/employment/compensation/company_size gate is {status:"pass|fail|unknown",reason,evidence}.
 years is {required:number,verified:number_or_null,evidence:string}.
 capabilities is [{name,core:boolean,mandatory:boolean,match:"proven|adjacent|gap|unverified",evidence:string}].
@@ -69,7 +69,6 @@ Years required=0 only if the JD states no minimum. Missing verified years must s
 Absence of proof for the full requested tenure does NOT mean zero years. Count supported relevant periods; otherwise return null.
 Prescreen: a proven shortfall of more than 1 year or >=2 genuinely missing core mandatory capabilities fails; adjacent/unverified does not.
 Apply actual location/employment/size/payroll/compensation requirements from profile and targeting; salary absent is unknown.
-Quote the exact source evidence for liveness; closed signals take precedence over generic Apply text.
 capabilities is the only capability judgment made for this job: list every requirement the JD states, one item each, core mandatory ones first,
 including preferred qualifications, domain, language and soft requirements. Merge duplicates; do not repeat tenure or credentials there.
 mandatory=true only when the JD states the item as required or a minimum qualification; preferred, plus or nice-to-have items are mandatory=false.
@@ -109,7 +108,7 @@ def attach_evidence(value, snapshot):
             elif not tenure:
                 credentials.append(item)
         screen['credentials'] = credentials
-    return {**{k: value[k] for k in ('company', 'role', 'complete_jd', 'liveness', 'liveness_reason')},
+    return {**{k: value[k] for k in ('company', 'role', 'complete_jd')},
             'prescreen': screen, 'jd': snapshot['text']}
 
 
@@ -126,7 +125,7 @@ def call_agent(phase, prompt):
                 continue
             raise
         if phase == 'prescreen_evidence' and not all(key in value for key in (
-            'company', 'role', 'complete_jd', 'liveness', 'liveness_reason',
+            'company', 'role', 'complete_jd',
             'assessment_complete', 'location', 'employment', 'compensation',
             'company_size', 'years', 'capabilities', 'credentials'
         )):

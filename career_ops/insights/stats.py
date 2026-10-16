@@ -49,7 +49,7 @@ def _tracker(db: sqlite3.Connection) -> dict | None:
         waiting = {str(row["opportunity_id"]): row["waiting_reason"] for row in db.execute(
             "SELECT opportunity_id,waiting_reason FROM tasks WHERE status='waiting' ORDER BY rowid"
         )}
-        unknown = sum(reason in {"source_access_unknown", "core_evidence_missing", "input_changed"}
+        unknown = sum(reason in {"source_access_unknown", "jd_evidence_missing", "core_evidence_missing", "input_changed"}
                       for reason in waiting.values())
         failures = sum(reason and (reason.startswith("failure:") or reason == "workflow_version_incompatible")
                        for reason in waiting.values())
@@ -91,13 +91,15 @@ def _liveness(db: sqlite3.Connection) -> dict | None:
     for row in db.execute("SELECT opportunity_id,payload FROM results WHERE module='scan' ORDER BY rowid DESC"):
         latest.setdefault(str(row["opportunity_id"]), json.loads(row["payload"]))
     counts = {"active_at_capture": 0, "expired_at_capture": 0, "excluded_by_gate": 0,
-              "excluded_unknown_cause": 0, "no_scan_result": 0}
+              "excluded_unknown_cause": 0, "no_scan_result": 0, "jd_captured": 0}
     for row in db.execute("SELECT id FROM opportunities"):
         result = latest.get(str(row["id"]))
         if result is None:
             counts["no_scan_result"] += 1
         elif result.get("outcome") == "jd_report" and result.get("artifact", {}).get("liveness") == "active":
             counts["active_at_capture"] += 1
+        elif result.get("outcome") == "jd_report":
+            counts["jd_captured"] += 1
         elif result.get("outcome") == "exclude":
             reason = result.get("artifact", {}).get("reason_code")
             counts["expired_at_capture" if reason == "expired" else

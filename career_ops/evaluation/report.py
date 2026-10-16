@@ -44,7 +44,7 @@ def conflicting_sections(sections: dict, evidence: dict) -> list[str]:
             r"(?:地点|城市).{0,8}(?:未披露|未知|未提供|无法确认)", body
         ):
             conflicts.append(name)
-        elif "browser_snapshot" in str(evidence.get("liveness_reason", "")) and re.search(
+        elif "browser_snapshot" in str(evidence.get("capture_method", evidence.get("liveness_reason", ""))) and re.search(
             r"(?:不含|缺少|没有|未提供).{0,16}(?:岗位页面|页面|快照|liveness)", body, re.I
         ):
             conflicts.append(name)
@@ -146,8 +146,8 @@ def _cell(value: object) -> str:
 def render_report(packet: dict, evidence: dict, assessment: dict) -> dict:
     """Project the assessment record into Markdown; nothing reads the report back."""
     root, directory = Path(packet["root"]), Path(packet["directory"])
-    if evidence.get("complete_jd") is not True or evidence.get("liveness") != "active" or not evidence.get("jd", "").strip():
-        raise ValueError("Complete live JD required")
+    if evidence.get("complete_jd") is not True or not evidence.get("jd", "").strip():
+        raise ValueError("Complete JD required")
     given = assessment.get("sections")
     sections = {name: section_value(name, given.get(name)) for name in TEXT_SECTIONS + LIST_SECTIONS} \
         if isinstance(given, dict) else {}
@@ -199,7 +199,7 @@ def render_report(packet: dict, evidence: dict, assessment: dict) -> dict:
     blocks.append(f"## 风险\n\n{_bullets(sections['risks'])}")
     blocks.append(f"## 待确认\n\n{_bullets(questions)}")
     host = urlsplit(packet["url"]).netloc
-    blocks.append(f"来源：[{host}](<{packet['url']}>) · {str(evidence.get('captured_at') or '')[:10]} 抓取时在线")
+    blocks.append(f"来源：[{host}](<{packet['url']}>) · {str(evidence.get('captured_at') or '')[:10]} 抓取")
     report = "\n\n".join(blocks) + "\n"
     (directory / "report.md").write_text(report)
     return {

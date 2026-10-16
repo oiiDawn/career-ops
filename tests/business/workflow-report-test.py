@@ -18,7 +18,7 @@ with tempfile.TemporaryDirectory(prefix="career-ops-report-") as temporary:
     (directory / "profile.txt").write_text("Current profile.")
     packet = {"root": str(root), "directory": str(directory), "sources": {"profile": "Current profile."},
               "url": "https://jobs.example.com/roles/1"}
-    evidence = {"company": "Example", "role": "Engineer", "complete_jd": True, "liveness": "active",
+    evidence = {"company": "Example", "role": "Engineer", "complete_jd": True,
                 "captured_at": "2026-10-01T16:20:27Z",
                 "jd": "Build and maintain software products. Annual salary CNY 300k-400k.",
                 "years": {"required": 2, "verified": None, "evidence": "CV dates unclear"},
@@ -65,7 +65,7 @@ with tempfile.TemporaryDirectory(prefix="career-ops-report-") as temporary:
             "| 必备 | BSc | 直接 | CV |\n| 加分 | Kubernetes | 缺口 | none \\| in CV |") in report
     # Research gaps join the questions once.
     assert "## 待确认\n\n- Is the employer direct?\n- 每周到岗几天？\n\n来源：" in report
-    assert report.endswith("来源：[jobs.example.com](<https://jobs.example.com/roles/1>) · 2026-10-01 抓取时在线\n")
+    assert report.endswith("来源：[jobs.example.com](<https://jobs.example.com/roles/1>) · 2026-10-01 抓取\n")
     # What programs need travels beside the report, not inside it.
     assert rendered["scores"]["culture"] == raw["score"] and rendered["recommendation"] == "deprioritize"
     assert rendered["advertised_comp"]["quote"] == "Annual salary CNY 300k-400k"

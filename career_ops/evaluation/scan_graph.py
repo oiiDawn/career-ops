@@ -28,7 +28,7 @@ class ScanState(TypedDict, total=False):
 def run_scan(inputs: dict, draft_root: Path) -> dict:
     """Resume completed extraction before any deterministic prescreen or report work."""
     key = hashlib.sha256(json.dumps(inputs, ensure_ascii=False, sort_keys=True).encode()).hexdigest()
-    directory = draft_root / key
+    directory = draft_root / key / "jd-extraction-v2"
     directory.mkdir(parents=True, exist_ok=True)
 
     def extract(state: ScanState) -> dict:
@@ -42,21 +42,13 @@ def run_scan(inputs: dict, draft_root: Path) -> dict:
         }, ensure_ascii=False)
         extracted = model_adapter.call_agent("prescreen_evidence", prompt)[0]
         evidence = model_adapter.attach_evidence(extracted, {"text": source["jd"]})
-        if evidence["liveness"] not in ("active", "expired"):
-            return {"evidence": evidence, "waiting_reason": "source_access_unknown", "tool_calls": 1}
-        if evidence["complete_jd"] is not True and evidence["liveness"] != "expired":
+        if evidence["complete_jd"] is not True:
             return {"evidence": evidence, "waiting_reason": "core_evidence_missing", "tool_calls": 1}
         return {"evidence": evidence, "tool_calls": 1}
 
     def prescreen(state: ScanState) -> dict:
         source, evidence = state["inputs"]["source"], state["evidence"]
         result = evaluate_prescreen({**evidence["prescreen"], "job": {"url": source["url"]}})
-        if evidence["liveness"] == "expired":
-            return {
-                "prescreen": result, "outcome": "exclude",
-                "artifact": {"type": "exclusion", "reason_code": "expired",
-                             "reason": evidence["liveness_reason"], "evidence": source["url"]},
-            }
         if result["status"] == "incomplete":
             return {"prescreen": result, "waiting_reason": "core_evidence_missing"}
         if result["status"] == "fail":
@@ -80,13 +72,8 @@ def run_scan(inputs: dict, draft_root: Path) -> dict:
             "role": evidence["role"],
             "jd": source["jd"],
             "captured_at": source["captured_at"],
-            "liveness": evidence["liveness"],
-            "liveness_reason": (
-                f"{source.get('capture_method', 'unknown')} at {source['url']} returned "
-                f"capture {source.get('liveness_evidence', {}).get('status', 'unknown')} "
-                f"on {source['captured_at']}; content hash "
-                f"{source.get('liveness_evidence', {}).get('content_hash', 'unknown')}"
-            ) if source.get("liveness_evidence", {}).get("status") in (200, "captured") else evidence["liveness_reason"],
+            "capture_method": source.get("capture_method", "unknown"),
+            "capture_evidence": source.get("capture_evidence", source.get("liveness_evidence", {})),
             "location_evidence": source.get("location_evidence"),
             "employment_evidence": source.get("employment_evidence"),
             "prescreen": state["prescreen"],
