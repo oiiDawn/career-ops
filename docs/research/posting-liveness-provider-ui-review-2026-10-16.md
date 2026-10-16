@@ -18,6 +18,8 @@ scheduler or retry layer was added.
 The browser keeps one bounded hydration loop. The LinkedIn closure rule needs a
 visible title and job description, a matching requested/final/canonical posting
 number, a complete document, no visible login wall and no visible Apply control.
+A dismissible LinkedIn sign-in prompt is closed through its own button before
+reading the posting; a mandatory login wall stays uncertain.
 A visible disabled Apply control stays uncertain. A late enabled Apply control
 stays active. Missing guest-API markers trigger the browser; conflicting API
 markers stay uncertain. The Python deletion gate validates the emitted evidence

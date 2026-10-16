@@ -368,6 +368,11 @@ export async function checkUrlLiveness(page, url, { extraSettleMs = 0 } = {}) {
     // for the headed retry, where a JS anti-bot interstitial needs a moment to clear.
     await page.waitForTimeout(HYDRATION_WAIT_MS + extraSettleMs);
 
+    if (/(^|\.)linkedin\.com$/.test(new URL(page.url()).hostname)) {
+      const dismiss = page.locator('button.contextual-sign-in-modal__modal-dismiss:visible').first();
+      if (await dismiss.count()) await dismiss.click({ timeout: 1_000 }).catch(() => {});
+    }
+
     for (let attempt = 0; ; attempt++) {
       const snapshot = await readSnapshot(page);
       if (page._blockedByGuard) return { result: 'uncertain', ...page._blockedByGuard };
@@ -389,6 +394,7 @@ export async function checkUrlLiveness(page, url, { extraSettleMs = 0 } = {}) {
           }
         }
         return { ...verdict, evidence: { ...verdict.evidence,
+          ...(snapshot.linkedinPosting ? { linkedin_posting: snapshot.linkedinPosting, settled } : {}),
           source_url: url, final_url: snapshot.finalUrl, status } };
       }
       await page.waitForTimeout(CONTENT_POLL_MS);

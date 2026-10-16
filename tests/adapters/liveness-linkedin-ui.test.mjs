@@ -25,6 +25,7 @@ try {
     ['<script>setTimeout(()=>document.body.insertAdjacentHTML("beforeend","<button>Apply</button>"),3000)</script>', 'active'],
     ['<div class="authwall">Sign in to continue</div>', 'uncertain'],
     ['<button disabled>Apply</button>', 'uncertain'],
+    ['<section role="dialog" aria-modal="true">Sign in<button class="contextual-sign-in-modal__modal-dismiss" onclick="this.parentElement.remove()">Close</button></section>', 'expired'],
   ]) {
     const page = await browser.newPage();
     const navigate = page.goto.bind(page);

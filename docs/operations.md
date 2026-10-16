@@ -210,7 +210,9 @@ closure text without a posting-specific assertion cannot authorize deletion.
 Per the user-confirmed LinkedIn rule, a fully rendered matching job detail page
 without a visible Apply control is closed. This requires a matching canonical
 posting ID, a visible job title and description, a completed hydration wait and
-no login wall. Missing guest-API signals trigger this browser check; conflicting
+no login wall. A dismissible LinkedIn sign-in prompt is closed through its own
+button before checking; mandatory login walls remain uncertain.
+Missing guest-API signals trigger this browser check; conflicting
 closure/application signals remain uncertain. HTTP errors, partial pages and
 identity mismatches cannot establish this closure.
 
