@@ -378,11 +378,6 @@ export function resolveAtsApi(rawUrl) {
   return null;
 }
 
-/** True if `url` is an ATS posting we can check via API (lets callers stay lazy about the browser). */
-export function isAtsPosting(url) {
-  return resolveAtsApi(url) !== null;
-}
-
 /**
  * Zero-token liveness check via the posting's ATS API.
  * @param {string} url
