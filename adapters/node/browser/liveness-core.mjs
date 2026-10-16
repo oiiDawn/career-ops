@@ -1,4 +1,5 @@
 /** Classify posting-bound HTTP, closure and application evidence without network access. */
+import { linkedInJobId } from '../shared/url-key.mjs';
 function normalizeForMatch(text = '') {
   if (typeof text !== 'string') return '';
   return text
@@ -110,7 +111,9 @@ function hasApplyControl(controls = []) {
   return controls.some((control) => APPLY_PATTERNS.some((pattern) => pattern.test(control)));
 }
 
-export function classifyLiveness({ status = 0, requestedUrl = '', finalUrl = '', bodyText: rawBodyText = '', applyControls: rawApplyControls = [] } = {}) {
+export function classifyLiveness({ status = 0, requestedUrl = '', finalUrl = '', bodyText: rawBodyText = '',
+  applyControls: rawApplyControls = [], visibleApplyControls = rawApplyControls,
+  linkedinPosting = null, settled = false } = {}) {
   const bodyText = normalizeForMatch(rawBodyText);
   const applyControls = (Array.isArray(rawApplyControls) ? rawApplyControls : []).map(normalizeForMatch);
 
@@ -170,7 +173,8 @@ export function classifyLiveness({ status = 0, requestedUrl = '', finalUrl = '',
   // not the posting, so apply controls are not evidence of liveness. Uncertain,
   // not expired: a portal migration can 301 live postings too, and a false
   // "expired" permanently filters a real job out of scans.
-  const jobId = jobIdToken(requestedUrl);
+  const linkedinId = linkedInJobId(requestedUrl);
+  const jobId = linkedinId || jobIdToken(requestedUrl);
   if (jobId && finalUrl && !finalUrl.toLowerCase().includes(jobId)) {
     return {
       result: 'uncertain',
@@ -190,6 +194,17 @@ export function classifyLiveness({ status = 0, requestedUrl = '', finalUrl = '',
 
   if (bodyText.trim().length < MIN_CONTENT_CHARS) {
     return { result: 'uncertain', code: 'insufficient_content', reason: 'insufficient content — liveness unconfirmed' };
+  }
+
+  if (status === 200 && settled && linkedinId && linkedinPosting?.ready
+      && linkedinId === linkedInJobId(finalUrl) && linkedinId === linkedInJobId(linkedinPosting.url)
+      && linkedinPosting.title && linkedinPosting.descriptionLength >= MIN_CONTENT_CHARS
+      && !hasApplyControl(visibleApplyControls.map(normalizeForMatch))) {
+    return { result: 'expired', code: 'linkedin_no_apply',
+      reason: 'The fully rendered matching LinkedIn posting has no visible Apply control',
+      evidence: { posting_id: linkedinId, title: linkedinPosting.title,
+        description_length: linkedinPosting.descriptionLength, settled: true,
+        apply_control_present: false } };
   }
 
   return { result: 'uncertain', code: 'no_apply_control', reason: 'content present but no visible apply control found' };

@@ -132,7 +132,7 @@ const API = `https://www.linkedin.com/jobs-guest/jobs/api/jobPosting/${ID}`;
     '<section class="core-rail"><h1 class="top-card-layout__title">Staff Software Engineer</h1></section>'
   );
   check('neither signal present is uncertain, not expired',
-    neither?.result === 'uncertain', JSON.stringify(neither));
+    neither?.result === 'uncertain' && neither.code === 'linkedin_signals_missing', JSON.stringify(neither));
 
   // The signals must be read independently rather than one being derived from the
   // other: apply control alone, with no closed marker, is the live case above;

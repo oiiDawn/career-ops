@@ -7,8 +7,10 @@ from contextlib import contextmanager
 import fcntl
 import hashlib
 import json
+import re
 from pathlib import Path
 import sqlite3
+from urllib.parse import urlsplit
 
 from career_ops.discovery.dedup import url_key
 
@@ -56,7 +58,7 @@ def execution_lock(directory: Path, opportunity_id: str):
 
 
 def explicit_closure(observation: dict) -> bool:
-    """Only posting-bound positive closure evidence authorizes destructive maintenance."""
+    """Validate posting-bound closure evidence, including the confirmed LinkedIn UI rule."""
     if not isinstance(observation, dict) or observation.get('result') != 'expired':
         return False
     evidence, code = observation.get('evidence', {}), observation.get('code', '')
@@ -74,6 +76,15 @@ def explicit_closure(observation: dict) -> bool:
     if (evidence.get('source_url') != observation.get('url')
             or url_key(evidence.get('final_url')) != url_key(observation.get('url'))):
         return False
+    if code == 'linkedin_no_apply':
+        source = urlsplit(observation['url'])
+        posting_id = re.fullmatch(r'/jobs/view/(?:.*-)?(\d+)/?', source.path)
+        return (source.scheme == 'https' and bool(re.fullmatch(r'(?:[\w-]+\.)*linkedin\.com', source.hostname or ''))
+                and posting_id is not None and evidence.get('posting_id') == posting_id[1]
+                and evidence.get('status') == 200 and evidence.get('settled') is True
+                and evidence.get('apply_control_present') is False
+                and isinstance(evidence.get('title'), str) and bool(evidence['title'].strip())
+                and isinstance(evidence.get('description_length'), int) and evidence['description_length'] >= 300)
     return ((code == 'http_gone' and evidence.get('status') in {404, 410})
             or (code == 'expired_body' and evidence.get('status') == 200
                 and bool(evidence.get('excerpt'))))

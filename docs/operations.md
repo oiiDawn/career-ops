@@ -207,6 +207,18 @@ classifier returns its matched closure excerpt directly; browser collection does
 not maintain a second closure rule list. Generic closure dates or application
 closure text without a posting-specific assertion cannot authorize deletion.
 
+Per the user-confirmed LinkedIn rule, a fully rendered matching job detail page
+without a visible Apply control is closed. This requires a matching canonical
+posting ID, a visible job title and description, a completed hydration wait and
+no login wall. Missing guest-API signals trigger this browser check; conflicting
+closure/application signals remain uncertain. HTTP errors, partial pages and
+identity mismatches cannot establish this closure.
+
+Eightfold detail pages without an Apply control may use their public API to
+resolve one trusted SuccessFactors application page. Activity requires a matching
+ATS job ID in the API, destination URL and rendered heading, plus a visible Apply
+control. A stale application URL alone cannot establish activity.
+
 The maintenance command stores observations in `data/opportunities.db` and reports
 per-posting results/errors as JSON. Normal uncertain observations and successful
 closures are not command failures. Collection/storage/cleanup errors are reported
@@ -223,8 +235,8 @@ Historical reports and frozen payloads are not rewritten or bulk rescored.
 Explicit posting-bound closure initiates deletion of an unsubmitted opportunity
 and its exclusive reports, drafts, captures and execution records. Submitted
 applications, candidate source files and shared company evidence are protected.
-Generic listing redirects, missing Apply controls, search absence and access
-failures cannot authorize deletion. Running work is not interrupted: confirmed
+Generic listing redirects, missing Apply controls outside the confirmed LinkedIn
+rule, search absence and access failures cannot authorize deletion. Running work is not interrupted: confirmed
 closure prevents new work, and cleanup retries after the active execution releases
 its opportunity lock. `maintenance_status` distinguishes deletion, deferred work
 and pending physical cleanup in a newly checked closed posting's output.

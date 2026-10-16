@@ -31,8 +31,36 @@
  */
 
 import { DEFAULT_USER_AGENT } from '../shared/user-agent.mjs';
+import { resolveTenant } from '../providers/eightfold.mjs';
+import { linkedInJobId } from '../shared/url-key.mjs';
 
 const TIMEOUT_MS = 8_000;
+
+/** Resolve a public Eightfold posting to its identity-bound SuccessFactors application page. */
+export async function resolveEightfoldApplication(url) {
+  const tenant = resolveTenant({ careers_url: url });
+  if (!tenant) return null;
+  const posting = new URL(url);
+  const id = posting.pathname.match(/^\/careers\/job\/(\d+)\/?$/)?.[1];
+  if (!id) return null;
+  const endpoint = new URL(`https://${tenant.host}/api/apply/v2/jobs/${id}`);
+  if (tenant.domain) endpoint.searchParams.set('domain', tenant.domain);
+  try {
+    const response = await fetch(endpoint.href, { redirect: 'error', signal: AbortSignal.timeout(TIMEOUT_MS),
+      headers: { 'user-agent': DEFAULT_USER_AGENT, accept: 'application/json' } });
+    if (response.status !== 200) return null;
+    const data = await response.json();
+    if (String(data?.id) !== id || !/^\d+$/.test(String(data.ats_job_id))) return null;
+    const target = new URL(data.apply_redirect_url);
+    if (target.origin !== 'https://career2.successfactors.eu' || target.pathname !== '/careers'
+        || target.searchParams.get('career_ns') !== 'job_application'
+        || target.searchParams.get('career_job_req_id') !== String(data.ats_job_id)
+        || !target.searchParams.get('company') || target.username || target.password) return null;
+    return { url: target.href, jobId: String(data.ats_job_id) };
+  } catch {
+    return null;
+  }
+}
 // Strict path-segment charset. Anything with a slash, dot-dot, or other char is
 // rejected before it can reach the fixed-host API URL template.
 const SAFE_SEGMENT = /^[A-Za-z0-9._-]+$/;
@@ -189,18 +217,11 @@ const ATS_PROVIDERS = [
     // linkedin.com/jobs/view/{id} · .../jobs/view/{title-slug}-{id} · any page that
     // carries the posting in ?currentJobId= (search and collection views).
     //
-    // LinkedIn had no rung here, so every LinkedIn URL fell through to Playwright —
-    // where /jobs/view/{id} redirects to a generic search page and no verdict can be
-    // trusted. The guest endpoint below returns the rendered posting as HTML with no
-    // auth and no browser, and it answers 200 for closed postings as well as live
-    // ones, so liveness has to come from the body (`interpret`), never from the
-    // status code alone.
+    // Guest HTML returns 200 for both live and closed postings. Missing signals
+    // require the rendered detail page; conflicting signals remain uncertain.
     match(u) {
-      if (!/(^|\.)linkedin\.com$/.test(u.hostname)) return null;
-      const path = u.pathname.match(/^\/jobs\/view\/(?:.*-)?(\d+)\/?$/);
-      if (path) return { id: path[1] };
-      const current = u.searchParams.get('currentJobId');
-      return current && /^\d+$/.test(current) ? { id: current } : null;
+      const id = linkedInJobId(u.href);
+      return id ? { id } : null;
     },
     api: ({ id }) => `https://www.linkedin.com/jobs-guest/jobs/api/jobPosting/${id}`,
     // The endpoint is unauthenticated and rate-limited. Space our calls; the
@@ -269,7 +290,7 @@ export function classifyLinkedInPosting(html) {
   }
   return {
     result: 'uncertain',
-    code: 'linkedin_signals_disagree',
+    code: closed ? 'linkedin_signals_disagree' : 'linkedin_signals_missing',
     reason: closed
       ? 'LinkedIn shows both a closure banner and an apply control — unrecognised page'
       : 'LinkedIn shows neither a closure banner nor an apply control — unrecognised page',
@@ -367,8 +388,8 @@ export function isAtsPosting(url) {
  * @param {string} url
  * @returns {Promise<{ result: 'active' | 'expired' | 'uncertain', code: string, reason: string } | null>}
  *   null = not a known ATS posting, or inconclusive → caller should fall back to Playwright.
- *   `uncertain` is a conclusion in its own right: the provider reached the posting
- *   and could not read it, and no other rung would do better.
+ *   LinkedIn missing signals require a rendered-page check; conflicting signals
+ *   remain uncertain instead of choosing one over the other.
  */
 export async function checkLivenessViaApi(url) {
   const resolved = resolveAtsApi(url);

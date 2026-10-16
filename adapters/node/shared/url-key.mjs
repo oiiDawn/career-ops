@@ -36,6 +36,20 @@
  * can adopt the same key later without the definitions drifting.
  */
 
+/** Read a LinkedIn posting identity without mistaking tracking parameters for a job ID. */
+export function linkedInJobId(rawUrl) {
+  try {
+    const url = new URL(rawUrl);
+    if (url.protocol !== 'https:' || !/(^|\.)linkedin\.com$/.test(url.hostname)) return null;
+    const path = url.pathname.match(/^\/jobs\/view\/(?:.*-)?(\d+)\/?$/);
+    if (path) return path[1];
+    const current = url.searchParams.get('currentJobId');
+    return current && /^\d+$/.test(current) ? current : null;
+  } catch {
+    return null;
+  }
+}
+
 // Query params that identify a click/campaign, never the posting itself. Keep
 // this list literal and board-specific; see the RFC note above on why generic
 // names are absent.

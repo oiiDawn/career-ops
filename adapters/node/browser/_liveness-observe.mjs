@@ -24,7 +24,8 @@ try {
     try {
       api = await checkLivenessViaApi(url);
       observation = api;
-      if (!api) {
+      if (!api || api.code === 'linkedin_signals_missing') {
+        api = null;
         if (!browser?.isConnected()) {
           browser = await chromium.launch({ headless: true });
           page = null;

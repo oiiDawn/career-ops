@@ -6,6 +6,7 @@
  */
 
 import { classifyLiveness } from './liveness-core.mjs';
+import { resolveEightfoldApplication } from './liveness-api.mjs';
 import { BROWSER_LIKE_USER_AGENT } from '../shared/user-agent.mjs';
 
 const NAVIGATE_TIMEOUT_MS = 15_000;
@@ -244,21 +245,16 @@ function readLivenessContent() {
   const candidates = Array.from(
     document.querySelectorAll('a, button, input[type="submit"], input[type="button"], [role="button"], [href][aria-label]')
   );
+  const visible = element => element && !element.closest('[aria-hidden="true"]')
+    && getComputedStyle(element).display !== 'none' && getComputedStyle(element).visibility !== 'hidden'
+    && Array.from(element.getClientRects()).some(rect => rect.width > 0 && rect.height > 0);
 
-  const applyControls = candidates
-    .filter((element) => {
-      if (element.closest('nav, header, footer')) return false;
-      if (element.closest('[aria-hidden="true"]')) return false;
-      if (element.matches(':disabled, [disabled], [aria-disabled="true"]')) return false;
-
-      const style = window.getComputedStyle(element);
-      if (style.display === 'none' || style.visibility === 'hidden') return false;
-
-      return Array.from(element.getClientRects()).some((rect) => rect.width > 0 && rect.height > 0);
-    })
+  const controls = candidates
+    .filter(element => !element.closest('nav, header, footer') && visible(element))
     .map((element) => {
+      const enabled = !element.matches(':disabled, [disabled], [aria-disabled="true"]');
       if ((linkedin && element.matches('[data-modal="job-details-topcard-apply-modal"], [data-tracking-control-name="public_jobs_apply-link-onsite"]'))
-          || (smartrecruiters && element.matches('a[data-sr-track="apply"][href*="/oneclick-ui/company/"]'))) return 'Apply';
+          || (smartrecruiters && element.matches('a[data-sr-track="apply"][href*="/oneclick-ui/company/"]'))) return { label: 'Apply', enabled };
       const label = [
         element.innerText,
         element.value,
@@ -270,10 +266,22 @@ function readLivenessContent() {
         .replace(/\s+/g, ' ')
         .trim();
 
-      return label;
+      return { label, enabled };
     })
-    .filter(Boolean);
-  return { finalUrl: location.href, bodyText: document.body?.innerText ?? '', applyControls };
+    .filter(control => control.label);
+  const applyControls = controls.filter(control => control.enabled).map(control => control.label);
+  const visibleApplyControls = controls.map(control => control.label);
+  let linkedinPosting = null;
+  if (linkedin) {
+    const title = document.querySelector('h1.top-card-layout__title, h1.topcard__title');
+    const description = document.querySelector('.description__text .show-more-less-html__markup');
+    const loginWall = Array.from(document.querySelectorAll('.authwall, .contextual-sign-in-modal, [role="dialog"][aria-modal="true"]')).some(visible);
+    linkedinPosting = { url: document.querySelector('link[rel="canonical"]')?.href,
+      title: visible(title) ? title.innerText.trim() : '',
+      descriptionLength: visible(description) ? description.innerText.trim().length : 0,
+      ready: document.readyState === 'complete' && !loginWall };
+  }
+  return { finalUrl: location.href, bodyText: document.body?.innerText ?? '', applyControls, visibleApplyControls, linkedinPosting };
 }
 
 /** Read the main document and same-origin posting frames together on every attempt. */
@@ -286,6 +294,7 @@ async function readSnapshot(page) {
       const content = await frame.evaluate(readLivenessContent);
       snapshot.bodyText += '\n' + content.bodyText;
       snapshot.applyControls.push(...content.applyControls);
+      snapshot.visibleApplyControls.push(...content.visibleApplyControls);
       snapshot.pendingFrames ||= !content.bodyText.trim();
     } catch {
       snapshot.pendingFrames = true;
@@ -362,10 +371,23 @@ export async function checkUrlLiveness(page, url, { extraSettleMs = 0 } = {}) {
     for (let attempt = 0; ; attempt++) {
       const snapshot = await readSnapshot(page);
       if (page._blockedByGuard) return { result: 'uncertain', ...page._blockedByGuard };
-      const verdict = classifyLiveness({ status, requestedUrl: url, ...snapshot });
+      const settled = attempt >= CONTENT_TIMEOUT_MS / CONTENT_POLL_MS && !snapshot.pendingFrames;
+      const verdict = classifyLiveness({ status, requestedUrl: url, ...snapshot, settled });
       const inconclusive = ['no_apply_control', 'insufficient_content'].includes(verdict.code);
       if (status !== 200 || attempt >= CONTENT_TIMEOUT_MS / CONTENT_POLL_MS
           || (!snapshot.pendingFrames && !inconclusive)) {
+        if (verdict.code === 'no_apply_control') {
+          const application = await resolveEightfoldApplication(url);
+          if (application) {
+            const checked = await checkUrlLiveness(page, application.url);
+            const headings = await page.locator('h1:visible').allTextContents();
+            if (checked.result === 'active' && page.url() === application.url
+                && headings.some(title => title.trim().endsWith(`(${application.jobId})`))) {
+              return { ...checked, evidence: { ...checked.evidence,
+                posting_url: url, ats_job_id: application.jobId } };
+            }
+          }
+        }
         return { ...verdict, evidence: { ...verdict.evidence,
           source_url: url, final_url: snapshot.finalUrl, status } };
       }
