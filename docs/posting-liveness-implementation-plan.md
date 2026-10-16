@@ -1,6 +1,6 @@
 # Periodic posting liveness: implementation plan
 
-Status: implementation reference, 2026-10-16. Business decisions are recorded in [ADR 0003](adr/0003-posting-liveness-is-maintained-independently.md). The runtime and dedicated script are implemented; live scheduler installation remains separate. See [operations](operations.md#independent-posting-liveness).
+Status: implemented and deployed, 2026-10-16. Business decisions are recorded in [ADR 0003](adr/0003-posting-liveness-is-maintained-independently.md). The first production run passed acceptance and the dedicated Hermes schedule is enabled. See [operations](operations.md#independent-posting-liveness).
 
 ## Outcome and ownership
 
@@ -101,4 +101,4 @@ Complete and commit slices separately. Slices 1–3 must all pass before install
 
 Use retained fixture pages for the exact LinkedIn closure case, then verify an approved live sample without destructive writes. Test actual adapters and actual SQLite commits as well as injected errors. Fixtures and passing tests alone do not establish current live-site access or correct destructive behavior.
 
-Deployment is separate from this planning task. At cutover, inspect current Hermes jobs and in-flight writers, pause affected schedules briefly, take a consistent recoverable SQLite backup, validate the integrated code against a database copy, and inspect the first check's exact deletion candidates/evidence before production maintenance. Do not delete from stale historical liveness fields. Install the dedicated job only after implementation/deployment authorization, verify scheduler timezone and installed script, restore existing jobs, and inspect plain `hermes cron list` plus persisted per-posting results. A successful scheduler exit alone is not acceptance evidence.
+The authorized operational rollout completed on 2026-10-16 after consistent SQLite backups and an accepted manual production run. Existing discovery and scoring schedules remained active, exercising the independent-workflow boundary. The installed script matches the repository version, and plain `hermes cron list` plus `hermes cron doctor` confirmed the new schedule. Future cutovers must inspect current jobs and in-flight writers, take consistent recoverable backups, validate deletion evidence and retained data, and verify scheduler timezone and installed scripts. Do not delete from stale historical liveness fields. A successful scheduler exit alone is not acceptance evidence.

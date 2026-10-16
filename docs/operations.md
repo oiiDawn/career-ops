@@ -224,11 +224,21 @@ references are rechecked before deleting files; unowned paths are preserved and
 reported. Same-URL reopening requires an explicit manual recheck and clearing the
 closed outcome before re-ingestion; merely inspecting a URL does not clear it.
 
-The dedicated entrypoint is `scripts/career-ops-liveness.sh`. Its intended Hermes
-schedule is 06:00 and 18:00 Asia/Shanghai, with the repository as working directory.
-This implementation adds the script but does not install or change live Hermes
-jobs. Before deployment, back up the SQLite database consistently, verify the
-installed script and timezone, and inspect fresh read-only closure evidence on a
-database copy. Never delete based on old scan-report liveness fields. Failures
-retry at the next scheduled run or via manual `--apply`; no separate retry timer
-is installed.
+The dedicated entrypoint is `scripts/career-ops-liveness.sh`, installed identically
+under `~/.hermes/scripts/`. Hermes job `9c81e6e28ec3` was enabled on 2026-10-16
+at 06:00 and 18:00 Asia/Shanghai, with this repository as working directory,
+`no-agent` execution and local output. `hermes cron doctor` passed for all three
+active jobs; existing discovery and scoring schedules were preserved.
+
+The first production maintenance run checked 236 postings: 166 active, 43 uncertain
+and 27 explicitly closed and deleted, with no run errors or pending cleanup.
+Acceptance verified database integrity, no new foreign-key violations, unchanged
+8 submitted applications, 573 shared company ratings and 228 surviving scores.
+Results and validation are in `data/maintenance/liveness/2026-10-16-first-run.json`
+and `2026-10-16-first-run-validation.json`; consistent pre-run SQLite backups are
+under `data/backups/liveness-first-run-20261016T084211/`.
+
+Before future deployment changes, take consistent SQLite backups and verify the
+installed script and timezone. Never delete based on old scan-report liveness
+fields. Uncertain checks retry at the next scheduled run or via manual `--apply`;
+they do not block other workflows, and no separate retry timer is installed.
