@@ -426,7 +426,7 @@ function render() {
       <td class="hide-sm">${esc(j.location || "—")}</td>
       <td>${dims(j.scores, j.dimensions)}${j.needs_rescore ? pill("needs_rescore") : ""}</td>
       <td class="num hide-sm" title="核心必备：直接 · 相邻 · 缺口 · 未知">${capabilityCell(j.capability_counts)}</td>
-      <td>${pill(j.action)}</td>
+      <td title="${j.needs_rescore ? "基于上次评分，待重新评分" : ""}">${pill(j.action)}</td>
       <td>${pill(j.state)}</td>
       <td>${pill(j.application_status)}</td>
       <td class="num hide-sm">${shortDate(j.created_at)}</td>

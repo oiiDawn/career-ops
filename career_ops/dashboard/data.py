@@ -123,7 +123,7 @@ def list_jobs(db: sqlite3.Connection) -> list[dict]:
             "company_profiles": artifact.get("company_profiles", {}),
             "profile_expired": "company_evidence_expired" in refresh_reasons,
             "company_research": artifact.get("company_research", {}),
-            "action": _action(score, scan) if current and not refresh_reasons else None,
+            "action": _action(score, scan),
             "score_current": current,
             "needs_rescore": bool(refresh_reasons),
             "refresh_reasons": refresh_reasons,

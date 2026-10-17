@@ -82,6 +82,8 @@ marked `needs_rescore` (待重新评分). `refresh_reasons` distinguishes change
 inputs from expired company evidence; either cause enters the same refresh queue.
 `list --view scores` exposes both fields; `list --view decisions` separates ready
 `decisions` from the `needs_rescore` list.
+Dashboard keeps the decision derived from the latest retained scores visible while
+marking it 待重新评分; refresh eligibility does not erase the previous decision.
 Refresh reuses the hash-verified retained JD and reruns prescreen only when its
 inputs changed. Current company evidence remains reusable; expired evidence is
 researched again. The evidence request date changes the execution identity without

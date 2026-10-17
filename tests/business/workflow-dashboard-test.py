@@ -124,10 +124,10 @@ with tempfile.TemporaryDirectory() as temporary:
         assert "<title>Career Ops Dashboard</title>" in fetch(base, "/")
         jobs = {job["id"]: job for job in fetch(base, "/api/jobs")}
         assert [jobs[i]["stage"] for i in (1, 2, 3, 4)] == ["scanned", "scored", "applied", "scanned"]
-        assert "score" not in jobs[2] and jobs[2]["action"] is None and "score" not in jobs[1]
+        assert "score" not in jobs[2] and jobs[2]["action"] == "deprioritize" and "score" not in jobs[1]
         assert jobs[2]["dimensions"]["culture"]["reason"] == "no_matching_valid_profile"
         assert jobs[2]["profile_expired"] and not jobs[1]["profile_expired"]
-        assert jobs[2]["scores"]["direction"] == 4.96 and jobs[3]["action"] is None
+        assert jobs[2]["scores"]["direction"] == 4.96 and jobs[3]["action"] == "deprioritize"
         assert jobs[3]["application_status"] == "applied" and jobs[3]["material_count"] == 2
         assert jobs[3]["url"] == "https://example.com/3" and jobs[1]["location"] == "Shanghai"
         assert [jobs[i]["score_current"] for i in (1, 2, 3)] == [None, True, False]
