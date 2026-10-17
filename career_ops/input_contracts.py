@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+from datetime import date
 from pathlib import Path
 import re
 from career_ops.evaluation import jev
@@ -46,6 +47,7 @@ def score_inputs(report: dict) -> str:
         "score_policy_version": SCORE_POLICY_VERSION,
         "rubric": (RULES_ROOT / "evaluation/four-dimension.md").read_text(),
         "company_valid_until": company_valid_until(),
+        "company_evidence_as_of": date.today().isoformat(),
         "jd_report": report,
         "cv": (INPUT_ROOT / "cv.md").read_text(),
         "profile": (INPUT_ROOT / "profile.yml").read_text(),
@@ -76,10 +78,20 @@ def score_is_current(connection, input_hash: str, report: dict) -> bool:
         return False
     for value in (stored, current):
         value.pop("company_valid_until", None)
+        value.pop("company_evidence_as_of", None)
         value['rubric'] = jev.standards(value['rubric'], jev.DIMENSIONS)
         if isinstance(value.get("profile"), str):
             value["profile"] = scoring_profile(value["profile"])
     return stored == current
+
+
+def score_refresh_reasons(current: bool, profiles: dict) -> list[str]:
+    """Unify refresh eligibility while retaining input and evidence-expiry causes."""
+    reasons = [] if current else ["inputs_changed"]
+    if any(ref.get("valid_until") and ref["valid_until"] < date.today().isoformat()
+           for ref in profiles.values()):
+        reasons.append("company_evidence_expired")
+    return reasons
 
 
 def canonical_score_input(value: str) -> str:

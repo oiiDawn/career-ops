@@ -77,6 +77,24 @@ score advances existing evaluation tasks and uses the previously authorized
 notification policy. Check `system doctor --json` and the offline suite before enabling
 changed wrappers. Neither doctor nor offline fixtures send candidate data.
 
+The ten-minute score schedule selects retained unscored postings as well as scores
+marked `needs_rescore` (待重新评分). `refresh_reasons` distinguishes changed scoring
+inputs from expired company evidence; either cause enters the same refresh queue.
+`list --view scores` exposes both fields; `list --view decisions` separates ready
+`decisions` from the `needs_rescore` list.
+Refresh reuses the hash-verified retained JD and reruns prescreen only when its
+inputs changed. Current company evidence remains reusable; expired evidence is
+researched again. The evidence request date changes the execution identity without
+invalidating otherwise current numeric scores when a new day begins.
+
+Waiting evaluation tasks are replaced when candidate/policy inputs or usable JD
+content change. Their old frozen inputs and completed results remain intact.
+Unchanged incomplete-evidence waits require new evidence; transient failures get
+one automatic retry. Missing-source probes run at most once per day, unless new
+retained evidence becomes available. Failed application preparation does not block
+independent evaluation. `idle / no_runnable_evaluations` means no task can currently
+advance, including when unresolved waits remain; it does not mean every job is scored.
+
 `evaluate ID` and `system advance` trace one opportunity as `job-evaluation`,
 with `prescreen` and `score` stages under the same root. A scheduled run continues
 from a completed prescreen into scoring; exclusions or waiting conditions stop it.

@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from career_ops.liveness import current_observations
 
-from datetime import date
 import json
 from pathlib import Path
 import sqlite3
@@ -12,7 +11,7 @@ import sqlite3
 from career_ops.applications.application_lifecycle import OUTCOMES, TRANSITIONS
 from career_ops.evaluation.capabilities import core_counts, rows as capability_rows
 from career_ops.evaluation.decisions import classify, valid_scores
-from career_ops.input_contracts import apply_inputs, digest, score_is_current
+from career_ops.input_contracts import apply_inputs, digest, score_is_current, score_refresh_reasons
 
 
 # The package files the page shows, in display order; the rendering intermediates stay on disk.
@@ -80,12 +79,6 @@ def _action(score: dict | None, scan: dict | None) -> str | None:
         return None
 
 
-def _profile_expired(profiles: dict) -> bool:
-    """Shared company dimensions are dated; an expired profile no longer describes the employer today."""
-    today = date.today().isoformat()
-    return any(ref.get("valid_until") and ref["valid_until"] < today for ref in profiles.values())
-
-
 def _stage(row: sqlite3.Row, lifecycle: dict | None, score: dict | None) -> str:
     if lifecycle or row["application_state"] == "submitted":
         return "applied"
@@ -111,6 +104,8 @@ def list_jobs(db: sqlite3.Connection) -> list[dict]:
         evaluation = evaluations.get(key, {})
         artifact = (score_result or {}).get("artifact", {})
         application = lifecycle.get(key)
+        current = _score_current(db, score_result, scan)
+        refresh_reasons = score_refresh_reasons(current, artifact.get("company_profiles", {})) if current is not None else []
         jobs.append({
             "id": row["id"], "url": row["url"], "company": row["company"], "role": row["role"],
             "source": row["source"], "state": row["state"], "created_at": row["created_at"],
@@ -126,10 +121,12 @@ def list_jobs(db: sqlite3.Connection) -> list[dict]:
             "scores": score if isinstance(score, dict) else None,
             "dimensions": artifact.get("dimensions", {}),
             "company_profiles": artifact.get("company_profiles", {}),
-            "profile_expired": _profile_expired(artifact.get("company_profiles", {})),
+            "profile_expired": "company_evidence_expired" in refresh_reasons,
             "company_research": artifact.get("company_research", {}),
-            "action": _action(score, scan) if _score_current(db, score_result, scan) else None,
-            "score_current": _score_current(db, score_result, scan),
+            "action": _action(score, scan) if current and not refresh_reasons else None,
+            "score_current": current,
+            "needs_rescore": bool(refresh_reasons),
+            "refresh_reasons": refresh_reasons,
             "scored_at": evaluation.get("created_at"),
             "application_status": application["status"] if application else None,
             "application_updated_at": application["updated_at"] if application else None,

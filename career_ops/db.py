@@ -9,7 +9,7 @@ from pathlib import Path
 from career_ops.evaluation.decisions import classify as classify_decision, order as order_decisions, valid_scores
 from career_ops.evaluation.report import dimension_scores
 from career_ops.context import WORKFLOW_VERSION
-from career_ops.input_contracts import canonical_scan_input, digest, scan_is_current, score_inputs, score_is_current
+from career_ops.input_contracts import canonical_scan_input, digest, scan_is_current, score_inputs, score_is_current, score_refresh_reasons
 from career_ops.task_state import WorkflowState
 from career_ops.liveness import require_open
 
@@ -208,6 +208,12 @@ class BusinessStore:
             (opportunity_id, module, input_hash),
         ).fetchone()
         if reused:
+            if re_evaluate:
+                self.db.execute(
+                    "UPDATE tasks SET status='cancelled',waiting_reason=NULL "
+                    "WHERE opportunity_id=? AND module=? AND status='waiting'",
+                    (opportunity_id, module),
+                )
             return {"task_id": reused["task_id"], "status": "completed", "reused": True}
         prior = self.db.execute(
             "SELECT task_id FROM results WHERE opportunity_id=? AND module=? LIMIT 1",
@@ -241,6 +247,12 @@ class BusinessStore:
                     raise ValueError("Another task owns this opportunity; resume or complete it first")
                 self.db.execute("COMMIT")
                 return {"task_id": active["task_id"], "status": active["status"], "reused": False}
+            if re_evaluate:
+                self.db.execute(
+                    "UPDATE tasks SET status='cancelled',waiting_reason=NULL "
+                    "WHERE opportunity_id=? AND module=? AND status='waiting'",
+                    (opportunity_id, module),
+                )
             task_id = str(uuid.uuid4())
             self.db.execute(
                 "INSERT INTO tasks(task_id,opportunity_id,module,status,input_hash,workflow_version,input_payload) VALUES(?,?,?,'running',?,?,?)",
@@ -562,7 +574,6 @@ class BusinessStore:
             artifact = payload.get("artifact", {})
             score = artifact.get("score")
             valid = False
-            reason = "score_metadata_missing"
             source_task = self.db.execute(
                 "SELECT input_payload FROM tasks WHERE opportunity_id=? AND module='score' AND input_hash=? ORDER BY rowid DESC LIMIT 1",
                 (opportunity_id, row["input_hash"]),
@@ -571,10 +582,10 @@ class BusinessStore:
                 try:
                     report = scan["artifact"] if scan else json.loads(source_task["input_payload"])["jd_report"]
                     valid = score_is_current(self.db, row["input_hash"], report)
-                    reason = None if valid else "candidate_or_policy_inputs_changed"
                 except (KeyError, OSError, ValueError):
-                    reason = "stored_input_invalid"
+                    valid = False
             if valid_scores(score):
+                refresh_reasons = score_refresh_reasons(valid, artifact.get("company_profiles", {}))
                 values.append({
                     "opportunity_id": opportunity_id, "scores": score,
                     "scoring_model": artifact.get("scoring_model"),
@@ -582,17 +593,18 @@ class BusinessStore:
                     "company_profiles": artifact.get("company_profiles", {}),
                     "company_research": artifact.get("company_research", {}),
                     "valid": valid,
-                    "stale_reason": reason,
+                    "needs_rescore": bool(refresh_reasons),
+                    "refresh_reasons": refresh_reasons,
                 })
         values.sort(key=lambda item: item["opportunity_id"])
         return values
 
     def decision_views(self) -> dict:
         """Derive the current action queue only from valid formal score inputs."""
-        ready, stale = [], []
+        ready, pending = [], []
         for item in self.score_views():
-            if not item["valid"]:
-                stale.append(item)
+            if item["needs_rescore"]:
+                pending.append(item)
                 continue
             scan = self.module_result(item["opportunity_id"], "scan")
             if scan:
@@ -608,4 +620,4 @@ class BusinessStore:
                 **item, "action": classify_decision(item["scores"], report["prescreen"]),
                 "deadline": None, "effort_days": None,
             })
-        return {"decisions": order_decisions(ready), "stale": stale}
+        return {"decisions": order_decisions(ready), "needs_rescore": pending}

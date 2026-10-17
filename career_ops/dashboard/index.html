@@ -67,7 +67,7 @@ td .sub { color: var(--muted); font-size: 12px; }
   color: var(--muted); white-space: nowrap; }
 .pill.focus, .pill.pass, .pill.active, .pill.applied, .pill.offer, .pill.hired { background: var(--focus-bg); color: var(--focus); }
 .pill.deprioritize, .pill.uncertain, .pill.unknown, .pill.responded, .pill.interview { background: var(--depri-bg); color: var(--depri); }
-.pill.discard, .pill.fail, .pill.stale, .pill.expired, .pill.closed, .pill.rejected, .pill.ineligible { background: var(--discard-bg); color: var(--discard); }
+.pill.discard, .pill.fail, .pill.needs_rescore, .pill.expired, .pill.closed, .pill.rejected, .pill.ineligible { background: var(--discard-bg); color: var(--discard); }
 .dims { display: flex; gap: 4px; }
 .dim { min-width: 36px; padding: 0 4px; text-align: center; border-radius: 4px; font-size: 12px; font-variant-numeric: tabular-nums;
   background: var(--neutral-bg); color: var(--muted); }
@@ -139,7 +139,7 @@ details summary { cursor: pointer; font-weight: 600; }
 <section class="filters" id="filters">
   <input type="search" id="q" placeholder="搜索公司 / 职位 / 地点 / ID">
   <label>决策 <select id="fAction"><option value="">全部</option><option value="focus">focus</option>
-    <option value="deprioritize">deprioritize</option><option value="discard">discard</option><option value="none">未打分</option><option value="stale">分数过期</option></select></label>
+    <option value="deprioritize">deprioritize</option><option value="discard">discard</option><option value="none">未打分</option><option value="needs_rescore">待重新评分</option></select></label>
   <label>状态 <select id="fState"></select></label>
   <label>来源 <select id="fSource"></select></label>
   <label>存活 <select id="fLiveness"></select></label>
@@ -232,7 +232,7 @@ function md(text) {
   if (window.marked && window.DOMPurify) return `<div class="md">${DOMPurify.sanitize(marked.parse(text))}</div>`;
   return `<pre class="plain">${esc(text)}</pre>`;
 }
-function pill(value) { return value ? `<span class="pill ${esc(value)}">${esc(value)}</span>` : '<span class="sub">—</span>'; }
+function pill(value) { return value ? `<span class="pill ${esc(value)}">${esc(value === "needs_rescore" ? "待重新评分" : value)}</span>` : '<span class="sub">—</span>'; }
 function shortDate(value) { return value ? esc(String(value).slice(0, 10)) : "—"; }
 function safeUrl(url) { return /^https?:\/\//i.test(url || "") ? url : "#"; }
 function jobLink(job, text = "↗") {
@@ -320,7 +320,7 @@ function filtered() {
   const q = state.q.trim().toLowerCase();
   return jobs.filter(j => inStage(j, state.stage)
     && (!q || [j.id, j.company, j.role, j.location, j.source].some(v => String(v ?? "").toLowerCase().includes(q)))
-    && (!state.action || (state.action === "none" ? !j.scores : state.action === "stale" ? j.score_current === false : j.action === state.action))
+    && (!state.action || (state.action === "none" ? !j.scores : state.action === "needs_rescore" ? j.needs_rescore : j.action === state.action))
     && (!state.state || j.state === state.state)
     && (!state.source || j.source === state.source)
     && (!state.liveness || j.liveness === state.liveness)
@@ -424,7 +424,7 @@ function render() {
       <td class="num">${j.id}</td>
       <td><div class="role">${esc(j.role)}${jobLink(j)}</div><div class="sub">${esc(j.company)} · ${esc(j.source)}${j.material_count ? " · 📎 材料" : ""}${runs[j.id]?.status === "running" ? ` · ⏳ ${ACTION_TEXT[runs[j.id].action].running}` : ""}</div></td>
       <td class="hide-sm">${esc(j.location || "—")}</td>
-      <td>${dims(j.scores, j.dimensions)}${j.score_current === false ? pill("stale") : ""}${j.profile_expired ? pill("expired") : ""}</td>
+      <td>${dims(j.scores, j.dimensions)}${j.needs_rescore ? pill("needs_rescore") : ""}</td>
       <td class="num hide-sm" title="核心必备：直接 · 相邻 · 缺口 · 未知">${capabilityCell(j.capability_counts)}</td>
       <td>${pill(j.action)}</td>
       <td>${pill(j.state)}</td>
@@ -522,9 +522,14 @@ function evidenceCard(item) {
     ${lines.map(line => `<div class="sub">• ${esc(typeof line === "string" ? line : JSON.stringify(line))}</div>`).join("")}</div>`;
 }
 
+function refreshReason(d) {
+  const labels = { inputs_changed: "简历、JD、资料或打分规则已变化", company_evidence_expired: "公司证据已过期" };
+  return (d.refresh_reasons || []).map(reason => labels[reason] || reason).join("；");
+}
+
 function report(d) {
-  const stale = d.score_current === false ? '<div class="banner failed">此报告基于旧版简历、资料或打分规则，建议点击上方「重新打分」。</div>' : "";
-  return runBanner(d, "rescore") + stale + (d.report ? `<div class="report">${md(d.report)}</div>` : '<p class="sub">该职位尚无打分报告。</p>');
+  const refresh = d.needs_rescore ? `<div class="banner failed">待重新评分：${refreshReason(d)}。请点击上方「重新打分」。</div>` : "";
+  return runBanner(d, "rescore") + refresh + (d.report ? `<div class="report">${md(d.report)}</div>` : '<p class="sub">该职位尚无打分报告。</p>');
 }
 function jd(d) { return d.jd ? `<pre class="plain">${esc(d.jd)}</pre>` : '<p class="sub">未保留 JD 原文。</p>'; }
 
@@ -549,10 +554,10 @@ function actions(d) {
   }
   if (d.scan_outcome !== "jd_report") return `<span class="sub">没有可用的 JD 扫描结果，暂不能打分或生成材料</span>`;
   if (!d.scores) return `${actionButton(d.id, "rescore", "开始打分")}<span class="sub">打分后才能生成申请材料</span>`;
-  if (d.score_current === false) {
-    return `${pill("stale")} ${actionButton(d.id, "rescore", "重新打分")}
-      <button class="ghost" disabled title="分数过期，需先重新打分">生成申请材料</button>
-      <span class="sub">简历、资料或打分规则在打分后有变更</span>`;
+  if (d.needs_rescore) {
+    return `${pill("needs_rescore")} ${actionButton(d.id, "rescore", "重新打分")}
+      <button class="ghost" disabled title="待重新评分">生成申请材料</button>
+      <span class="sub">${esc(refreshReason(d))}</span>`;
   }
   const label = d.materials.length ? "重新生成材料" : "生成申请材料";
   return `${actionButton(d.id, "prepare", label)}<span class="sub">不会提交申请</span>`;

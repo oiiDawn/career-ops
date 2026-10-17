@@ -124,13 +124,16 @@ with tempfile.TemporaryDirectory() as temporary:
         assert "<title>Career Ops Dashboard</title>" in fetch(base, "/")
         jobs = {job["id"]: job for job in fetch(base, "/api/jobs")}
         assert [jobs[i]["stage"] for i in (1, 2, 3, 4)] == ["scanned", "scored", "applied", "scanned"]
-        assert "score" not in jobs[2] and jobs[2]["action"] == "deprioritize" and "score" not in jobs[1]
+        assert "score" not in jobs[2] and jobs[2]["action"] is None and "score" not in jobs[1]
         assert jobs[2]["dimensions"]["culture"]["reason"] == "no_matching_valid_profile"
         assert jobs[2]["profile_expired"] and not jobs[1]["profile_expired"]
         assert jobs[2]["scores"]["direction"] == 4.96 and jobs[3]["action"] is None
         assert jobs[3]["application_status"] == "applied" and jobs[3]["material_count"] == 2
         assert jobs[3]["url"] == "https://example.com/3" and jobs[1]["location"] == "Shanghai"
         assert [jobs[i]["score_current"] for i in (1, 2, 3)] == [None, True, False]
+        assert jobs[2]["needs_rescore"] and jobs[2]["refresh_reasons"] == ["company_evidence_expired"]
+        assert jobs[3]["needs_rescore"] and "inputs_changed" in jobs[3]["refresh_reasons"]
+        assert not jobs[1]["needs_rescore"]
 
         detail = fetch(base, "/api/jobs/3")
         assert detail["report"].startswith("## A.") and detail["jd"] == "JD text"
@@ -161,13 +164,14 @@ with tempfile.TemporaryDirectory() as temporary:
         assert "过期" in fetch(base, "/api/jobs/3/prepare", 409, "POST", action)["error"]
         fetch(base, "/api/jobs/99/prepare", 404, "POST", action)
         assert runner.started == []
+        assert "待重新评分" in fetch(base, "/api/jobs/2/prepare", 409, "POST", action)["error"]
         origin = {**action, "Origin": base}
-        assert fetch(base, "/api/jobs/2/prepare", 202, "POST", origin)["run"]["status"] == "running"
+        assert fetch(base, "/api/jobs/2/rescore", 202, "POST", origin)["run"]["status"] == "running"
         assert fetch(base, "/api/jobs/1/rescore", 202, "POST", action)["run"]["action"] == "rescore"
-        assert runner.started == [(2, "prepare"), (1, "rescore")]
-        assert fetch(base, "/api/jobs/2/run")["run"]["action"] == "prepare" and fetch(base, "/api/jobs/3/run")["run"] is None
+        assert runner.started == [(2, "rescore"), (1, "rescore")]
+        assert fetch(base, "/api/jobs/2/run")["run"]["action"] == "rescore" and fetch(base, "/api/jobs/3/run")["run"] is None
         assert {job["id"]: job["run"] for job in fetch(base, "/api/jobs")} == {
-            1: {"action": "rescore", "status": "running"}, 2: {"action": "prepare", "status": "running"}, 3: None, 4: None}
+            1: {"action": "rescore", "status": "running"}, 2: {"action": "rescore", "status": "running"}, 3: None, 4: None}
         assert fetch(base, "/api/jobs/3")["apply_task"] == {"task_id": "apply-3", "status": "completed", "reason": None}
     finally:
         server.shutdown()

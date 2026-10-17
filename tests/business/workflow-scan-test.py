@@ -202,7 +202,7 @@ with tempfile.TemporaryDirectory(prefix="career-ops-cron-") as temporary:
     assert score_crash.returncode == 86
     crashed_score = next(task for task in run(directory, "task", "list") if task["opportunity_id"] == "1" and task["module"] == "score")
     assert run(directory, "task", "run", crashed_score["task_id"], "--crash-at", "publish")["status"] == "completed"
-    assert run(directory, "system", "advance") == {"status": "idle", "reason": "no_unscored_opportunities"}
+    assert run(directory, "system", "advance") == {"status": "idle", "reason": "no_runnable_evaluations"}
     database = sqlite3.connect(directory / "opportunities.db")
     assert database.execute("SELECT state FROM opportunities WHERE id=1").fetchone()[0] == "evaluated"
     assert database.execute("SELECT count(*) FROM evaluations WHERE opportunity_id=1").fetchone()[0] == 1
@@ -235,15 +235,19 @@ with tempfile.TemporaryDirectory(prefix="career-ops-cron-wait-") as temporary:
     assert run(directory, "system", "advance")["task"]["status"] == "waiting"
     advanced = run(directory, "system", "advance")
     assert advanced["opportunity_id"] == "2" and advanced["task"]["status"] == "completed"
-    assert run(directory, "system", "advance")["opportunity_id"] == "1"
+    assert run(directory, "system", "advance")["status"] == "idle"
     blocked_task = next(task for task in run(directory, "task", "list") if task["opportunity_id"] == "1")
     refreshed = {
         "status": "captured", "url": "https://example.com/jobs/blocked",
         "text": "Build reviewed AI agent workflows in Shanghai as an employee.",
         "retrieved_at": datetime.now(timezone.utc).isoformat(),
     }
-    with patch("career_ops.tasks.capture_jd", return_value=None), patch.dict(os.environ, {"CAREER_OPS_MODEL_STUB": RUNNER}):
-        assert cron_score(directory)["status"] == "waiting"
+    with patch("career_ops.tasks.capture_jd", return_value=None) as capture, patch.dict(os.environ, {"CAREER_OPS_MODEL_STUB": RUNNER}):
+        assert cron_score(directory)["status"] == "idle"
+        capture.assert_not_called()
+    store = BusinessStore(directory / "opportunities.db")
+    store.db.execute("DELETE FROM task_context WHERE key='source_probe'")
+    store.close()
     with patch("career_ops.tasks.capture_jd", return_value=refreshed), patch.dict(os.environ, {"CAREER_OPS_MODEL_STUB": RUNNER}):
         recovered = cron_score(directory)
     assert recovered["opportunity_id"] == "1"
@@ -263,8 +267,10 @@ with tempfile.TemporaryDirectory(prefix="career-ops-cron-fair-") as temporary:
     with patch("career_ops.tasks.capture_jd", return_value=None), patch.dict(os.environ, {"CAREER_OPS_MODEL_STUB": RUNNER}):
         assert cron_score(directory)["opportunity_id"] == "1"
         assert cron_score(directory)["opportunity_id"] == "2"
-        assert cron_score(directory)["opportunity_id"] == "1"
-        assert cron_score(directory)["opportunity_id"] == "2"
+        assert cron_score(directory)["status"] == "idle"
+    store = BusinessStore(directory / "opportunities.db")
+    store.db.execute("DELETE FROM task_context WHERE key='source_probe'")
+    store.close()
     waiting = next(task for task in run(directory, "task", "list") if task["opportunity_id"] == "2")
     refreshed = {
         "status": "captured", "url": "https://example.com/jobs/two",
@@ -303,7 +309,7 @@ with tempfile.TemporaryDirectory(prefix="career-ops-cron-retry-") as temporary:
     database.execute("UPDATE tasks SET attempt=2 WHERE task_id=?", (failed["task_id"],))
     database.commit()
     database.close()
-    assert cron_score(directory) == {"status": "idle", "reason": "no_unscored_opportunities"}
+    assert cron_score(directory) == {"status": "idle", "reason": "no_runnable_evaluations"}
 
 with tempfile.TemporaryDirectory(prefix="career-ops-cron-stale-") as temporary:
     directory = Path(temporary)
@@ -354,7 +360,7 @@ with tempfile.TemporaryDirectory(prefix="career-ops-cron-stale-") as temporary:
     # A started scan reports only its task; the outcome is read from the task view, as a manual evaluation does.
     rescanned = {"task_id": "rescan", "status": "waiting"}
     with patch("career_ops.tasks.scan_discovered", return_value=rescanned), \
-         patch("career_ops.tasks.view", return_value={"task_id": "rescan", "status": "waiting", "reason": "jd_evidence_missing"}) as viewed, \
+         patch("career_ops.tasks.view", return_value={"task_id": "rescan", "status": "waiting", "reason": "core_evidence_missing"}) as viewed, \
          patch("career_ops.tasks.capture_jd", return_value=None), \
          patch("career_ops.tasks.start_and_run") as start:
         assert cron_score(directory) == {"status": "waiting", "opportunity_id": "1", "task": viewed.return_value}
@@ -374,9 +380,9 @@ with tempfile.TemporaryDirectory(prefix="career-ops-cron-stale-") as temporary:
     assert store.score_views()[0]["valid"] is True
     store.db.execute("UPDATE results SET payload=? WHERE task_id=?",
                      (json.dumps({"outcome": "jd_report", "artifact": {**report, "jd": "Changed current JD."}}), scanned["task_id"]))
-    assert store.score_views()[0]["stale_reason"] == "candidate_or_policy_inputs_changed"
-    pending = store.start("1", "score", "new-input", re_evaluate=True)
-    store.wait(pending["task_id"], "source_access_unknown")
+    assert store.score_views()[0]["refresh_reasons"] == ["inputs_changed"]
+    pending = store.start("1", "score", score_inputs({**report, "jd": "Changed current JD."}), re_evaluate=True)
+    store.wait(pending["task_id"], "core_evidence_missing")
     store.close()
     # With nothing stale left, the failed task gets its one retry, and only then is the unconfirmed posting probed.
     with patch("career_ops.tasks.resume_task", return_value={"status": "waiting"}) as resume:

@@ -82,7 +82,7 @@ with tempfile.TemporaryDirectory() as temp:
     assert result['http_attempts'] == 0 and len(sent) == 5
     incomplete = deepcopy(bundle)
     incomplete['companies'][0]['profiles'][1]['evidence']['new_fact'] = 'not yet scored'
-    partial = c.evaluate(incomplete, rubric, root/'store', root/'aggregation-only', 'test-key', reuse_company_scores=True)
+    partial = c.evaluate(incomplete, rubric, root/'store', root/'aggregation-only', 'test-key', today=date(2026,10,8), reuse_company_scores=True)
     assert partial['companies']['sample']['status'] == 'partial'
     assert partial['http_attempts'] == 0 and partial['jobs'][0]['dimensions']['culture']['score'] is None
     changed = deepcopy(bundle)

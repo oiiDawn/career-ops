@@ -129,12 +129,12 @@ with tempfile.TemporaryDirectory(prefix="career-ops-cli-") as temporary:
 
     scores = run(directory, "list", "--view", "scores", env=model_env)
     assert {item["opportunity_id"] for item in scores if item["valid"]} == {"job-1", "job-2", "job-real", "job-uncertain"}
-    assert all(set(item) == {"opportunity_id", "scores", "valid", "stale_reason", "scoring_model", "dimensions", "company_profiles", "company_research"} for item in scores)
+    assert all(set(item) == {"opportunity_id", "scores", "valid", "needs_rescore", "refresh_reasons", "scoring_model", "dimensions", "company_profiles", "company_research"} for item in scores)
     decisions = run(directory, "list", "--view", "decisions", env=model_env)
     assert {item["opportunity_id"] for item in decisions["decisions"] if item["action"] == "deprioritize"} == {
         "job-1", "job-2", "job-real", "job-uncertain"
     }
-    assert decisions["stale"] == []
+    assert decisions["needs_rescore"] == []
     reevaluated = run(
         directory, "task", "start", "score", "job-2", str(report("job-2")), "--re-evaluate", env=model_env
     )
@@ -150,7 +150,7 @@ with tempfile.TemporaryDirectory(prefix="career-ops-cli-") as temporary:
     assert terminal_resume.returncode == 1 and "Terminal task cannot resume" in terminal_resume.stderr
     (inputs / "cv.md").write_text("Verified candidate facts v2")
     stale = run(directory, "list", "--view", "scores", env=model_env)
-    assert stale and all(not item["valid"] and item["stale_reason"] == "candidate_or_policy_inputs_changed" for item in stale)
+    assert stale and all(not item["valid"] and item["refresh_reasons"] == ["inputs_changed"] for item in stale)
     assert run(directory, "list", "--view", "decisions", env=model_env)["decisions"] == []
 
 print("workflow CLI: start/show/list/resume/cancel contract passed")
