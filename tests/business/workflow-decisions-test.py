@@ -35,7 +35,6 @@ for invalid in ("2026-02-30", "2026-9-30"):
     else:
         raise AssertionError("invalid deadline accepted")
 
-print("workflow decisions: action policy and ordering passed")
 
 v4 = {"direction": 4.96, "company": 4.02, "culture": 3.40, "compensation": None}
 assert valid_scores(v4) and not worth_attention(v4)
@@ -53,7 +52,7 @@ assert not worth_attention({**{k: 4.1 for k in v4}, "company": None})
 # Recommendation changes preserve scores; evidence and numeric rubric changes invalidate them.
 import sqlite3
 from unittest.mock import patch
-from career_ops.input_contracts import digest, score_is_current
+from career_ops.input_contracts import digest, score_is_current, scan_is_current
 
 with sqlite3.connect(':memory:') as connection:
     connection.execute('CREATE TABLE tasks (module TEXT, opportunity_id TEXT, input_hash TEXT, input_payload TEXT)')
@@ -81,3 +80,19 @@ with sqlite3.connect(':memory:') as connection:
         assert not score_is_current(connection, digest(payload), frozen['jd_report'])
     connection.execute('UPDATE tasks SET input_payload=?', (json.dumps(dict(frozen, cv='tampered')),))
     assert not score_is_current(connection, digest(payload), frozen['jd_report'])
+    for previous, current in (('', '  postal_code: "710075"\n'),
+                              ('  postal_code: "710075"\n', '  postal_code: "100000"\n'),
+                              ('  postal_code: "710075"\n', '')):
+        frozen = dict(frozen, profile='candidate:\n  location: China\n' + previous + profile)
+        payload = json.dumps(frozen)
+        connection.execute('UPDATE tasks SET input_hash=?,input_payload=?', (digest(payload), payload))
+        updated = dict(frozen, profile='candidate:\n  location: China\n' + current + profile)
+        with patch('career_ops.input_contracts.score_inputs', return_value=json.dumps(updated)):
+            assert score_is_current(connection, digest(payload), frozen['jd_report'])
+        assert scan_is_current(payload, json.dumps(updated))
+        changed_location = dict(updated, profile=updated['profile'].replace('location: China', 'location: Hong Kong'))
+        with patch('career_ops.input_contracts.score_inputs', return_value=json.dumps(changed_location)):
+            assert not score_is_current(connection, digest(payload), frozen['jd_report'])
+        assert not scan_is_current(payload, json.dumps(changed_location))
+
+print("workflow decisions: action policy, input freshness, and ordering passed")

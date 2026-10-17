@@ -190,6 +190,10 @@ or expiry require new research. Scoring-rule changes only rerun Jev. Existing ar
 historical and does not become current merely because the caller extends a date.
 Expiry dates are retained in frozen inputs but excluded from score freshness comparisons: changing
 the expiry policy or crossing a window changes archive expiry, without itself making scores stale.
+Profile discovery keywords and the application postal code do not invalidate scans
+or scores. Frozen inputs and application packages still retain the full profile;
+changes to role preferences, location, compensation and other evaluation inputs
+continue to require a fresh evaluation.
 
 Each nonempty dimension then receives one Jev request (multiple salary scopes share a request).
 The existing `.env` `TYPESAFE_API_KEY` authorizes Jev 1.13.0; only this scoring stage receives

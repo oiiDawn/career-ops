@@ -546,7 +546,7 @@ def replacement_input(store: BusinessStore, task: sqlite3.Row) -> str | None:
             frozen = json.loads(task["input_payload"])
             changed = (not score_is_current(store.db, task["input_hash"], scan["artifact"])
                        or frozen.get("company_valid_until", "9999-12-31") < datetime.now(timezone.utc).date().isoformat())
-        if changed or task["workflow_version"] != WORKFLOW_VERSION:
+        if changed or task["workflow_version"] != WORKFLOW_VERSION or task["waiting_reason"] == "input_changed":
             return current
     except (KeyError, TypeError, ValueError):
         return None

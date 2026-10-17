@@ -75,6 +75,13 @@ with tempfile.TemporaryDirectory(prefix="career-ops-evaluation-queue-") as tempo
         capture.assert_not_called()
 
     store = BusinessStore(directory / "opportunities.db")
+    store.wait(replacement["task_id"], "input_changed")
+    store.close()
+    with patch("career_ops.tasks.start_and_run", return_value={"status": "waiting"}) as start:
+        assert cron_score(directory)["opportunity_id"] == "1"
+        assert start.call_args.args[2] == "scan" and start.call_args.args[5] is True
+
+    store = BusinessStore(directory / "opportunities.db")
     report = {**source("1"), "schema_version": "jd_report_v1", "prescreen": {"status": "pass"}}
     complete(store, replacement, "jd_report", report)
     assert retained_scan_source(store, "1") == source("1")

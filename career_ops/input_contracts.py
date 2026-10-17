@@ -17,12 +17,13 @@ def digest(value: str) -> str:
 
 
 def scoring_profile(profile: str) -> str:
-    """Drop the discovery search keywords; they recall postings and never reach a scan or a rating."""
-    return re.sub(r"(?m)^( +)search_keywords:.*\n(?:\1(?: +|- ).*\n)*", "", profile)
+    """Exclude discovery keywords and the application postal code from evaluation freshness."""
+    profile = re.sub(r"(?m)^( +)search_keywords:.*\n(?:\1(?: +|- ).*\n)*", "", profile)
+    return re.sub(r"(?m)^  postal_code:.*(?:\n|$)", "", profile)
 
 
 def scan_is_current(stored: str, current: str) -> bool:
-    """Compare frozen and current scan inputs, ignoring the discovery search keywords."""
+    """Compare frozen and current scan inputs using the evaluation-relevant profile."""
     values = [json.loads(stored), json.loads(current)]
     for value in values:
         value["profile"] = scoring_profile(value["profile"])
