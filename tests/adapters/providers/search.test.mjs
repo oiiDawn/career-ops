@@ -59,4 +59,87 @@ const deduped = await collectSearch({ ...entry, search: linkedin }, { searchKeyw
   search: async () => aliases.map(url => ({ url })), read: async address => detail(address),
 });
 assert.equal(deduped.length, 1);
+
+const retryEntry = { ...entry, search: linkedin, max_results: 2 };
+const realNow = Date.now;
+let now = realNow();
+Date.now = () => now;
+try {
+  const waits = [], attempts = new Map();
+  const retryContext = { searchKeywords: ['AI', '智能体'], maxPages: 1, deadlineMs: now + 600_000,
+    sleep: async ms => { waits.push(ms); now += ms; } };
+  let searchAttempts = 0;
+  const recovered = await collectSearch(retryEntry, retryContext, {
+    search: async request => {
+      if (++searchAttempts === 1) throw new Error('HTTP 429');
+      return [{ url: `https://www.linkedin.com/jobs/view/${new URL(request).searchParams.get('keywords') === 'AI' ? 1 : 2}` }];
+    },
+    read: async address => {
+      const count = (attempts.get(address) || 0) + 1;
+      attempts.set(address, count);
+      if (address.endsWith('/1') && count <= 2) throw new Error('HTTP 429');
+      return detail(address);
+    },
+  });
+  assert.equal(recovered.length, 2);
+  assert.deepEqual(waits, [10_000, 10_000, 20_000], 'Retry search and detail with exponential backoff');
+  assert.equal(attempts.get('https://www.linkedin.com/jobs/view/1'), 3);
+
+  waits.length = 0;
+  let exhaustedAttempts = 0;
+  const exhausted = await collectSearch(retryEntry, { ...retryContext, deadlineMs: now + 600_000 }, {
+    search: async request => (new URL(request).searchParams.get('keywords') === 'AI' ? [3, 7] : [4])
+      .map(id => ({ url: `https://www.linkedin.com/jobs/view/${id}` })),
+    read: async address => {
+      if (address.endsWith('/3')) { exhaustedAttempts++; throw Object.assign(new Error('HTTP 429'), { retryAfter: '120' }); }
+      return detail(address);
+    },
+  });
+  assert.equal(exhaustedAttempts, 3, 'A URL has at most two retries');
+  assert.deepEqual(waits, [60_000, 60_000], 'Retry-After cannot cause unbounded waits');
+  assert.deepEqual(exhausted.map(j => j.url), ['https://www.linkedin.com/jobs/view/4', 'https://www.linkedin.com/jobs/view/7'], 'Exhaustion preserves the same queue and other keyword queues');
+  assert.equal(exhausted.collectionTruncationKind, 'incomplete_details');
+
+  waits.length = 0;
+  let failedSearchAttempts = 0;
+  const searchExhausted = await collectSearch(retryEntry, { ...retryContext, deadlineMs: now + 600_000 }, {
+    search: async request => {
+      if (new URL(request).searchParams.get('keywords') === 'AI') { failedSearchAttempts++; throw new Error('HTTP 429'); }
+      return [{ url: 'https://www.linkedin.com/jobs/view/8' }];
+    }, read: async address => detail(address),
+  });
+  assert.equal(failedSearchAttempts, 3);
+  assert.equal(searchExhausted.length, 1, 'An exhausted search does not discard other keywords');
+  assert.deepEqual(waits, [10_000, 20_000]);
+
+  waits.length = 0;
+  let budgetAttempts = 0;
+  const budgeted = await collectSearch(retryEntry, { ...retryContext, deadlineMs: now + 75_000 + 5_000 }, {
+    search: async () => [{ url: 'https://www.linkedin.com/jobs/view/5' }],
+    read: async () => { budgetAttempts++; throw new Error('HTTP 429'); },
+  });
+  assert.equal(budgetAttempts, 1, 'Do not retry or start other work without enough remaining budget');
+  assert.deepEqual(waits, []);
+  assert.equal(budgeted.collectionTruncated, true);
+
+  let lateAttempts = 0;
+  const late = await collectSearch(retryEntry, { ...retryContext, deadlineMs: now + 75_000 + 15_000,
+    sleep: async ms => { waits.push(ms); now += 20_000; } }, {
+    search: async () => [{ url: 'https://www.linkedin.com/jobs/view/9' }],
+    read: async () => { lateAttempts++; throw new Error('HTTP 429'); },
+  });
+  assert.equal(lateAttempts, 1, 'Recheck the deadline after a delayed timer wakes');
+  assert.deepEqual(waits, [10_000]);
+  assert.equal(late.collectionTruncated, true);
+
+  waits.length = 0;
+  let forbiddenAttempts = 0;
+  const forbidden = await collectSearch(retryEntry, { ...retryContext, deadlineMs: now + 600_000 }, {
+    search: async () => [{ url: 'https://www.linkedin.com/jobs/view/10' }],
+    read: async () => { forbiddenAttempts++; throw new Error('HTTP 403'); },
+  });
+  assert.equal(forbiddenAttempts, 1, 'Do not retry authorization failures');
+  assert.deepEqual(waits, []);
+  assert.equal(forbidden.length, 0);
+} finally { Date.now = realNow; }
 console.log('Scoped search collection passed');

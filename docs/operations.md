@@ -77,6 +77,14 @@ score advances existing evaluation tasks and uses the previously authorized
 notification policy. Check `system doctor --json` and the offline suite before enabling
 changed wrappers. Neither doctor nor offline fixtures send candidate data.
 
+LinkedIn discovery retries a rate-limited search or detail request at most twice,
+waiting 10 then 20 seconds. A longer `Retry-After` increases the wait up to 60
+seconds per retry. Exhausting retries skips the failed detail or search keyword
+without clearing the other queued work. Waits, navigation pacing and browser
+reads share the source deadline: configured collection uses 525 seconds of its
+ten-minute budget, preserving the existing 75-second reserve. A retry that cannot
+fit ends collection with partial results. HTTP401/403/405 still stop that source.
+
 The ten-minute score schedule selects retained unscored postings as well as scores
 marked `needs_rescore` (待重新评分). `refresh_reasons` distinguishes changed scoring
 inputs from expired company evidence; either cause enters the same refresh queue.

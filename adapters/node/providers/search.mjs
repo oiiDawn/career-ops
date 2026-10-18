@@ -7,11 +7,32 @@ import { newExtractionPage, readPage } from '../browser/browser-extract.mjs';
 import { rejectPrivateOrInvalid, validateUrlSecurity } from '../browser/liveness-browser.mjs';
 import { normalizeUrl } from '../shared/url-key.mjs';
 import { providerKeywords } from './_profile-keywords.mjs';
+import { parseRetryAfterMs, sleep } from './_http.mjs';
 
-// ponytail: fixed pacing shared by every LinkedIn source; adaptive backoff if 429s persist
 const LINKEDIN_GAP_MS = 2000;
 let linkedinTurn = Promise.resolve();
-const linkedinPause = () => (linkedinTurn = linkedinTurn.then(() => new Promise(resolve => setTimeout(resolve, LINKEDIN_GAP_MS))));
+
+/** Identify budget exhaustion consistently across retries, pacing and browser reads. */
+function searchBudgetError() {
+  return Object.assign(new Error('Search time budget reached'), { code: 'SEARCH_TIME_BUDGET' });
+}
+
+/** Bound each browser operation by the same collection deadline. */
+function remainingSearchMs(deadline) {
+  const remaining = deadline - Date.now();
+  if (remaining <= 0) throw searchBudgetError();
+  return remaining;
+}
+
+/** Serialize LinkedIn navigation without allowing one expired source to poison the queue. */
+function linkedinPause(deadline) {
+  const turn = linkedinTurn.then(async () => {
+    if (remainingSearchMs(deadline) <= LINKEDIN_GAP_MS) throw searchBudgetError();
+    await sleep(LINKEDIN_GAP_MS);
+  });
+  linkedinTurn = turn.catch(() => {});
+  return turn;
+}
 
 export function searchOptions(entry) {
   const search = entry.search;
@@ -131,7 +152,22 @@ export async function collectSearch(entry, context, { search, read }) {
   const deadline = (context?.deadlineMs ?? Date.now() + 600_000) - 75_000;
   const queries = [];
   let bounded = false;
-  while (queues.some(queue => !queue.done || queue.rows.length) && jobs.length < options.max) {
+
+  /** Retry only LinkedIn rate limits; waits and attempts consume the source budget. */
+  async function requestWithRateLimitRetry(request) {
+    for (let attempt = 0; ; attempt++) {
+      remainingSearchMs(deadline);
+      try { return await request(); } catch (error) {
+        if (options.method !== 'linkedin' || !/HTTP 429\b/.test(error.message) || attempt === 2) throw error;
+        const delayMs = Math.min(60_000, Math.max(10_000 * 2 ** attempt, parseRetryAfterMs(error.retryAfter) ?? 0));
+        if (delayMs >= remainingSearchMs(deadline)) throw searchBudgetError();
+        console.error(`${entry.name}: HTTP 429 retry ${attempt + 1}/2 in ${delayMs}ms`);
+        await sleep(delayMs, context);
+      }
+    }
+  }
+
+  collection: while (queues.some(queue => !queue.done || queue.rows.length) && jobs.length < options.max) {
     if (Date.now() >= deadline) { warnings.push('Search time budget reached'); bounded = true; break; }
     for (const queue of queues) {
       if (jobs.length >= options.max || Date.now() >= deadline) break;
@@ -139,7 +175,7 @@ export async function collectSearch(entry, context, { search, read }) {
         const request = searchRequest(options, queue.keyword, queue.page);
         queries.push(request);
         try {
-          const rows = await search(request, options.method);
+          const rows = await requestWithRateLimitRetry(() => search(request, options.method));
           if (!Array.isArray(rows)) throw new Error('Search returned invalid rows');
           queue.rows = rows.filter(row => withinSites(row.url, options.sites));
           queue.request = request;
@@ -151,7 +187,11 @@ export async function collectSearch(entry, context, { search, read }) {
             queue.rows = [];
             if (!queue.done) { queue.done = true; bounded = true; warnings.push(`${queue.keyword}: search repeated a page`); }
           }
-        } catch (error) { warnings.push(`${queue.keyword}: ${error.message}`); queue.done = true; }
+        } catch (error) {
+          warnings.push(`${queue.keyword}: ${error.message}`);
+          if (error.code === 'SEARCH_TIME_BUDGET') { bounded = true; break collection; }
+          queue.done = true;
+        }
       }
       while (queue.rows.length) {
         const row = queue.rows.shift();
@@ -159,14 +199,16 @@ export async function collectSearch(entry, context, { search, read }) {
         if (seen.has(key)) continue;
         seen.add(key);
         try {
-          const detail = await read(row.url);
+          const detail = await requestWithRateLimitRetry(() => read(row.url));
           if (!withinSites(detail.url, options.sites) || postingKey(detail.url) !== key) {
             throw new Error('Detail redirected away from the discovered posting');
           }
           jobs.push({ ...jobFromPage(detail, detail.url), discovery_query: queue.request });
         } catch (error) {
           warnings.push(`${row.url}: ${error.message}`);
-          if (/HTTP (?:401|403|405|429)\b/.test(error.message)) {
+          if (error.code === 'SEARCH_TIME_BUDGET') { bounded = true; break collection; }
+          if (/HTTP (?:401|403|405)\b/.test(error.message)
+              || options.method !== 'linkedin' && /HTTP 429\b/.test(error.message)) {
             queues.forEach(queue => { queue.rows = []; queue.done = true; });
           }
         }
@@ -186,20 +228,24 @@ export default {
   async fetch(entry, context) {
     searchOptions(entry);
     providerKeywords(context);
+    const deadline = (context?.deadlineMs ?? Date.now() + 600_000) - 75_000;
     const browser = await chromium.launch({ headless: true });
     try {
       const read = async (url, mode = 'jd') => {
+        remainingSearchMs(deadline);
         await validateUrlSecurity(url);
-        if (withinSites(url, ['linkedin.com'])) await linkedinPause();
+        if (withinSites(url, ['linkedin.com'])) await linkedinPause(deadline);
         const page = await newExtractionPage(browser);
         try {
-          const response = await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 20000 });
-          if (response && !response.ok()) throw new Error(`HTTP ${response.status()}`);
-          const raw = await readPage(page, { mode, timeout: 10000 });
+          const response = await page.goto(url, { waitUntil: 'domcontentloaded', timeout: Math.min(20000, remainingSearchMs(deadline)) });
+          if (response && !response.ok()) throw Object.assign(new Error(`HTTP ${response.status()}`), {
+            retryAfter: response.headers()['retry-after'],
+          });
+          const raw = await readPage(page, { mode, timeout: Math.min(10000, remainingSearchMs(deadline)) });
           return { ...raw, url: page.url() };
         } finally { await page.context().close(); }
       };
-      return await collectSearch(entry, context, {
+      return await collectSearch(entry, { ...context, deadlineMs: deadline + 75_000 }, {
         read,
         search: async (request, method) => {
           if (method === 'web') return webSearch(request);
