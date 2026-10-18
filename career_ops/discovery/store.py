@@ -126,7 +126,7 @@ class DiscoveryStore:
     def close(self) -> None:
         self.db.close()
 
-    def ingest(self, offer: dict, source: str, *, observed_on: str | None = None) -> dict | None:
+    def ingest(self, offer: dict, source: str, *, observed_on: str | None = None, run_id: str | None = None) -> dict | None:
         """Resolve current posting identity atomically and retain source-specific evidence."""
         url, company, role = (str(offer.get(key) or "").strip() for key in ("url", "company", "title"))
         if not url or not company or not role:
@@ -151,7 +151,7 @@ class DiscoveryStore:
                 self.db.execute("INSERT INTO source_evidence(opportunity_id,source,payload) VALUES(?,?,?)",
                                 (row["id"], source, _json(payload)))
                 self.db.execute("INSERT INTO opportunity_events(opportunity_id,type,payload) VALUES(?,'discovered',?)",
-                                (row["id"], _json({"source": source})))
+                                (row["id"], _json({"source": source, 'run_id': run_id if created else None})))
             primary = url_key(row['url']) == url_key(url)
             if primary and isinstance(description, str) and description.strip():
                 self.db.execute("INSERT OR IGNORE INTO page_evidence(opportunity_id,content,content_hash) VALUES(?,?,?)",
@@ -161,7 +161,11 @@ class DiscoveryStore:
                                 (row["id"], payload["fingerprint"]))
             self.db.execute("INSERT OR IGNORE INTO scan_observations(opportunity_id,url,company,title,observed_on) VALUES(?,?,?,?,?)",
                             (row["id"], url, company, role, observed_on or date.today().isoformat()))
-        return {**row, 'created': created}
+            created_in_run = created or bool(run_id and self.db.execute(
+                "SELECT 1 FROM opportunity_events WHERE opportunity_id=? AND type='discovered' "
+                "AND json_extract(payload,'$.run_id')=? LIMIT 1", (row['id'], run_id),
+            ).fetchone())
+        return {**row, 'created': created, 'created_in_run': created_in_run}
 
     def scan_outcome(self, offer: dict, status: str) -> None:
         url = offer.get("url")

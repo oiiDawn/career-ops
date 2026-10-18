@@ -129,21 +129,23 @@ def should_dedup(first_seen: str, status: str, *, today: date, recheck_after_day
     return (today - first).days < recheck_after_days
 
 
-def database_snapshot(db: sqlite3.Connection, *, today: date, recheck_after_days: int | None = None,
-                      aliases: dict[str, str] | None = None) -> dict:
-    """Take one coherent run-start view of URL, role and fingerprint history."""
+def database_snapshot(db: sqlite3.Connection, *, today: date, recheck_after_days: int | None = None) -> dict:
+    """Skip known source identities; titles alone cannot establish duplicate openings."""
     rows = [dict(row) for row in db.execute(
-        "SELECT url,company,role,CASE WHEN state='discovered' THEN 'added' ELSE 'processed' END status, "
+        "SELECT url,CASE WHEN state='discovered' THEN 'added' ELSE 'processed' END status, "
         "substr(created_at,1,10) first_seen FROM opportunities")]
     rows.extend(dict(row) for row in db.execute(
-        "SELECT url,NULL company,NULL role,status,substr(created_at,1,10) first_seen FROM scan_outcomes"))
+        "SELECT url,status,substr(created_at,1,10) first_seen FROM scan_outcomes"))
     eligible = [row for row in rows if should_dedup(row["first_seen"], row["status"],
                                                     today=today, recheck_after_days=recheck_after_days)]
     seen = {url_key(row["url"]) for row in eligible}
-    roles = {company_role_key(row["company"], row["role"], aliases) for row in eligible
-             if row["company"] and row["role"]}
+    for row in db.execute("SELECT s.url,o.state,substr(o.created_at,1,10) first_seen "
+                          "FROM scan_observations s JOIN opportunities o ON o.id=s.opportunity_id"):
+        if should_dedup(row['first_seen'], 'added' if row['state'] == 'discovered' else 'processed',
+                        today=today, recheck_after_days=recheck_after_days):
+            seen.add(url_key(row['url']))
     fingerprints = [dict(row) for row in db.execute(
         "SELECT o.url,substr(r.first_seen,1,10) dateStr,o.company,o.role title,r.fingerprint "
         "FROM repost_inputs r JOIN opportunities o ON o.id=r.opportunity_id")]
-    return {"seen": seen, "seen_company_roles": roles, "recheck_eligible": len(rows) - len(seen),
+    return {"seen": seen, "recheck_eligible": len(rows) - len(eligible),
             "fingerprint_history": fingerprints}

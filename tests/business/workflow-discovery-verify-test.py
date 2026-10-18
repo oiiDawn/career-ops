@@ -83,14 +83,14 @@ with tempfile.TemporaryDirectory() as temporary:
       script: tests/fixtures/three-city-board.mjs
 """)
     def reject(accepted, **options):
-        assert len(accepted) == 1 and options["rediscover_404"] is False
-        return [{"url": accepted[0]["url"], "result": "expired", "code": "http_gone"}]
+        assert len(accepted) == 3 and options["rediscover_404"] is False
+        return [{"url": offer["url"], "result": "expired", "code": "http_gone"} for offer in accepted]
     result = discover(root / "work", portals, verify=True, verification_observer=reject,
                       capture=lambda directory, url: None)
     assert result["checked"] == 3 and result["added"] == 0
     with sqlite3.connect(root / "work" / "opportunities.db") as db:
         assert db.execute("SELECT count(*) FROM opportunities").fetchone()[0] == 0
-        assert db.execute("SELECT status FROM scan_outcomes").fetchone()[0] == "skipped_expired"
+        assert db.execute("SELECT count(*) FROM scan_outcomes WHERE status='skipped_expired'").fetchone()[0] == 3
 
 for flags, expected in (([], 0), (["--throttle=5000"], 5000), (["--throttle=0"], 0),
                         (["--throttle=8000"], 8000)):

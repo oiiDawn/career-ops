@@ -16,7 +16,8 @@ from urllib.parse import urlsplit
 import yaml
 
 from career_ops.discovery.cooldown import cooldown, load_windows
-from career_ops.discovery.dedup import company_aliases, company_role_key, database_snapshot, url_key, _text_key
+from career_ops.discovery.dedup import company_aliases, database_snapshot, url_key, _text_key
+from career_ops.artifacts import load_artifact, save_artifact
 from career_ops.discovery.filters import filter_reason
 from career_ops.discovery.fingerprint import cross_listings, fingerprint
 from career_ops.discovery.inputs import candidate_source_hash
@@ -218,7 +219,8 @@ def discover(directory: Path, config_path: Path, company_filter: str | None = No
         directory, inputs_hash, {"effective_after": effective_after, "since_ms": since_ms}, resume=resume,
         collect=lambda cutoffs: collect_provider_results(targets, cutoffs["since_ms"],
                                                         search_keywords),
-        decide=decide, publish=lambda decision, run_id: _publish_decision(directory, decision, capture, run_id),
+        decide=decide, publish=lambda decision, run_id: _publish_decision(
+            directory, decision, capture, run_id, aliases=company_aliases(config.get('company_aliases'))),
         collector_failure=collector_failure,
     )
 
@@ -246,9 +248,8 @@ def _decide_collected(directory: Path, config: dict, profile: dict, input_root: 
             recheck = recheck if recheck is not None and recheck >= 0 else None
         except ValueError:
             recheck = None
-        aliases = company_aliases(config.get("company_aliases"))
-        snapshot = database_snapshot(store.db, today=today, recheck_after_days=recheck, aliases=aliases)
-        seen_urls, seen_roles = snapshot["seen"], snapshot["seen_company_roles"]
+        snapshot = database_snapshot(store.db, today=today, recheck_after_days=recheck)
+        seen_urls = snapshot["seen"]
         blacklist = _blacklist(input_root / "blacklist.md")
         windows = load_windows(profile)
         country = profile.get("location", {}).get("country", "") if isinstance(profile.get("location"), dict) else ""
@@ -312,17 +313,12 @@ def _decide_collected(directory: Path, config: dict, profile: dict, input_root: 
                     if url in seen_urls:
                         counts["dupes"] += 1
                         continue
-                    identity = company_role_key(offer.get("company"), offer.get("title"), aliases)
-                    if identity in seen_roles:
-                        counts["dupes"] += 1
-                        continue
                     cooled = cooldown(offer, windows, today=today)
                     if cooled["skip"]:
                         counts["cooldown"] += 1
                         cooldown_offers.append({**offer, "source": source, "status": cooled["reason"]})
                         continue
                     seen_urls.add(url)
-                    seen_roles.add(identity)
                     try:
                         careers_domain = urlsplit(entry.get("careers_url") or "").hostname
                     except ValueError:
@@ -339,9 +335,6 @@ def _decide_collected(directory: Path, config: dict, profile: dict, input_root: 
             accepted, verification_outcomes = route(accepted, browser(
                 accepted, headed_fallback=headed_fallback, throttle_ms=throttle_ms,
                 rediscover_404=rediscover_404))
-        for offer in accepted:
-            offer["fingerprint"] = fingerprint(offer.get("description"))
-        crosslist = cross_listings(accepted, snapshot["fingerprint_history"], today=today)
         summary = {"companies": companies, "boards": boards, "found": found, "dupes": counts["dupes"],
                    "newAdded": len(accepted), "errors": len(failures), "searches": searches,
                    "filtered": counts, "failures": failures}
@@ -359,7 +352,7 @@ def _decide_collected(directory: Path, config: dict, profile: dict, input_root: 
                 "result": {"status": "partial" if incomplete and found else "failed" if incomplete else "completed",
                            "sources": companies + boards, "checked": found, "added": len(accepted), "errors": len(failures),
                            "failures": failures, "searches": searches,
-                           "filtered": counts, "cross_listings": crosslist,
+                           "filtered": counts, "cross_listings": [],
                            "recheck_eligible": snapshot["recheck_eligible"],
                            "persistent_failures": persistent_failures,
                            "annotated_blacklisted": annotated_blacklisted}}
@@ -376,14 +369,19 @@ def _decide_collected(directory: Path, config: dict, profile: dict, input_root: 
         store.close()
 
 
-def _publish_decision(directory: Path, decision: dict, capture, run_id: str | None = None) -> dict:
+def _publish_decision(directory: Path, decision: dict, capture, run_id: str | None = None,
+                      *, aliases: dict[str, str] | None = None) -> dict:
     """Capture accepted JDs and commit the decided business facts."""
-    store = DiscoveryStore(directory / "opportunities.db")
+    store = DiscoveryStore(directory / "opportunities.db", aliases=aliases)
     try:
-        if run_id and store.db.execute("SELECT 1 FROM scan_runs WHERE operation='configured' AND run_id=?",
-                                       (run_id,)).fetchone():
-            return decision["result"]
+        completed = store.db.execute("SELECT summary FROM scan_runs WHERE operation='configured' AND run_id=?",
+                                      (run_id,)).fetchone() if run_id else None
+        if completed:
+            summary = json.loads(completed['summary'])
+            return load_artifact(summary['result']) if summary.get('result') else decision['result']
         capture = capture or capture_jd
+        history = database_snapshot(store.db, today=date.fromisoformat(decision['today']))['fingerprint_history']
+        published = set()
         for offer in decision["accepted"]:
             try:
                 retained = offer.get("scan_jd")
@@ -395,16 +393,25 @@ def _publish_decision(directory: Path, decision: dict, capture, run_id: str | No
                 offer["scan_jd"] = {"text": snapshot_value["text"], "final_url": snapshot_value["url"],
                                     "retrieved_at": snapshot_value["retrieved_at"],
                                     "content_hash": hashlib.sha256(snapshot_value["text"].encode()).hexdigest()}
-            if store.ingest(offer, offer["source"], observed_on=decision["today"]) is None:
+            offer['fingerprint'] = fingerprint((offer.get('scan_jd') or {}).get('text') or offer.get('description'))
+            retained = store.ingest(offer, offer["source"], observed_on=decision["today"], run_id=run_id)
+            if retained is None or not retained['created_in_run'] or retained['id'] in published:
                 decision["summary"]["newAdded"] -= 1
                 decision["summary"]["dupes"] += 1
                 decision["result"]["added"] -= 1
                 decision["result"]["filtered"]["dupes"] += 1
+            if retained:
+                published.add(retained['id'])
+        decision['result']['cross_listings'] = cross_listings(decision['accepted'], history,
+                                                             today=date.fromisoformat(decision['today']))
+        decision['summary']['filtered'] = dict(decision['result']['filtered'])
         for offer in decision["cooldown_offers"]:
             store.scan_outcome(offer, offer["status"])
         for offer, status in decision["verification_outcomes"]:
             store.scan_outcome(offer, status)
         if run_id:
+            decision['summary']['result'] = save_artifact(
+                directory / 'cache/configured-discovery' / run_id / 'published.json', decision['result'])
             store.scan_run_once("configured", run_id, decision["summary"], decision["health"])
         else:
             store.scan_run("configured", decision["summary"], decision["health"])

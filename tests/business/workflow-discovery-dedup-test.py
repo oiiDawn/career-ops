@@ -44,7 +44,6 @@ with tempfile.TemporaryDirectory() as temporary:
     store.scan_outcome({"url": "https://example.com/expired"}, "skipped_expired")
     snapshot = database_snapshot(store.db, today=today)
     assert url_key(first["url"]) in snapshot["seen"]
-    assert "acme::engineer" in snapshot["seen_company_roles"]
     assert url_key("https://example.com/expired") in snapshot["seen"]
     assert snapshot["fingerprint_history"] == []
     store.close()
@@ -74,7 +73,6 @@ with tempfile.TemporaryDirectory() as temporary:
         "https://example.com/new-added", "https://example.com/old-processed",
         "https://example.com/dead", "https://example.com/blocked", "https://example.com/cool-active",
     }
-    assert python["seen_company_roles"] == {"beta::engineer", "gamma::designer"}
     assert python["fingerprint_history"] == []
-    assert len(python["seen"]) == 5 and len(python["seen_company_roles"]) == 2
+    assert len(python["seen"]) == 5
     assert python["recheck_eligible"] == 2

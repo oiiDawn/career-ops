@@ -447,7 +447,7 @@ with tempfile.TemporaryDirectory() as temporary:
             return [{"status": "fetched", "provider": "workday", "jobs": [job],
                      "truncated": True, "truncation_kind": "network"}]
         return [{"status": "fetched", "provider": "workday", "jobs": [job,
-                {**job, "title": "Engineer II", "url": job["url"] + "-2"}]}]
+                {**job, "title": "Engineer II", "url": job["url"].replace('JR-1', 'JR-2')}]}]
 
     workday = discover_global(root / "workday", config, ats=["workday"], collect=collect_workday,
                               load_source=lambda name, cache: (["acme|wd5|External"], "ok"), now_ms=NOW)

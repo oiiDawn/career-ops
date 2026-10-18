@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 
-from career_ops.discovery.dedup import _text_key, company_role_key, url_key
+from career_ops.discovery.dedup import _text_key, url_key
 from career_ops.discovery.filters import content_match, location_match, title_match
 
 
@@ -51,7 +51,7 @@ def rejection(job: dict, config: dict, cutoff_ms: float, *, include_undated: boo
 
 
 def retain_jobs(jobs: list[dict], source: str, config: dict, cutoff_ms: float,
-                seen_urls: set, seen_roles: set, *, include_undated: bool = False) -> tuple[list[dict], dict[str, int]]:
+                seen_urls: set, *, include_undated: bool = False) -> tuple[list[dict], dict[str, int]]:
     """Filter and deduplicate one collected board against the run's shared snapshot."""
     offers, dropped = [], {"invalid": 0, "stale": 0, "undated": 0, "title": 0, "location": 0, "content": 0, "duplicate": 0}
     for job in jobs:
@@ -60,12 +60,10 @@ def retain_jobs(jobs: list[dict], source: str, config: dict, cutoff_ms: float,
             dropped[reason] += 1
             continue
         normalized_url = url_key(job["url"])
-        normalized_role = company_role_key(job.get("company"), job["title"])
-        if normalized_url in seen_urls or normalized_role in seen_roles:
+        if normalized_url in seen_urls:
             dropped["duplicate"] += 1
             continue
         seen_urls.add(normalized_url)
-        seen_roles.add(normalized_role)
         offers.append({**job, "source": source, "dateStatus": "dated" if job.get("postedAt") else "unknown"})
     return offers, dropped
 

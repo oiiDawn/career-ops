@@ -24,7 +24,7 @@ from langgraph.graph import END, START, StateGraph
 
 from career_ops.artifacts import cached_artifact, load_artifact, save_artifact
 from career_ops.discovery.configured import _blacklist
-from career_ops.discovery.dedup import company_role_key, database_snapshot, url_key
+from career_ops.discovery.dedup import company_aliases, database_snapshot, url_key
 from career_ops.discovery.store import DiscoveryStore
 from career_ops.discovery.verify import observe
 from career_ops.discovery.reverse_checkpoint import compatible, load_checkpoint, resume_at, write_checkpoint
@@ -228,7 +228,12 @@ def publish_reverse_offers(store: DiscoveryStore, final: list[dict], run_id: str
                            health: list[dict], *, md_out: Path | None, since_days: float,
                            liveness: bool) -> tuple[Path | None, str | None]:
     """Retain offers and one run, then write the optional digest."""
-    retained = [offer for offer in final if store.ingest(offer, offer["source"]) is not None]
+    retained, seen = [], set()
+    for offer in final:
+        row = store.ingest(offer, offer['source'], run_id=run_id)
+        if row and row['created_in_run'] and row['id'] not in seen:
+            retained.append(offer)
+            seen.add(row['id'])
     final[:] = retained
     summary['found'] = len(final)
     store.scan_run_once("global", run_id, summary, health)
@@ -328,13 +333,12 @@ def discover_global(directory: Path, config_path: Path, *, ats: list[str] | None
                                              ensure_ascii=False).encode()).hexdigest()
     decision_inputs = {"liveness": liveness, "include_blacklisted": include_blacklisted,
                        "blacklist_hash": blacklist_hash}
-    store = DiscoveryStore(directory / "opportunities.db")
+    store = DiscoveryStore(directory / "opportunities.db", aliases=company_aliases(config.get('company_aliases')))
     try:
         snapshot = database_snapshot(store.db, today=datetime.now().date())
-        seen_urls, seen_roles = snapshot["seen"], snapshot["seen_company_roles"]
+        seen_urls = snapshot["seen"]
         for offer in offers:
             seen_urls.add(url_key(offer.get("url")))
-            seen_roles.add(company_role_key(offer.get("company"), offer.get("title")))
 
         def save(current: dict | None) -> bool:
             nonlocal pending_current
@@ -443,7 +447,7 @@ def discover_global(directory: Path, config_path: Path, *, ats: list[str] | None
                                         source_incomplete = True
                                         counters["errors"] += 1
                             accepted, dropped = retain_jobs([job for job in jobs if isinstance(job, dict)],
-                                                           f"{name}-full", config, cutoff_ms, seen_urls, seen_roles,
+                                                           f"{name}-full", config, cutoff_ms, seen_urls,
                                                            include_undated=include_undated)
                             offers.extend(accepted)
                             counters["undated"] += dropped["undated"]
@@ -459,7 +463,7 @@ def discover_global(directory: Path, config_path: Path, *, ats: list[str] | None
                                     if not isinstance(retry.get("jobs"), list):
                                         raise ValueError("Workday retry returned invalid jobs")
                                     retried, retried_dropped = retain_jobs(retry["jobs"], f"{name}-full", config, cutoff_ms,
-                                                                            seen_urls, seen_roles, include_undated=include_undated)
+                                                                            seen_urls, include_undated=include_undated)
                                     offers.extend(retried)
                                     counters["undated"] += retried_dropped["undated"]
                                     counters["content"] += retried_dropped["content"]
@@ -555,7 +559,7 @@ def discover_global(directory: Path, config_path: Path, *, ats: list[str] | None
                             else:
                                 counters["errors"] += 1
                         accepted, _ = retain_jobs([job for job in jobs if isinstance(job, dict)],
-                                                  f"{seed}-seed", config, cutoff_ms, seen_urls, seen_roles,
+                                                  f"{seed}-seed", config, cutoff_ms, seen_urls,
                                                   include_undated=include_undated)
                         offers.extend(accepted)
                 if source_incomplete:

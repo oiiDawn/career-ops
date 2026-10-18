@@ -67,7 +67,7 @@ def _body(text: object) -> str:
         return ''
     text = text[start.end():]
     text = re.split(r'\ball personal data collected\b', text, maxsplit=1, flags=re.I)[0]
-    text = re.split(r'(?im)^\s*(?:about (?!the role)[^\n]+|posting statement|similar jobs|employer questions|company questions|report this job advert|loading|skip video slider|continue with page content|all personal data collected)\b', text, maxsplit=1)[0]
+    text = re.split(r'(?im)^\s*(?:about (?:us|our company|the company)|posting statement|similar jobs|employer questions|company questions|report this job advert|loading|skip video slider|continue with page content)\b', text, maxsplit=1)[0]
     text = re.sub(r'(?<=\d)[.,](?=\d)', 'decimal', text)
     return _text_key(text)
 

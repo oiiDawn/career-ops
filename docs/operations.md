@@ -28,6 +28,31 @@ Daily commands derive inputs from the opportunity ID:
 .venv/bin/python -B -m career_ops task show TASK_ID
 ```
 
+Discovery skips previously observed source posting URLs, including LinkedIn
+locale, slug and tracking-parameter variants of one numeric posting ID. New
+URLs reach a shared resolver inside the SQLite write transaction in both
+configured and global discovery, including resumed runs. Company and title
+alone never suppress an opening. Explicit employer `company_aliases` in
+`portals.yml` only select candidates; different official requisitions remain
+separate. Cross-source matching otherwise requires the same normalized title,
+location and complete substantive JD, with numbers preserved. Missing evidence,
+ambiguous matches and text similarity alone do not authorize a merge.
+
+`scan_observations` retains confirmed source URL aliases for each opportunity.
+Alternate source captures stay separate from the primary URL's capture and
+cannot replace its JD, score or application status. Fingerprints use the final
+captured JD and only warn about possible cross-listings. New-opening counts
+survive a crash after ingestion and before run publication. Public captures in
+`tests/fixtures/discovery-real-postings.json` exercise duplicate replay and
+distinct-level, requisition, direction, domain and incomplete-JD boundaries.
+
+Historical consolidations require reviewed identities, an SQLite backup,
+opportunity execution locks, immutable archives of removed records and an
+integrity check. Prefer an already submitted record; never choose between
+conflicting submissions automatically. Preserve source aliases and the surviving
+record's assessment and application state. Operational dedup archives and
+backups live under `data/maintenance/`; they are not scoring inputs.
+
 Use `task start scan|score|apply ID INPUT` for explicit input imports. Business
 commands emit JSON by default. Put global sweep options after `discover global`.
 `discover --throttle MS` takes milliseconds; zero disables the delay.

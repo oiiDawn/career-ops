@@ -28,23 +28,23 @@ with tempfile.TemporaryDirectory() as temporary:
 """)
     output = root / "work"
     first = discover(output, portals, capture=lambda directory, url: None)
-    assert first["status"] == "completed" and first["checked"] == 3 and first["added"] == 1
-    assert first["filtered"]["dupes"] == 2
+    assert first["status"] == "completed" and first["checked"] == 3 and first["added"] == 3
+    assert first["filtered"]["dupes"] == 0
     second = discover(output, portals, capture=lambda directory, url: None)
     assert second["status"] == "completed" and second["added"] == 0 and second["filtered"]["dupes"] == 3
     db = sqlite3.connect(output / "opportunities.db")
-    assert db.execute("SELECT count(*) FROM opportunities").fetchone()[0] == 1
-    assert db.execute("SELECT count(*) FROM source_evidence").fetchone()[0] == 1
+    assert db.execute("SELECT count(*) FROM opportunities").fetchone()[0] == 3
+    assert db.execute("SELECT count(*) FROM source_evidence").fetchone()[0] == 3
     assert db.execute("SELECT count(*) FROM scan_runs").fetchone()[0] == 2
     summaries = [json.loads(row[0]) for row in db.execute("SELECT summary FROM scan_runs ORDER BY id")]
-    assert summaries[0]["filtered"]["dupes"] == 2
+    assert summaries[0]["filtered"]["dupes"] == 0
     assert summaries[1]["filtered"]["dupes"] == 3
-    assert db.execute("SELECT count(*) FROM scan_observations").fetchone()[0] == 1
+    assert db.execute("SELECT count(*) FROM scan_observations").fetchone()[0] == 3
     db.close()
 
     second_lane = discover(root / "other-lane", portals, capture=lambda directory, url: None)
     shared_lane = discover(output, portals, capture=lambda directory, url: None)
-    assert second_lane["added"] == 1 and shared_lane["added"] == 0
+    assert second_lane["added"] == 3 and shared_lane["added"] == 0
     run_id = json.loads((output / "cache" / "configured-discovery" / "latest.json").read_text())["run_id"]
     with sqlite3.connect(output / "opportunities.db") as db:
         run = db.execute("SELECT id FROM scan_runs WHERE run_id=?", (run_id,)).fetchone()[0]
@@ -54,7 +54,7 @@ with tempfile.TemporaryDirectory() as temporary:
     with sqlite3.connect(output / "opportunities.db") as db:
         assert db.execute("SELECT count(*) FROM scan_runs WHERE run_id=?", (run_id,)).fetchone()[0] == 1
     with sqlite3.connect(root / "other-lane" / "opportunities.db") as db:
-        assert db.execute("SELECT count(*) FROM opportunities").fetchone()[0] == 1
+        assert db.execute("SELECT count(*) FROM opportunities").fetchone()[0] == 3
 
 with tempfile.TemporaryDirectory() as temporary:
     root = Path(temporary)
@@ -80,10 +80,10 @@ with tempfile.TemporaryDirectory() as temporary:
             raise AssertionError("Expected injected crash")
     with patch("career_ops.discovery.configured.collect_provider_results", side_effect=AssertionError("collector repeated")):
         resumed = discover(output, portals, capture=lambda directory, url: None, resume=True)
-    assert resumed["added"] == 1 and resumed["filtered"]["dupes"] == 2
+    assert resumed["added"] == 3 and resumed["filtered"]["dupes"] == 0
     with sqlite3.connect(output / "opportunities.db") as db:
-        assert db.execute("SELECT count(*) FROM opportunities").fetchone()[0] == 1
-        assert db.execute("SELECT count(*) FROM source_evidence").fetchone()[0] == 1
+        assert db.execute("SELECT count(*) FROM opportunities").fetchone()[0] == 3
+        assert db.execute("SELECT count(*) FROM source_evidence").fetchone()[0] == 3
         assert db.execute("SELECT count(*) FROM scan_runs").fetchone()[0] == 1
 
 with tempfile.TemporaryDirectory() as temporary:
@@ -115,9 +115,9 @@ with tempfile.TemporaryDirectory() as temporary:
         assert db.execute("SELECT count(*) FROM opportunities").fetchone()[0] == 1
     with patch("career_ops.discovery.configured.collect_provider_results", side_effect=AssertionError("collector repeated")):
         resumed = discover(output, portals, capture=lambda directory, url: None, resume=True)
-    assert resumed["added"] == 1 and resumed["filtered"]["dupes"] == 2
+    assert resumed["added"] == 3 and resumed["filtered"]["dupes"] == 0
     with sqlite3.connect(output / "opportunities.db") as db:
-        assert db.execute("SELECT count(*) FROM opportunities").fetchone()[0] == 1
+        assert db.execute("SELECT count(*) FROM opportunities").fetchone()[0] == 3
         assert db.execute("SELECT count(*) FROM scan_runs").fetchone()[0] == 2
 
 with tempfile.TemporaryDirectory() as temporary:
@@ -134,7 +134,7 @@ with tempfile.TemporaryDirectory() as temporary:
   - name: Unconfigured Source
 """)
     result = discover(root / "work", portals, capture=lambda directory, url: None)
-    assert result["status"] == "partial" and result["added"] == 1
+    assert result["status"] == "partial" and result["added"] == 3
     assert result["errors"] == 2
     assert discover(root / "filtered", portals, company_filter="Missing Provider",
                            capture=lambda directory, url: None)["status"] == "failed"
@@ -327,7 +327,7 @@ with tempfile.TemporaryDirectory() as temporary:
     assert skipped["added"] == 0 and skipped["filtered"]["blacklist"] == 3
     audited = discover(root / "audited", portals, include_blacklisted=True,
                        capture=lambda directory, url: None)
-    assert audited["added"] == 1 and audited["annotated_blacklisted"] == 3
+    assert audited["added"] == 3 and audited["annotated_blacklisted"] == 3
     with sqlite3.connect(root / "audited" / "opportunities.db") as db:
         payload = json.loads(db.execute("SELECT payload FROM source_evidence").fetchone()[0])
     assert payload["blacklisted"] is True and payload["note"] == "blacklisted: user decision"
@@ -344,10 +344,10 @@ with tempfile.TemporaryDirectory() as temporary:
 """)
     output = root / "work"
     preview = discover(output, portals, dry_run=True)
-    assert preview["dry_run"] is True and preview["added"] == 1
+    assert preview["dry_run"] is True and preview["added"] == 3
     assert not output.exists()
     committed = discover(output, portals, capture=lambda directory, url: None)
-    assert committed["added"] == 1
+    assert committed["added"] == 3
     database = output / "opportunities.db"
     before = database.read_bytes()
     repeat = discover(output, portals, dry_run=True)
@@ -380,7 +380,7 @@ with tempfile.TemporaryDirectory() as temporary:
     assert json.loads(global_preview.stdout)["status"] == "completed"
     result = discover(root / "committed", alternate, capture=lambda directory, url: None,
                       input_root=root, profile_path=profile)
-    assert result["added"] == 1
+    assert result["added"] == 3
 
 with tempfile.TemporaryDirectory() as temporary:
     root = Path(temporary)
@@ -389,7 +389,7 @@ with tempfile.TemporaryDirectory() as temporary:
         portals.write_text(f"scan_history:\n  recheck_after_days: {value}\ntracked_companies: []\n")
         with patch("career_ops.discovery.configured.database_snapshot", wraps=database_snapshot) as snapshot:
             discover(root / f"recheck-{index}", portals)
-        assert snapshot.call_args.kwargs["recheck_after_days"] == expected
+        assert snapshot.call_args_list[0].kwargs["recheck_after_days"] == expected
 
 with tempfile.TemporaryDirectory() as temporary:
     root = Path(temporary)

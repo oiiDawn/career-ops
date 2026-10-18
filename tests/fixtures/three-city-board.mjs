@@ -1,12 +1,4 @@
-// tests/fixtures/three-city-board.mjs — a local-parser fixture board.
-//
-// Emits ONE role posted at THREE URLs, one per city — the shape that leaked a
-// city variant per scan before the company+role key was seeded across runs.
-// Used by tests/scan-company-role-dedup.test.mjs; no network involved.
-//
-// local-parser requires the script to live inside the project root and to be
-// the interpreter's first argument, and runs it with cwd pinned to the repo
-// root. It reads a JSON array (or {jobs:[]}) off stdout.
+// Emit three separately located openings with the same title for offline discovery checks.
 const ROLE = 'Strategic Finance Manager';
 
 console.log(JSON.stringify([

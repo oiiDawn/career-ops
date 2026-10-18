@@ -38,16 +38,16 @@ assert not pre_enrich({**base, "location": "Seattle", "postedAt": None}, config,
 jobs = [base, {**base, "url": "https://jobs.example.com/2"},
         {**base, "url": "https://jobs.example.com/3", "title": "AI Engineer II"},
         {**base, "url": "https://jobs.example.com/4", "postedAt": None}]
-seen_urls, seen_roles = set(), set()
-offers, dropped = retain_jobs(jobs, "greenhouse-full", config, CUTOFF, seen_urls, seen_roles)
-assert len(offers) == 2 and dropped["duplicate"] == 1 and dropped["undated"] == 1
-assert {offer["url"] for offer in offers} == {jobs[0]["url"], jobs[2]["url"]}
-assert len(seen_urls) == len(seen_roles) == 2
+seen_urls = set()
+offers, dropped = retain_jobs(jobs, "greenhouse-full", config, CUTOFF, seen_urls)
+assert len(offers) == 3 and dropped["duplicate"] == 0 and dropped["undated"] == 1
+assert {offer["url"] for offer in offers} == {job['url'] for job in jobs[:3]}
+assert len(seen_urls) == 3
 
 kept, filtered, annotated = blacklist_offers(offers, {"acme": {"reason": "user choice"}})
-assert not kept and filtered == 2 and annotated == 0
+assert not kept and filtered == 3 and annotated == 0
 kept, filtered, annotated = blacklist_offers(offers, {"acme": {"reason": "user choice"}}, include_blacklisted=True)
-assert len(kept) == 2 and filtered == 0 and annotated == 2
+assert len(kept) == 3 and filtered == 0 and annotated == 3
 assert kept[0]["note"] == "blacklisted: user choice"
 assert output_offer(kept[0])["source"] == "greenhouse-full"
 print("reverse discovery: date, filters, dedup and blacklist passed")
