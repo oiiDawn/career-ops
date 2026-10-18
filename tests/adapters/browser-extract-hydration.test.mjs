@@ -2,6 +2,7 @@
 import assert from 'node:assert/strict';
 import { chromium } from 'playwright';
 import { readPage } from '../../adapters/node/browser/browser-extract.mjs';
+import { jobFromPage } from '../../adapters/node/providers/search.mjs';
 
 const browser = await chromium.launch({ headless: true });
 try {
@@ -46,5 +47,30 @@ try {
   assert.equal(publisher.postings[0].description.trim(), 'Build software.\nMaintain services.');
   await page.goto(jobUrl.replace('id123', 'id456'));
   assert.deepEqual((await readPage(page, { timeout: 100 })).postings, [], 'Metadata must belong to the current posting');
+
+  const linkedinUrl = 'https://www.linkedin.com/jobs/view/engineer-at-employer-123';
+  const linkedinBody = `<link rel="canonical" href="${linkedinUrl}"><h1>AI Engineer</h1>
+    <a class="topcard__org-name-link">Employer</a><span class="topcard__flavor--bullet">Hong Kong</span>
+    <section class="description__text"><div class="show-more-less-html__markup" style="max-height:20px;overflow:hidden">
+      <p>${'Build reliable AI services. '.repeat(12)}</p><p>Final qualification: production operations.</p>
+    </div><button aria-expanded="false">Show more</button></section>`;
+  await page.route('https://www.linkedin.com/**', route => route.fulfill({ contentType: 'text/html', body: linkedinBody }));
+  await page.goto(linkedinUrl);
+  const linkedin = await readPage(page, { timeout: 100 });
+  const linkedinJob = jobFromPage(linkedin, linkedinUrl);
+  assert.equal(linkedinJob.company, 'Employer');
+  assert.equal(linkedinJob.location, 'Hong Kong');
+  assert(linkedinJob.description.endsWith('Final qualification: production operations.'), 'Read the full publisher markup despite visual clipping');
+  assert.equal(await page.locator('button').getAttribute('aria-expanded'), 'false', 'Extraction must not click or alter the page');
+  await page.goto(linkedinUrl.replace('-123', '-456'));
+  assert.deepEqual((await readPage(page, { timeout: 100 })).postings, [], 'Reject another posting canonical');
+  await page.goto('https://www.linkedin.com/authwall');
+  assert.deepEqual((await readPage(page, { timeout: 100 })).postings, [], 'A login wall cannot provide a posting');
+  await page.goto(linkedinUrl);
+  await page.locator('.topcard__org-name-link').evaluate(element => element.remove());
+  assert.deepEqual((await readPage(page, { timeout: 100 })).postings, [], 'Require an identified employer');
+  await page.goto(linkedinUrl);
+  await page.locator('h1').evaluate(element => element.remove());
+  assert.deepEqual((await readPage(page, { timeout: 100 })).postings, [], 'A document title cannot replace the posting title');
 } finally { await browser.close(); }
 console.log('browser-extract: hydrated JD text and publisher metadata are extracted');

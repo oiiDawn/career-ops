@@ -230,6 +230,24 @@ async function readDom(page) {
     for (const script of document.querySelectorAll('script[type="application/ld+json"]')) {
       try { visit(JSON.parse(script.textContent)); } catch {}
     }
+    const linkedinId = /\/jobs\/view\/(?:[^/]*-)?(\d+)\/?$/.exec(location.pathname)?.[1];
+    if (!postings.length && linkedinId && /(^|\.)linkedin\.com$/.test(location.hostname)) {
+      const canonical = document.querySelector('link[rel="canonical"]')?.href;
+      const postingTitle = document.querySelector('h1')?.textContent?.trim();
+      const company = document.querySelector('.topcard__org-name-link')?.textContent?.trim();
+      const description = document.querySelector('.description__text .show-more-less-html__markup');
+      try {
+        const identity = new URL(canonical);
+        const canonicalId = /\/jobs\/view\/(?:[^/]*-)?(\d+)\/?$/.exec(identity.pathname)?.[1];
+        // Public LinkedIn clips the full publisher markup visually but often omits JSON-LD.
+        if (identity.protocol === 'https:' && /(^|\.)linkedin\.com$/.test(identity.hostname)
+            && canonicalId === linkedinId && postingTitle && company && description?.textContent.trim().length >= 200) {
+          visit({ '@type': 'JobPosting', url: canonical, title: postingTitle, hiringOrganization: { name: company },
+            description: description.innerHTML,
+            jobLocation: { address: document.querySelector('.topcard__flavor--bullet')?.textContent?.trim() || '' } });
+        }
+      } catch {}
+    }
     const efinancialId = /\.id(\d+)$/.exec(location.pathname)?.[1];
     if (!postings.length && efinancialId && ['efinancialcareers.hk', 'www.efinancialcareers.hk'].includes(location.hostname)) {
       try {
