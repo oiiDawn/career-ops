@@ -18,12 +18,12 @@ with tempfile.TemporaryDirectory() as temporary:
     assert row["url"] == first["url"]
     assert store.ingest(first, "fixture-api", observed_on="2026-09-28")["id"] == row["id"]
     alternate = {**first, "url": "https://example.com/b", "description": "Changed description"}
-    assert store.ingest(alternate, "other-api", observed_on="2026-09-29")["id"] == row["id"]
+    assert store.ingest(alternate, "other-api", observed_on="2026-09-29")["id"] != row["id"]
     db = store.db
-    assert db.execute("SELECT count(*) FROM opportunities").fetchone()[0] == 1
+    assert db.execute("SELECT count(*) FROM opportunities").fetchone()[0] == 2
     assert db.execute("SELECT count(*) FROM source_evidence").fetchone()[0] == 2
     assert db.execute("SELECT count(*) FROM scan_observations").fetchone()[0] == 2
-    assert db.execute("SELECT content FROM page_evidence").fetchone()[0] == first["description"]
+    assert db.execute("SELECT content FROM page_evidence WHERE opportunity_id=?", (row['id'],)).fetchone()[0] == first["description"]
     assert db.execute("SELECT count(*) FROM repost_inputs").fetchone()[0] == 0
     assert json.loads(db.execute("SELECT payload FROM source_evidence ORDER BY id").fetchone()[0])["description"] == first["description"]
     try:
@@ -61,6 +61,6 @@ with tempfile.TemporaryDirectory() as temporary:
     legacy.close()
     upgraded = DiscoveryStore(path)
     assert tuple(upgraded.db.execute("SELECT identity,application_state,attempts FROM opportunities").fetchone()) == (
-        "acme::engineer", "none", 0)
+        "https://example.com/old", "none", 0)
     assert "run_id" in {column["name"] for column in upgraded.db.execute("PRAGMA table_info(scan_runs)")}
     upgraded.close()

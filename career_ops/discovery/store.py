@@ -7,10 +7,11 @@ import hashlib
 import json
 from pathlib import Path
 import sqlite3
-import unicodedata
 
 from career_ops.liveness import SCHEMA as LIVENESS_SCHEMA, closed_url
 from career_ops.discovery.dedup import url_key
+from career_ops.discovery.fingerprint import fingerprint
+from career_ops.discovery.identity import resolve_posting
 
 
 SCHEMA = """
@@ -93,10 +94,11 @@ def _json(value: object) -> str:
 class DiscoveryStore:
     """Own one discovery transaction; callers decide filters and capture policy."""
 
-    def __init__(self, path: Path):
+    def __init__(self, path: Path, *, aliases: dict[str, str] | None = None):
         path.parent.mkdir(parents=True, exist_ok=True)
         self.db = sqlite3.connect(path)
         self.db.row_factory = sqlite3.Row
+        self.aliases = aliases or {}
         self.db.execute("PRAGMA busy_timeout=5000")
         self.db.executescript(SCHEMA + LIVENESS_SCHEMA)
         self._migrate()
@@ -110,13 +112,8 @@ class DiscoveryStore:
             self.db.execute("ALTER TABLE opportunities ADD COLUMN application_state TEXT NOT NULL DEFAULT 'none'")
         if "identity" not in columns:
             self.db.execute("ALTER TABLE opportunities ADD COLUMN identity TEXT")
-            used = set()
-            for row in self.db.execute("SELECT id,company,role FROM opportunities ORDER BY id"):
-                base = f"{unicodedata.normalize('NFKC', row['company']).strip().lower()}::{unicodedata.normalize('NFKC', row['role']).strip().lower()}"
-                key = base + f"#{row['id']}" if base in used else base
-                used.add(base)
-                self.db.execute("UPDATE opportunities SET identity=? WHERE id=?", (key, row["id"]))
             self.db.execute("CREATE UNIQUE INDEX IF NOT EXISTS opportunities_identity ON opportunities(identity)")
+        self.db.execute('UPDATE opportunities SET identity=url WHERE identity IS NULL OR identity<>url')
         delivery_columns = {row["name"] for row in self.db.execute("PRAGMA table_info(deliveries)")}
         if "status" not in delivery_columns:
             self.db.execute("ALTER TABLE deliveries ADD COLUMN status TEXT NOT NULL DEFAULT 'claimed'")
@@ -130,46 +127,41 @@ class DiscoveryStore:
         self.db.close()
 
     def ingest(self, offer: dict, source: str, *, observed_on: str | None = None) -> dict | None:
-        """Reuse URL or company-role identity, retaining first source evidence."""
+        """Resolve current posting identity atomically and retain source-specific evidence."""
         url, company, role = (str(offer.get(key) or "").strip() for key in ("url", "company", "title"))
         if not url or not company or not role:
             raise ValueError("Discovered offer requires URL, company, and title")
-        identity = f"{unicodedata.normalize('NFKC', company).strip().lower()}::{unicodedata.normalize('NFKC', role).strip().lower()}"
         capture = offer.get("scan_jd") if isinstance(offer.get("scan_jd"), dict) else {}
         description = capture.get("text") or offer.get("description") or offer.get("text") or ""
-        fingerprint = offer.get("fingerprint")
-        if fingerprint is None and isinstance(description, str) and description:
-            fingerprint = hashlib.sha256(description.encode()).hexdigest()[:16]
-        payload = {**offer, "description": description, "fingerprint": fingerprint}
+        payload = {**offer, "description": description, "fingerprint": fingerprint(description)}
         if not self.db.in_transaction:
             self.db.execute("BEGIN IMMEDIATE")
         with self.db:
             if closed_url(self.db, url):
                 return None
-            self.db.execute("INSERT OR IGNORE INTO opportunities(url,company,role,identity,source) VALUES(?,?,?,?,?)",
-                            (url, company, role, identity, source))
-            row = self.db.execute("SELECT id,url FROM opportunities WHERE url=?", (url,)).fetchone()
+            row = resolve_posting(self.db, {**payload, 'url': url, 'company': company, 'title': role}, self.aliases)
+            created = row is None
             if row is None:
-                row = self.db.execute("SELECT id,url FROM opportunities WHERE identity=? OR substr(identity,1,length(?) + 1)=? || '#' ORDER BY id LIMIT 1",
-                                      (identity, identity, identity)).fetchone()
-            if row is None:
-                raise RuntimeError("Opportunity identity could not be resolved")
-            exists = self.db.execute("SELECT 1 FROM source_evidence WHERE opportunity_id=? AND source=?",
-                                     (row["id"], source)).fetchone()
+                cursor = self.db.execute("INSERT INTO opportunities(url,company,role,identity,source) VALUES(?,?,?,?,?)",
+                                         (url, company, role, url, source))
+                row = {'id': cursor.lastrowid, 'url': url}
+            exists = self.db.execute("SELECT 1 FROM source_evidence WHERE opportunity_id=? AND source=? AND json_extract(payload,'$.url')=?",
+                                     (row["id"], source, url)).fetchone()
             if not exists:
                 self.db.execute("INSERT INTO source_evidence(opportunity_id,source,payload) VALUES(?,?,?)",
                                 (row["id"], source, _json(payload)))
                 self.db.execute("INSERT INTO opportunity_events(opportunity_id,type,payload) VALUES(?,'discovered',?)",
                                 (row["id"], _json({"source": source})))
-            if isinstance(description, str) and description.strip():
+            primary = url_key(row['url']) == url_key(url)
+            if primary and isinstance(description, str) and description.strip():
                 self.db.execute("INSERT OR IGNORE INTO page_evidence(opportunity_id,content,content_hash) VALUES(?,?,?)",
                                 (row["id"], description, hashlib.sha256(description.encode()).hexdigest()))
-            if payload["fingerprint"]:
+            if primary and payload["fingerprint"]:
                 self.db.execute("INSERT OR IGNORE INTO repost_inputs(opportunity_id,fingerprint) VALUES(?,?)",
                                 (row["id"], payload["fingerprint"]))
             self.db.execute("INSERT OR IGNORE INTO scan_observations(opportunity_id,url,company,title,observed_on) VALUES(?,?,?,?,?)",
                             (row["id"], url, company, role, observed_on or date.today().isoformat()))
-        return dict(row)
+        return {**row, 'created': created}
 
     def scan_outcome(self, offer: dict, status: str) -> None:
         url = offer.get("url")

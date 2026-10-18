@@ -416,7 +416,9 @@ def discovery_query(store: BusinessStore) -> tuple[str, str]:
     has_page_versions = bool(store.db.execute(
         "SELECT 1 FROM sqlite_master WHERE type='table' AND name='page_evidence_versions'"
     ).fetchone())
-    capture_select = "(SELECT payload FROM source_evidence s WHERE s.opportunity_id=o.id ORDER BY s.id DESC LIMIT 1)" if has_source_evidence else "NULL"
+    capture_select = ("(SELECT payload FROM source_evidence s WHERE s.opportunity_id=o.id "
+                      "AND COALESCE(json_extract(s.payload,'$.url'),json_extract(s.payload,'$._capture.url'))=o.url "
+                      "ORDER BY s.id DESC LIMIT 1)") if has_source_evidence else "NULL"
     page_join = "LEFT JOIN page_evidence_versions p ON p.id=(SELECT id FROM page_evidence_versions v WHERE v.opportunity_id=o.id ORDER BY v.id DESC LIMIT 1)" if has_page_versions else "LEFT JOIN page_evidence p ON p.opportunity_id=o.id"
     return capture_select, page_join
 
