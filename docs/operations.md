@@ -18,8 +18,6 @@ is the Career Ops Python environment. Run `.venv/bin/python -B -m career_ops
 | `dashboard` | Local page of scanned, scored and applied jobs; its only writes start `apply prepare` or a re-score of the retained JD (`--port`, default 8765) |
 | `system` | Doctor, portal maintenance, liveness, company resolution, advance and notify |
 
-Dashboard derives Chinese city labels for display, bilingual search and city filtering from retained location evidence. Multi-city jobs match each listed city; area details and original evidence remain visible. Unknown locations stay unclassified. These labels do not rewrite reports or change scoring inputs.
-
 Daily commands derive inputs from the opportunity ID:
 
 ```bash

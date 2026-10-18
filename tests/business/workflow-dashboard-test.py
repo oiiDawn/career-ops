@@ -17,40 +17,7 @@ sys.path.insert(0, str(ROOT))
 
 from career_ops.dashboard.actions import ActionRunner  # noqa: E402
 from career_ops.input_contracts import apply_inputs, digest, score_inputs  # noqa: E402
-from career_ops.dashboard.locations import location_fields  # noqa: E402
 from career_ops.dashboard.server import handler_for  # noqa: E402
-
-
-for raw, display, cities in (
-    ("Hong Kong SAR", "香港", ["香港"]),
-    ("Hong Kong, Hong Kong, HK", "香港", ["香港"]),
-    ("香港", "香港", ["香港"]),
-    ("Kowloon Bay", "香港 · 九龙湾", ["香港"]),
-    ("Science Park, Tai Po District, Hong Kong", "香港 · 大埔区 · 科学园", ["香港"]),
-    ("Hong Kong Island", "香港 · 香港岛", ["香港"]),
-    ("Hong Kong SAR; China", "香港；中国（城市未明确）", ["香港"]),
-    ("重庆/成都", "重庆；成都", ["重庆", "成都"]),
-    ("China, Beijing, Beijing; China, Shanghai, Shanghai", "北京；上海", ["北京", "上海"]),
-    ("北京市, CN", "北京", ["北京"]),
-    ("Guangdong, China", "Guangdong, China", []),
-    ("Science Park", "Science Park", []),
-    ("Shanghai, Science Park", "上海 · Science Park", ["上海"]),
-    ("Remote - Hong Kong", "香港 · Remote", ["香港"]),
-    ("Hybrid, Shenzhen", "深圳 · Hybrid", ["深圳"]),
-    ("Remote", "Remote", []),
-    ("2 Locations", "2 Locations", []),
-    ("Nottingham", "Nottingham", []),
-    (None, "地点未提供", []),
-    ([], "地点未提供", []),
-    ({"@type": "Place", "address": {"addressLocality": "Hong Kong", "addressCountry": "HK"}}, "香港", ["香港"]),
-    ([{"name": "Shanghai"}, {"name": "Hong Kong"}], "上海；香港", ["上海", "香港"]),
-    ({"unrecognized": "Somewhere"}, '{"unrecognized": "Somewhere"}', []),
-):
-    before_raw = json.dumps(raw, ensure_ascii=False)
-    actual = location_fields(raw)
-    assert (actual["location"], actual["location_cities"]) == (display, cities), (raw, actual)
-    assert actual["location_raw"] == raw and json.dumps(raw, ensure_ascii=False) == before_raw
-assert "hong kong" in location_fields("香港")["location_search"]
 
 
 class StubRunner:
@@ -162,16 +129,13 @@ with tempfile.TemporaryDirectory() as temporary:
         assert jobs[2]["profile_expired"] and not jobs[1]["profile_expired"]
         assert jobs[2]["scores"]["direction"] == 4.96 and jobs[3]["action"] == "deprioritize"
         assert jobs[3]["application_status"] == "applied" and jobs[3]["material_count"] == 2
-        assert jobs[3]["url"] == "https://example.com/3" and jobs[1]["location"] == "上海"
-        assert jobs[1]["location_raw"] == "Shanghai" and jobs[1]["location_cities"] == ["上海"]
-        assert "shanghai" in jobs[1]["location_search"].lower()
+        assert jobs[3]["url"] == "https://example.com/3" and jobs[1]["location"] == "Shanghai"
         assert [jobs[i]["score_current"] for i in (1, 2, 3)] == [None, True, False]
         assert jobs[2]["needs_rescore"] and jobs[2]["refresh_reasons"] == ["company_evidence_expired"]
         assert jobs[3]["needs_rescore"] and "inputs_changed" in jobs[3]["refresh_reasons"]
         assert not jobs[1]["needs_rescore"]
 
         detail = fetch(base, "/api/jobs/3")
-        assert detail["location"] == "上海" and detail["location_raw"] == "Shanghai"
         assert detail["report"].startswith("## A.") and detail["jd"] == "JD text"
         assert detail["application_events"][0]["payload"] == {"notes": "ok"}
         assert [item["id"] for item in detail["materials"]] == ["resume_pdf", "interview_prep", "upskill"], "latest package only, display order"

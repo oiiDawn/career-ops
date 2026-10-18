@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from career_ops.liveness import current_observations
-from career_ops.dashboard.locations import location_fields
 
 import json
 from pathlib import Path
@@ -112,7 +111,7 @@ def list_jobs(db: sqlite3.Connection) -> list[dict]:
             "source": row["source"], "state": row["state"], "created_at": row["created_at"],
             "stage": _stage(row, application, score_result),
             "scan_outcome": (scan or {}).get("outcome"),
-            **location_fields(scan_artifact.get("location_evidence")),
+            "location": scan_artifact.get("location_evidence"),
             **liveness.get(key, {"liveness": "uncertain", "liveness_checked_at": None,
                                  "liveness_last_active_at": None, "liveness_reason": "尚未检查"}),
             "captured_at": scan_artifact.get("captured_at"),

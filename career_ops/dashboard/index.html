@@ -142,7 +142,6 @@ details summary { cursor: pointer; font-weight: 600; }
     <option value="deprioritize">deprioritize</option><option value="discard">discard</option><option value="none">未打分</option><option value="needs_rescore">待重新评分</option></select></label>
   <label>状态 <select id="fState"></select></label>
   <label>来源 <select id="fSource"></select></label>
-  <label>城市 <select id="fCity"></select></label>
   <label>存活 <select id="fLiveness"></select></label>
   <label><input type="checkbox" id="fMaterials"> 仅有材料</label>
   <button class="ghost" id="reset">重置</button>
@@ -217,7 +216,7 @@ const POLL_MS = 3000;
 let state = loadState();
 
 function loadState() {
-  const fallback = { stage: "all", sort: "id", dir: "desc", csort: "avg", cdir: "desc", q: "", action: "", state: "", source: "", city: "", liveness: "", materials: false };
+  const fallback = { stage: "all", sort: "id", dir: "desc", csort: "avg", cdir: "desc", q: "", action: "", state: "", source: "", liveness: "", materials: false };
   try { return { ...fallback, ...JSON.parse(localStorage.getItem(STORAGE_KEY) || "{}") }; }
   catch { return fallback; }
 }
@@ -300,15 +299,14 @@ async function loadJobs() {
 }
 
 function fillSelects() {
-  const options = (key, id, stateKey = key) => {
-    const values = [...new Set(jobs.flatMap(j => j[key] ?? []).filter(Boolean))].sort();
-    if (!values.includes(state[stateKey])) state[stateKey] = "";
+  const options = (key, id) => {
+    const values = [...new Set(jobs.map(j => j[key]).filter(Boolean))].sort();
+    if (!values.includes(state[key])) state[key] = "";
     $(id).innerHTML = `<option value="">全部</option>` + values.map(v => `<option>${esc(v)}</option>`).join("");
-    $(id).value = state[stateKey];
+    $(id).value = state[key];
   };
   options("state", "fState");
   options("source", "fSource");
-  options("location_cities", "fCity", "city");
   options("liveness", "fLiveness");
 }
 
@@ -321,11 +319,10 @@ function inStage(job, stage) {
 function filtered() {
   const q = state.q.trim().toLowerCase();
   return jobs.filter(j => inStage(j, state.stage)
-    && (!q || [j.id, j.company, j.role, j.location_search, j.source].some(v => String(v ?? "").toLowerCase().includes(q)))
+    && (!q || [j.id, j.company, j.role, j.location, j.source].some(v => String(v ?? "").toLowerCase().includes(q)))
     && (!state.action || (state.action === "none" ? !j.scores : state.action === "needs_rescore" ? j.needs_rescore : j.action === state.action))
     && (!state.state || j.state === state.state)
     && (!state.source || j.source === state.source)
-    && (!state.city || j.location_cities.includes(state.city))
     && (!state.liveness || j.liveness === state.liveness)
     && (!state.materials || j.material_count > 0));
 }
@@ -491,7 +488,6 @@ function overview(d) {
   const rows = [
     ["职位链接", `<a href="${esc(safeUrl(d.url))}" target="_blank" rel="noopener noreferrer">${esc(d.url)}</a>`],
     ["公司", esc(d.company)], ["来源", esc(d.source)], ["地点", esc(d.location || "—")],
-    ["地点原文", esc(d.location_raw == null ? "—" : typeof d.location_raw === "string" ? d.location_raw : JSON.stringify(d.location_raw))],
     ["流程状态", pill(d.state)], ["存活", `${pill(d.liveness)} <span class="sub">${esc(d.liveness_reason || "")}</span>`],
     ["预筛", pill(d.prescreen)], ["资格", pill(d.eligibility)],
     ["决策", pill(d.action)],
@@ -772,9 +768,9 @@ document.addEventListener("click", event => {
 });
 const bind = (id, key, read = el => el.value) => $(id).addEventListener("input", e => { state[key] = read(e.target); render(); });
 bind("q", "q"); bind("fAction", "action"); bind("fState", "state"); bind("fSource", "source");
-bind("fCity", "city"); bind("fLiveness", "liveness"); bind("fMaterials", "materials", el => el.checked);
+bind("fLiveness", "liveness"); bind("fMaterials", "materials", el => el.checked);
 $("reset").addEventListener("click", () => {
-  state = { ...state, q: "", action: "", state: "", source: "", city: "", liveness: "", materials: false };
+  state = { ...state, q: "", action: "", state: "", source: "", liveness: "", materials: false };
   fillSelects(); render();
 });
 $("refresh").addEventListener("click", loadJobs);
