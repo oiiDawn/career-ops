@@ -147,8 +147,7 @@ class BusinessStore:
             self.db.execute("UPDATE tasks SET attempt_tool_calls=tool_calls")
         self.db.executescript(
             """
-            DROP INDEX IF EXISTS one_active_task_per_opportunity;
-            CREATE UNIQUE INDEX one_active_task_per_opportunity
+            CREATE UNIQUE INDEX IF NOT EXISTS one_active_task_per_opportunity
               ON tasks(opportunity_id)
               WHERE status='running';
             """
