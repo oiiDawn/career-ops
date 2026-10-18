@@ -64,6 +64,9 @@ try {
   assert.equal(await page.locator('button').getAttribute('aria-expanded'), 'false', 'Extraction must not click or alter the page');
   await page.goto(linkedinUrl.replace('-123', '-456'));
   assert.deepEqual((await readPage(page, { timeout: 100 })).postings, [], 'Reject another posting canonical');
+  await page.goto(linkedinUrl);
+  await page.locator('link[rel="canonical"]').evaluate(element => element.href = 'https://www.linkedin.com/foo/jobs/view/123');
+  assert.deepEqual((await readPage(page, { timeout: 100 })).postings, [], 'Canonical identity requires a posting path');
   await page.goto('https://www.linkedin.com/authwall');
   assert.deepEqual((await readPage(page, { timeout: 100 })).postings, [], 'A login wall cannot provide a posting');
   await page.goto(linkedinUrl);

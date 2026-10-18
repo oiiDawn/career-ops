@@ -55,6 +55,8 @@ const blocked = await collectSearch(entry, { searchKeywords: ['AI', '智能体']
 assert.equal(blockedReads, 1);
 assert.equal(blocked.collectionTruncated, true);
 const aliases = ['https://cn.linkedin.com/jobs/view/engineer-at-acme-123?refId=one', 'https://www.linkedin.com/jobs/view/123?refId=two'];
+assert.throws(() => jobFromPage({ postings: [{ ...detail(aliases[0]).postings[0],
+  url: 'https://www.linkedin.com/foo/jobs/view/123' }] }, aliases[0]), /JobPosting/);
 const deduped = await collectSearch({ ...entry, search: linkedin }, { searchKeywords: ['AI', '智能体'], maxPages: 1 }, {
   search: async () => aliases.map(url => ({ url })), read: async address => detail(address),
 });
@@ -62,8 +64,11 @@ assert.equal(deduped.length, 1);
 
 const retryEntry = { ...entry, search: linkedin, max_results: 2 };
 const realNow = Date.now;
+const realError = console.error;
+const terminalWarnings = [];
 let now = realNow();
 Date.now = () => now;
+console.error = message => terminalWarnings.push(message);
 try {
   const waits = [], attempts = new Map();
   const retryContext = { searchKeywords: ['AI', '智能体'], maxPages: 1, deadlineMs: now + 600_000,
@@ -82,6 +87,7 @@ try {
     },
   });
   assert.equal(recovered.length, 2);
+  assert.deepEqual(terminalWarnings, [], 'Recovered requests must not become Python collector failure warnings');
   assert.deepEqual(waits, [10_000, 10_000, 20_000], 'Retry search and detail with exponential backoff');
   assert.equal(attempts.get('https://www.linkedin.com/jobs/view/1'), 3);
 
@@ -91,14 +97,39 @@ try {
     search: async request => (new URL(request).searchParams.get('keywords') === 'AI' ? [3, 7] : [4])
       .map(id => ({ url: `https://www.linkedin.com/jobs/view/${id}` })),
     read: async address => {
-      if (address.endsWith('/3')) { exhaustedAttempts++; throw Object.assign(new Error('HTTP 429'), { retryAfter: '120' }); }
+      if (address.endsWith('/3')) { exhaustedAttempts++; throw new Error('HTTP 429'); }
       return detail(address);
     },
   });
   assert.equal(exhaustedAttempts, 3, 'A URL has at most two retries');
-  assert.deepEqual(waits, [60_000, 60_000], 'Retry-After cannot cause unbounded waits');
+  assert.deepEqual(waits, [10_000, 20_000]);
   assert.deepEqual(exhausted.map(j => j.url), ['https://www.linkedin.com/jobs/view/4', 'https://www.linkedin.com/jobs/view/7'], 'Exhaustion preserves the same queue and other keyword queues');
   assert.equal(exhausted.collectionTruncationKind, 'incomplete_details');
+  assert(terminalWarnings.some(message => message.includes('jobs/view/3: HTTP 429')), 'Report terminal request failures');
+
+  waits.length = 0;
+  let deferredAttempts = 0;
+  const deferred = await collectSearch(retryEntry, { ...retryContext, searchKeywords: ['AI'], deadlineMs: now + 600_000 }, {
+    search: async () => [11, 12].map(id => ({ url: `https://www.linkedin.com/jobs/view/${id}` })),
+    read: async address => {
+      if (address.endsWith('/11')) { deferredAttempts++; throw Object.assign(new Error('HTTP 429'), { retryAfter: '120' }); }
+      return detail(address);
+    },
+  });
+  assert.equal(deferredAttempts, 1, 'Do not retry before a server delay that exceeds the local wait limit');
+  assert.deepEqual(waits, []);
+  assert.deepEqual(deferred.map(j => j.url), ['https://www.linkedin.com/jobs/view/12']);
+
+  let headerAttempts = 0;
+  const headerRecovered = await collectSearch(retryEntry, { ...retryContext, searchKeywords: ['AI'], deadlineMs: now + 600_000 }, {
+    search: async () => [{ url: 'https://www.linkedin.com/jobs/view/13' }],
+    read: async address => {
+      if (++headerAttempts === 1) throw Object.assign(new Error('HTTP 429'), { retryAfter: '30' });
+      return detail(address);
+    },
+  });
+  assert.equal(headerRecovered.length, 1);
+  assert.deepEqual(waits, [30_000]);
 
   waits.length = 0;
   let failedSearchAttempts = 0;
@@ -141,5 +172,5 @@ try {
   assert.equal(forbiddenAttempts, 1, 'Do not retry authorization failures');
   assert.deepEqual(waits, []);
   assert.equal(forbidden.length, 0);
-} finally { Date.now = realNow; }
+} finally { Date.now = realNow; console.error = realError; }
 console.log('Scoped search collection passed');

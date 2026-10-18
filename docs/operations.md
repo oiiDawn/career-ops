@@ -78,8 +78,9 @@ notification policy. Check `system doctor --json` and the offline suite before e
 changed wrappers. Neither doctor nor offline fixtures send candidate data.
 
 LinkedIn discovery retries a rate-limited search or detail request at most twice,
-waiting 10 then 20 seconds. A longer `Retry-After` increases the wait up to 60
-seconds per retry. Exhausting retries skips the failed detail or search keyword
+waiting 10 then 20 seconds. A longer `Retry-After` increases the wait; if it exceeds
+60 seconds, skip that request rather than retrying before the server allows it.
+Exhausting retries skips the failed detail or search keyword
 without clearing the other queued work. Waits, navigation pacing and browser
 reads share the source deadline: configured collection uses 525 seconds of its
 ten-minute budget, preserving the existing 75-second reserve. A retry that cannot

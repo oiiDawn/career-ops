@@ -5,7 +5,7 @@ import { fileURLToPath } from 'node:url';
 import { chromium } from 'playwright';
 import { newExtractionPage, readPage } from '../browser/browser-extract.mjs';
 import { rejectPrivateOrInvalid, validateUrlSecurity } from '../browser/liveness-browser.mjs';
-import { normalizeUrl } from '../shared/url-key.mjs';
+import { linkedInJobId, normalizeUrl } from '../shared/url-key.mjs';
 import { providerKeywords } from './_profile-keywords.mjs';
 import { parseRetryAfterMs, sleep } from './_http.mjs';
 
@@ -79,10 +79,8 @@ export function searchRequest(options, keyword, page = 0) {
 }
 
 function postingKey(value) {
-  const url = new URL(value);
-  const id = /\/jobs\/view\/(?:[^/]*-)?(\d+)\/?$/.exec(url.pathname)?.[1];
-  return id && (url.hostname === 'linkedin.com' || url.hostname.endsWith('.linkedin.com'))
-    ? `https://www.linkedin.com/jobs/view/${id}` : normalizeUrl(value);
+  const id = linkedInJobId(value);
+  return id ? `https://www.linkedin.com/jobs/view/${id}` : normalizeUrl(value);
 }
 
 function webSearch(query) {
@@ -159,9 +157,9 @@ export async function collectSearch(entry, context, { search, read }) {
       remainingSearchMs(deadline);
       try { return await request(); } catch (error) {
         if (options.method !== 'linkedin' || !/HTTP 429\b/.test(error.message) || attempt === 2) throw error;
-        const delayMs = Math.min(60_000, Math.max(10_000 * 2 ** attempt, parseRetryAfterMs(error.retryAfter) ?? 0));
+        const delayMs = Math.max(10_000 * 2 ** attempt, parseRetryAfterMs(error.retryAfter) ?? 0);
+        if (delayMs > 60_000) throw error;
         if (delayMs >= remainingSearchMs(deadline)) throw searchBudgetError();
-        console.error(`${entry.name}: HTTP 429 retry ${attempt + 1}/2 in ${delayMs}ms`);
         await sleep(delayMs, context);
       }
     }
@@ -228,7 +226,8 @@ export default {
   async fetch(entry, context) {
     searchOptions(entry);
     providerKeywords(context);
-    const deadline = (context?.deadlineMs ?? Date.now() + 600_000) - 75_000;
+    context = { ...context, deadlineMs: context?.deadlineMs ?? Date.now() + 600_000 };
+    const deadline = context.deadlineMs - 75_000;
     const browser = await chromium.launch({ headless: true });
     try {
       const read = async (url, mode = 'jd') => {
@@ -245,7 +244,7 @@ export default {
           return { ...raw, url: page.url() };
         } finally { await page.context().close(); }
       };
-      return await collectSearch(entry, { ...context, deadlineMs: deadline + 75_000 }, {
+      return await collectSearch(entry, context, {
         read,
         search: async (request, method) => {
           if (method === 'web') return webSearch(request);

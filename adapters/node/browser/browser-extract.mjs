@@ -230,7 +230,8 @@ async function readDom(page) {
     for (const script of document.querySelectorAll('script[type="application/ld+json"]')) {
       try { visit(JSON.parse(script.textContent)); } catch {}
     }
-    const linkedinId = /\/jobs\/view\/(?:[^/]*-)?(\d+)\/?$/.exec(location.pathname)?.[1];
+    const linkedinPostingId = path => /^\/jobs\/view\/(?:[^/]*-)?(\d+)\/?$/.exec(path)?.[1];
+    const linkedinId = linkedinPostingId(location.pathname);
     if (!postings.length && linkedinId && /(^|\.)linkedin\.com$/.test(location.hostname)) {
       const canonical = document.querySelector('link[rel="canonical"]')?.href;
       const postingTitle = document.querySelector('h1')?.textContent?.trim();
@@ -238,7 +239,7 @@ async function readDom(page) {
       const description = document.querySelector('.description__text .show-more-less-html__markup');
       try {
         const identity = new URL(canonical);
-        const canonicalId = /\/jobs\/view\/(?:[^/]*-)?(\d+)\/?$/.exec(identity.pathname)?.[1];
+        const canonicalId = linkedinPostingId(identity.pathname);
         // Public LinkedIn clips the full publisher markup visually but often omits JSON-LD.
         if (identity.protocol === 'https:' && /(^|\.)linkedin\.com$/.test(identity.hostname)
             && canonicalId === linkedinId && postingTitle && company && description?.textContent.trim().length >= 200) {
