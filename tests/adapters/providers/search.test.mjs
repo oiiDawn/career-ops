@@ -53,6 +53,20 @@ assert.equal(efinancialJobs.length, 1);
 assert.equal(efinancialJobs.collectionTruncated, false);
 assert.throws(() => jobFromPage({ postings: [{ ...detail(efinancialDetail).postings[0],
   url: efinancialRenamed.replace('id123', 'id456') }] }, efinancialDetail), /JobPosting/);
+const forbiddenDetail = n => `https://www.efinancialcareers.hk/jobs-Hong_Kong-Engineer.id${n}`;
+const continuedReads = [];
+const continued = await collectSearch(efinancial, { searchKeywords: ['AI', 'Backend'] }, {
+  search: async query => (query.includes('"AI"') ? [1, 2] : [1, 3]).map(n => ({ url: forbiddenDetail(n) })),
+  read: async address => {
+    continuedReads.push(address);
+    if (address === forbiddenDetail(1)) throw new Error('HTTP 403');
+    return detail(address);
+  },
+});
+assert.deepEqual(continuedReads, [forbiddenDetail(1), forbiddenDetail(3), forbiddenDetail(2)]);
+assert.equal(continued.length, 2);
+assert.equal(continued.collectionTruncated, true);
+assert.equal(continued.collectionTruncationKind, 'incomplete_details');
 assert.throws(() => jobFromPage({ postings: [] }, url(1)), /JobPosting/);
 assert.throws(() => jobFromPage({ postings: [detail(url(1)).postings[0], detail(url(2)).postings[0]] }, url(1)), /JobPosting/);
 assert.throws(() => jobFromPage({ postings: [{ ...detail(url(1)).postings[0], description: 'Search snippet' }] }, url(1)), /substantive/);
@@ -195,5 +209,14 @@ try {
   assert.equal(forbiddenAttempts, 1, 'Do not retry authorization failures');
   assert.deepEqual(waits, []);
   assert.equal(forbidden.length, 0);
+  let expiredForbiddenReads = 0;
+  const expiredForbidden = await collectSearch(efinancial, {
+    searchKeywords: ['AI', 'Backend'], deadlineMs: now + 75_000 + 5_000,
+  }, {
+    search: async () => [1, 2].map(n => ({ url: forbiddenDetail(n) })),
+    read: async () => { expiredForbiddenReads++; now += 6_000; throw new Error('HTTP 403'); },
+  });
+  assert.equal(expiredForbiddenReads, 1, 'A 403 does not extend the collection deadline');
+  assert.equal(expiredForbidden.collectionTruncated, true);
 } finally { Date.now = realNow; console.error = realError; }
 console.log('Scoped search collection passed');

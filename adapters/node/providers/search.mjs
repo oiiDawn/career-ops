@@ -217,7 +217,7 @@ export async function collectSearch(entry, context, { search, read }) {
         } catch (error) {
           warnings.push(`${row.url}: ${error.message}`);
           if (error.code === 'SEARCH_TIME_BUDGET') { bounded = true; break collection; }
-          if (/HTTP (?:401|403|405)\b/.test(error.message)
+          if (/HTTP (?:401|405)\b/.test(error.message)
               || options.method !== 'linkedin' && /HTTP 429\b/.test(error.message)) {
             queues.forEach(queue => { queue.rows = []; queue.done = true; });
           }

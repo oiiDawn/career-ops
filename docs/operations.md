@@ -84,7 +84,9 @@ Exhausting retries skips the failed detail or search keyword
 without clearing the other queued work. Waits, navigation pacing and browser
 reads share the source deadline: configured collection uses 525 seconds of its
 ten-minute budget, preserving the existing 75-second reserve. A retry that cannot
-fit ends collection with partial results. HTTP401/403/405 still stop that source.
+fit ends collection with partial results. For search providers, a detail HTTP403
+is reported and skipped without retrying or discarding other queued postings.
+HTTP401/405 still stop that source.
 
 The ten-minute score schedule selects retained unscored postings as well as scores
 marked `needs_rescore` (待重新评分). `refresh_reasons` distinguishes changed scoring
