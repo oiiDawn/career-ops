@@ -78,7 +78,18 @@ export function searchRequest(options, keyword, page = 0) {
     + (options.locations.length ? ` (${options.locations.map(quote).join(' OR ')})` : '');
 }
 
+/** Identify eFinancialCareers details independently of their changeable title slug. */
+function efinancialJobId(value) {
+  try {
+    const url = new URL(value);
+    return url.protocol === 'https:' && ['efinancialcareers.hk', 'www.efinancialcareers.hk'].includes(url.hostname)
+      ? /^\/jobs-[^/]+\.id(\d+)$/.exec(url.pathname)?.[1] : null;
+  } catch { return null; }
+}
+
 function postingKey(value) {
+  const efinancialId = efinancialJobId(value);
+  if (efinancialId) return `efinancialcareers.hk:${efinancialId}`;
   const id = linkedInJobId(value);
   return id ? `https://www.linkedin.com/jobs/view/${id}` : normalizeUrl(value);
 }
@@ -181,6 +192,7 @@ export async function collectSearch(entry, context, { search, read }) {
           queue.done = options.method === 'web' || !rows.length || queue.page >= (context?.maxPages ?? 10);
           if (options.method === 'web' && rows.length >= 20 || queue.page >= (context?.maxPages ?? 10)) bounded = true;
           if (rows.length && !queue.rows.length) warnings.push(`${queue.keyword}: results did not match source scope`);
+          queue.rows = queue.rows.filter(row => !withinSites(row.url, ['efinancialcareers.hk']) || efinancialJobId(row.url));
           if (queue.rows.length && queue.rows.every(row => seen.has(postingKey(row.url)))) {
             queue.rows = [];
             if (!queue.done) { queue.done = true; bounded = true; warnings.push(`${queue.keyword}: search repeated a page`); }

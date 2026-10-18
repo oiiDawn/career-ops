@@ -30,6 +30,29 @@ assert.equal(jobs[0].location, 'Hong Kong, HK');
 assert.equal(jobs[0].scan_jd.text, jobs[0].description);
 assert.equal(searched.length, 2);
 assert.equal(read.length, 3);
+const efinancial = { ...entry, search: { method: 'web', sites: ['efinancialcareers.hk'], locations: ['Hong Kong'] } };
+const efinancialDetail = 'https://www.efinancialcareers.hk/jobs-Hong_Kong-AI_Engineer.id123?ref=search';
+const efinancialRenamed = 'https://efinancialcareers.hk/jobs-Hong_Kong-Senior_AI_Engineer.id123';
+const efinancialOtherPages = [
+  'https://www.efinancialcareers.hk/news/2018/09/hong-kong-machine-learning-ai-hsbc',
+  'https://www.efinancialcareers.hk/jobs/artificial-intelligence/in-hong-kong',
+  'https://www.efinancialcareers.hk/jobs/backend-engineering/at-tribus/in-hong-kong',
+  'https://www.efinancialcareers.hk/foo/jobs-AI_Engineer.id123',
+  'https://www.efinancialcareers.hk/jobs-AI_Engineer.id123/related',
+];
+const efinancialReads = [];
+const efinancialJobs = await collectSearch(efinancial, { searchKeywords: ['AI', 'Backend'] }, {
+  search: async query => (query.includes('"AI"') ? efinancialOtherPages : [efinancialDetail, efinancialRenamed]).map(url => ({ url })),
+  read: async address => {
+    efinancialReads.push(address);
+    return { ...detail(address), postings: [{ ...detail(address).postings[0], url: efinancialRenamed }] };
+  },
+});
+assert.deepEqual(efinancialReads, [efinancialDetail]);
+assert.equal(efinancialJobs.length, 1);
+assert.equal(efinancialJobs.collectionTruncated, false);
+assert.throws(() => jobFromPage({ postings: [{ ...detail(efinancialDetail).postings[0],
+  url: efinancialRenamed.replace('id123', 'id456') }] }, efinancialDetail), /JobPosting/);
 assert.throws(() => jobFromPage({ postings: [] }, url(1)), /JobPosting/);
 assert.throws(() => jobFromPage({ postings: [detail(url(1)).postings[0], detail(url(2)).postings[0]] }, url(1)), /JobPosting/);
 assert.throws(() => jobFromPage({ postings: [{ ...detail(url(1)).postings[0], description: 'Search snippet' }] }, url(1)), /substantive/);
