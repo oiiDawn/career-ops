@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import date
+import html
 import re
 import sqlite3
 import unicodedata
@@ -18,6 +19,7 @@ LOCATION_SUFFIXES = frozenset([
     "new york", "north america", "nyc", "on site", "onsite", "oslo", "paris", "poland", "porto", "prague",
     "remote", "rome", "san francisco", "seattle", "sf", "singapore", "spain", "stockholm", "sydney", "tokyo",
     "toronto", "uk", "united kingdom", "united states", "us", "usa", "vancouver", "vienna", "warsaw", "zurich",
+    "hong kong", "hk", "shanghai", "shenzhen", "hangzhou", "suzhou", "beijing", "in office",
 ])
 REMOTE_SUFFIXES = frozenset(("distributed", "hybrid", "on site", "onsite", "remote", "wfh", "work from home"))
 
@@ -50,7 +52,9 @@ def _location_suffix(tag: str) -> bool:
 
 
 def role_key(role: object) -> str:
-    title = unicodedata.normalize("NFKC", str(role or "")).lower()
+    title = unicodedata.normalize("NFKC", html.unescape(str(role or ""))).lower()
+    while "|" in title and _location_suffix(title.rsplit("|", 1)[1]):
+        title = title.rsplit("|", 1)[0].rstrip()
     while match := re.search(r"\s*[\[(]([^\[\]()]+)[\])]\s*$", title):
         if not _location_suffix(match.group(1)):
             break
@@ -84,7 +88,7 @@ def company_role_key(company: object, role: object, aliases: dict[str, str] | No
 
 
 def url_key(raw: object) -> object:
-    """Match Node's scanner comparison key without changing the emitted URL."""
+    """Compare source posting identities without changing retained evidence URLs."""
     if not isinstance(raw, str) or not raw:
         return raw
     try:
@@ -92,6 +96,10 @@ def url_key(raw: object) -> object:
         if not parsed.scheme or not parsed.netloc:
             return raw
         host = parsed.hostname or ""
+        if re.fullmatch(r"(?:[\w-]+\.)*linkedin\.com", host.lower()):
+            posting = re.fullmatch(r"/jobs/view/(?:.*-)?(\d+)/?", parsed.path)
+            if posting:
+                return f"https://www.linkedin.com/jobs/view/{posting[1]}"
         netloc = parsed.netloc.lower()
         query = [(key, value) for key, value in parse_qsl(parsed.query, keep_blank_values=True)
                  if key.lower() not in STRIP_PARAMS]

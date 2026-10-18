@@ -18,6 +18,14 @@ assert url_key("https://app.mokahr.com/m/candidate/apply/tenant#/job/123") == "h
 assert url_key("not a url") == "not a url"
 assert role_key("Engineer (Berlin)") == role_key("Engineer [Remote]") == "engineer"
 assert role_key("Engineer (Platform)") == "engineer platform"
+assert role_key("NLP &amp; Machine Learning Engineer") == role_key("NLP & Machine Learning Engineer")
+assert role_key("AI Platform Engineer | Hong Kong, HK | In-Office") == role_key("AI Platform Engineer")
+assert role_key("AI Engineer | Insurance") != role_key("AI Engineer | Financial Services")
+assert role_key("Engineer (Shanghai)") == role_key("Engineer")
+assert role_key("Senior Engineer") != role_key("Engineer II")
+assert url_key("https://cn.linkedin.com/jobs/view/backend-at-siemens-4479386764?position=13&trackingId=a") == url_key("https://www.linkedin.com/jobs/view/4479386764?refId=b")
+assert url_key("https://linkedin.com/jobs/view/4479386764") != url_key("https://linkedin.com/jobs/view/4479386765")
+assert url_key("https://linkedin.com.evil.example/jobs/view/4479386764") != url_key("https://linkedin.com/jobs/view/4479386764")
 assert role_key("バックエンドエンジニア") != role_key("フロントエンドエンジニア")
 aliases = company_aliases({"Fin": ["Intercom"], "Other": ["Shared"], "Third": ["Shared"]})
 assert company_role_key("Intercom", "Engineer (Berlin)", aliases) == "fin::engineer"
