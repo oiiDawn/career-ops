@@ -21,6 +21,16 @@ try {
   assert.equal(calls, 1);
   assert.equal((await captureScanJds([offer], root, extract, true)).captured, 1);
   assert.equal(calls, 2);
+  const moka = { url: 'https://app.mokahr.com/social-recruitment/step/94904#/job/e3578266-fb63-4db8-9ab0-1ec0a0417fd6' };
+  const mokaAlias = { url: `${moka.url}?utm_source=test` };
+  const visited = [];
+  assert.deepEqual(await captureScanJds([moka, mokaAlias], root, async url => {
+    visited.push(url);
+    return { url, text: 'Coding Agent responsibilities and qualifications' };
+  }), { captured: 1, reused: 0, failed: 0 });
+  assert.deepEqual(visited, [moka.url]);
+  assert.equal(readScanJd(moka.url, root).url, moka.url);
+  assert.equal(scanJdPath(moka.url, root), scanJdPath(mokaAlias.url, root));
   assert.equal(readScanJd(offer.url, root, Date.now() + JD_MAX_AGE_MS), null);
   const bad = { url: 'https://example.com/jobs/empty' };
   assert.equal((await captureScanJds([bad], root, async () => ({ text: '' }))).failed, 1);

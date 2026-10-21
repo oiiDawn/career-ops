@@ -64,7 +64,11 @@ export async function extractPosting(url, browser = browserPosting,
 
 export async function captureScanJds(offers, root, extract = extractPosting, fresh = false) {
   const counts = { captured: 0, reused: 0, failed: 0 };
-  for (const url of new Set(offers.map(offer => normalizeUrl(offer.url)))) {
+  const seen = new Set();
+  for (const { url } of offers) {
+    const key = normalizeUrl(url);
+    if (seen.has(key)) continue;
+    seen.add(key);
     if (!fresh && readScanJd(url, root)) { counts.reused++; continue; }
     let record;
     try {
@@ -73,10 +77,10 @@ export async function captureScanJds(offers, root, extract = extractPosting, fre
         throw new Error('Empty or truncated browser JD');
       if (!samePostingUrl(url, snapshot.url))
         throw new Error('Browser page redirected away from the requested posting');
-      record = { ...snapshot, requested_url: url, retrieved_at: new Date().toISOString(), status: 'captured' };
+      record = { ...snapshot, requested_url: key, retrieved_at: new Date().toISOString(), status: 'captured' };
       counts.captured++;
     } catch (error) {
-      record = { requested_url: url, retrieved_at: new Date().toISOString(), status: 'failed', reason: String(error.message).slice(0, 1500) };
+      record = { requested_url: key, retrieved_at: new Date().toISOString(), status: 'failed', reason: String(error.message).slice(0, 1500) };
       counts.failed++;
     }
     const target = scanJdPath(url, root);
