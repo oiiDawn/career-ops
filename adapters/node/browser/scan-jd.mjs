@@ -8,6 +8,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import { normalizeUrl } from '../shared/url-key.mjs';
 import { makeHttpCtx } from '../providers/_http.mjs';
 import { readJibeapplyPosting } from '../providers/jibeapply.mjs';
+import { readJobsdbPosting } from '../providers/jobstreet.mjs';
 
 const exec = promisify(execFile);
 const extractor = fileURLToPath(new URL('./browser-extract.mjs', import.meta.url));
@@ -52,7 +53,8 @@ async function browserPosting(url) {
 
 /** Read the page in a browser; when the site refuses it, ask the posting's own JSON API for the same JD. */
 export async function extractPosting(url, browser = browserPosting,
-  api = target => readJibeapplyPosting(target, makeHttpCtx().fetchJson)) {
+  api = async target => await readJobsdbPosting(target, makeHttpCtx().fetchJson)
+    ?? await readJibeapplyPosting(target, makeHttpCtx().fetchJson)) {
   try {
     return await browser(url);
   } catch (error) {

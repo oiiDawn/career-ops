@@ -31,25 +31,23 @@ function stripMarkup(content) {
  * the description-consuming filters match against — substring matching over
  * raw HTML misses keywords split by a tag and pads matches into attribute
  * soup.
+ * Strip literal markup before decoding so quote entities inside attributes
+ * cannot become false delimiters. Strip after each decode so encoded active
+ * markup cannot survive. Neutralize incomplete tag openers without losing text.
  *
  * Exported for tests.
  *
  * @param {unknown} content
+ * @param {number} [maxChars] Search summaries are capped; full detail readers can pass Infinity.
  * @returns {string}
  */
-export function htmlToText(content) {
+export function htmlToText(content, maxChars = DESCRIPTION_CAP) {
   if (typeof content !== 'string' || !content) return '';
-  // Strip literal markup before decoding: quote entities inside a quoted
-  // attribute are data, and decoding them first would turn them into false
-  // delimiters. Each decode is followed by a strip so double-encoded active
-  // markup cannot become the final plain-text output. A final incomplete tag
-  // opener has no closing `>` for stripMarkup() to consume, so drop only its
-  // leading angle bracket; this keeps the text visible while making it inert.
   const decoded = decodeEntities(stripMarkup(content));
   const decodedTwice = decodeEntities(stripMarkup(decoded));
   return stripMarkup(decodedTwice)
     .replace(/<(?=\/?[a-z!?])/gi, '')
     .replace(/\s+/g, ' ')
     .trim()
-    .slice(0, DESCRIPTION_CAP);
+    .slice(0, maxChars);
 }

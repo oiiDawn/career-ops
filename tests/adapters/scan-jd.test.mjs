@@ -6,6 +6,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { captureScanJds, extractPosting, readScanJd, scanJdPath, samePostingUrl, JD_MAX_AGE_MS } from '../../adapters/node/browser/scan-jd.mjs';
+import { readJobsdbPosting } from '../../adapters/node/providers/jobstreet.mjs';
 const root = mkdtempSync(join(tmpdir(), 'scan-jd-'));
 try {
   assert.equal(scanJdPath('https://example.com/jobs/123', root).startsWith(join(root, 'cache', 'scan-jds')), true);
@@ -40,6 +41,45 @@ try {
   assert.equal((await captureScanJds([redirected], root, async () => ({ url: 'https://example.com/', text: 'Other page' }))).failed, 1);
   assert.equal(readScanJd(redirected.url, root), null);
   const blocked = async () => { throw new Error('navigation error: HTTP 403'); };
+  const jobsdb = 'https://hk.jobsdb.com/job/95358046';
+  const job = { id: '95358046', title: 'AI Engineer', advertiser: { name: 'JFE Consulting Limited' },
+    content: '<h2>Responsibilities</h2><p>Build agent workflows.</p><h2>Requirements</h2><p>Python experience.</p>' };
+  const fetchJobsdb = async (url, options) => {
+    assert.equal(url, 'https://hk.jobsdb.com/graphql');
+    assert.equal(options.method, 'POST');
+    assert.equal(options.redirect, 'error');
+    assert.equal(JSON.parse(options.body).variables.id, '95358046');
+    assert.match(JSON.parse(options.body).query, /content\(platform: WEB\)/);
+    return { data: { jobDetails: { job } } };
+  };
+  const posting = await extractPosting(jobsdb, blocked, url => readJobsdbPosting(url, fetchJobsdb));
+  assert.equal(posting.url, jobsdb);
+  assert.match(posting.text, /JFE Consulting Limited/);
+  assert.match(posting.text, /Build agent workflows/);
+  assert.match(posting.text, /Python experience/);
+  const fullContent = 'Responsibilities '.repeat(400) + 'Final requirement.';
+  const longPosting = await readJobsdbPosting(jobsdb, async () => ({
+    data: { jobDetails: { job: { ...job, content: fullContent } } },
+  }));
+  assert.equal(longPosting.text.endsWith('Final requirement.'), true);
+  assert.equal(longPosting.text.includes(fullContent), true);
+  const originalFetch = globalThis.fetch;
+  try {
+    globalThis.fetch = async (url, options) => new Response(JSON.stringify(await fetchJobsdb(url, options)));
+    assert.deepEqual(await extractPosting(jobsdb, blocked), posting);
+  } finally { globalThis.fetch = originalFetch; }
+  for (const response of [
+    { errors: [{ message: 'rate limited' }] },
+    { data: { jobDetails: null } },
+    { data: { jobDetails: { job: { ...job, id: '95358047' } } } },
+    { data: { jobDetails: { job: { ...job, content: '' } } } },
+    { data: { jobDetails: { job: { ...job, advertiser: null } } } },
+  ]) assert.equal(await readJobsdbPosting(jobsdb, async () => response), null);
+  for (const url of ['https://evil.example/job/95358046', 'http://hk.jobsdb.com/job/95358046',
+    'https://hk.jobsdb.com/jobs/95358046', 'https://hk.jobsdb.com/job/not-a-number']) {
+    assert.equal(await readJobsdbPosting(url, async () => { throw new Error('must not fetch'); }), null);
+  }
+  await assert.rejects(extractPosting(jobsdb, blocked, async () => { throw new Error('API unavailable'); }), /HTTP 403/);
   assert.deepEqual(await extractPosting(offer.url, blocked, async url => ({ url, text: 'API description' })), { url: offer.url, text: 'API description' });
   await assert.rejects(extractPosting(offer.url, blocked, async () => null), /HTTP 403/);
   assert.equal((await extractPosting(offer.url, extract, async () => { throw new Error('unused'); })).title, 'Engineer');

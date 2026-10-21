@@ -1,6 +1,7 @@
-/** Collect jobstreet postings using the shared profile search terms. */
+/** Collect JobStreet search results and read JobsDB posting details. */
 // @ts-check
 import { providerKeywords } from './_profile-keywords.mjs';
+import { htmlToText } from './_html-to-text.mjs';
 
 /** @typedef {import('./_types.js').Provider} Provider */
 
@@ -125,6 +126,31 @@ function buildSearchUrl(origin, params) {
   url.searchParams.set('pageSize', String(pageSize || DEFAULT_PAGE_SIZE));
   url.searchParams.set('page', String(page || 1));
   return url.href;
+}
+
+/**
+ * Read a JobsDB detail through its public API when the HTML page refuses access.
+ * @param {string} url
+ * @param {(url: string, options?: object) => Promise<any>} fetchJson
+ */
+export async function readJobsdbPosting(url, fetchJson) {
+  const page = new URL(url);
+  const id = /^\/job\/(\d+)\/?$/.exec(page.pathname)?.[1];
+  if (page.origin !== 'https://hk.jobsdb.com' || !id) return null;
+  const response = await fetchJson('https://hk.jobsdb.com/graphql', {
+    method: 'POST', headers: { 'content-type': 'application/json' }, redirect: 'error',
+    body: JSON.stringify({
+      operationName: 'JobDetails', variables: { id },
+      query: 'query JobDetails($id: ID!) { jobDetails(id: $id) { job { id title advertiser { name } content(platform: WEB) } } }',
+    }),
+  });
+  const job = response?.data?.jobDetails?.job;
+  if (response?.errors || job?.id !== id || typeof job?.title !== 'string' || !job.title.trim()
+      || typeof job?.advertiser?.name !== 'string' || !job.advertiser.name.trim()
+      || typeof job?.content !== 'string') return null;
+  const text = htmlToText(job.content, Infinity);
+  return text ? { url: `${page.origin}/job/${id}`, title: job.title,
+    text: [job.title, job.advertiser.name, text].join('\n\n') } : null;
 }
 
 /** @type {Provider} */
