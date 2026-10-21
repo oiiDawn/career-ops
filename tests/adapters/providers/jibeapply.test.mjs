@@ -1,4 +1,4 @@
-// tests/providers/jibeapply.test.mjs — moved verbatim from test-all.mjs (#1440).
+/** Verify JibeApply discovery normalization, pagination, and complete JD reads. */
 import { pass, fail, ROOT } from '../../helpers.mjs';
 import { join } from 'path';
 import { pathToFileURL } from 'url';
@@ -323,6 +323,14 @@ try {
   if (asked === 'https://careers.acme.com/api/jobs?keywords=129299' && read.url === 'https://careers.acme.com/jobs/129299'
       && read.text === withJd.description) pass('readJibeapplyPosting reads one posting through the list API');
   else fail(`readJibeapplyPosting: ${asked} ${JSON.stringify(read)}`);
+  const longText = 'Build agent services. '.repeat(250) + 'Required: three years of engineering experience.';
+  const longListing = { jobs: [{ data: { title: 'AI Engineer', slug: '129299', description: `<p>${longText}</p>` } }] };
+  const longJob = parseJibeapplyResponse(longListing, entry)[0];
+  const longRead = await readJibeapplyPosting(longJob.url, async () => longListing);
+  if (longJob.description === longText.slice(0, 4000).trim()
+      && longJob.scan_jd.text === longText && longRead?.text === longText) {
+    pass('jibeapply caps discovery summaries while retaining the full JD through detail reads');
+  } else fail('jibeapply must preserve requirements beyond the discovery summary cap');
   if (await readJibeapplyPosting('https://careers.acme.com/jobs/777', async () => listed) === null
       && await readJibeapplyPosting('https://careers.acme.com/roles/129299', async () => { throw new Error('no request'); }) === null) {
     pass('readJibeapplyPosting returns null for an unlisted posting or a non-posting path');

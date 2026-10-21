@@ -1,7 +1,8 @@
 // @ts-check
+/** Read JibeApply listings with capped summaries and intact JD evidence. */
 /** @typedef {import('./_types.js').Provider} Provider */
 
-import { htmlToText } from './_html-to-text.mjs';
+import { DESCRIPTION_CAP, htmlToText } from './_html-to-text.mjs';
 
 // JibeApply provider — hits the /api/jobs endpoint on the same hostname.
 // Auto-detects from careers_url pattern `https://<slug>.jibeapply.com`.
@@ -72,15 +73,16 @@ export function parseJibeapplyResponse(json, entry) {
       const slug = d.slug || d.req_id;
       if (!title || !slug) return null;
       const url = `${origin}${prefix}/jobs/${encodeURIComponent(slug)}`;
-      const description = htmlToText(String(d.description || '')).trim();
+      const jd = htmlToText(String(d.description || ''), Infinity);
+      const description = jd.slice(0, DESCRIPTION_CAP).trim();
       return {
         title,
         url,
         company: String(d.hiring_organization || entry.name || '').trim(),
         location: d.full_location || [d.city, d.country].filter(Boolean).join(', '),
         ...(description ? { description } : {}),
-        ...(description.length >= 200
-          ? { scan_jd: { text: description, final_url: url, retrieved_at: new Date().toISOString() } } : {}),
+        ...(jd.length >= 200
+          ? { scan_jd: { text: jd, final_url: url, retrieved_at: new Date().toISOString() } } : {}),
       };
     })
     .filter(Boolean);
