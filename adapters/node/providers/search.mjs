@@ -10,6 +10,7 @@ import { providerKeywords } from './_profile-keywords.mjs';
 import { parseRetryAfterMs, sleep } from './_http.mjs';
 
 const LINKEDIN_GAP_MS = 2000;
+export const LINKEDIN_TIMEOUT_MS = 20 * 60_000;
 let linkedinTurn = Promise.resolve();
 
 /** Identify budget exhaustion consistently across retries, pacing and browser reads. */
@@ -48,6 +49,10 @@ export function searchOptions(entry) {
   }
   if (search.method === 'linkedin' && (locations.length !== 1 || search.sites.length !== 1
       || search.sites[0] !== 'linkedin.com/jobs/view')) throw new Error('LinkedIn requires one location and linkedin.com/jobs/view');
+  if (search.posted_within_days !== undefined && (search.method !== 'linkedin'
+      || !Number.isInteger(search.posted_within_days) || search.posted_within_days < 1 || search.posted_within_days > 30)) {
+    throw new Error('search.posted_within_days must be an integer from 1 to 30 for LinkedIn');
+  }
   const max = entry.max_results ?? 50;
   if (!Number.isInteger(max) || max < 1 || max > 500) throw new Error('max_results must be an integer from 1 to 500');
   return { ...search, locations, max };
@@ -69,7 +74,7 @@ export function searchRequest(options, keyword, page = 0) {
   if (options.method === 'linkedin') {
     const url = new URL('https://www.linkedin.com/jobs/search/');
     url.search = new URLSearchParams({ keywords: keyword, location: options.locations[0],
-      f_TPR: 'r604800', f_JT: 'F', sortBy: 'DD', start: String(page * 25) }).toString();
+      f_TPR: `r${(options.posted_within_days ?? 7) * 86400}`, f_JT: 'F', sortBy: 'DD', start: String(page * 25) }).toString();
     return url.href;
   }
   const quote = value => `"${value.replace(/["\\]/g, ' ')}"`;
@@ -158,7 +163,7 @@ export async function collectSearch(entry, context, { search, read }) {
   const keywords = providerKeywords(context);
   const queues = keywords.map(keyword => ({ keyword, page: 0, rows: [], done: false }));
   const seen = new Set(), jobs = [], warnings = [];
-  const deadline = (context?.deadlineMs ?? Date.now() + 600_000) - 75_000;
+  const deadline = (context?.deadlineMs ?? Date.now() + (options.method === 'linkedin' ? LINKEDIN_TIMEOUT_MS : 600_000)) - 75_000;
   const queries = [];
   let bounded = false;
 
@@ -238,7 +243,8 @@ export default {
   async fetch(entry, context) {
     searchOptions(entry);
     providerKeywords(context);
-    context = { ...context, deadlineMs: context?.deadlineMs ?? Date.now() + 600_000 };
+    context = { ...context, deadlineMs: context?.deadlineMs ?? Date.now()
+      + (entry.search.method === 'linkedin' ? LINKEDIN_TIMEOUT_MS : 600_000) };
     const deadline = context.deadlineMs - 75_000;
     const browser = await chromium.launch({ headless: true });
     try {

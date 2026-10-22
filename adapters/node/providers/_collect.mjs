@@ -8,6 +8,7 @@ import { loadProviders, resolveProvider } from './_registry.mjs';
 import { makeHttpCtx } from './_http.mjs';
 import { isResolverFailure } from './_dns-cache.mjs';
 import { classifyFetchError } from './_fetch_error.mjs';
+import { LINKEDIN_TIMEOUT_MS } from './search.mjs';
 
 const providerDirectory = dirname(fileURLToPath(import.meta.url));
 const REVERSE_TIMEOUT_MS = 5 * 60_000;
@@ -36,7 +37,6 @@ export async function collect(input, providers = null, onResult = null) {
   if (input.mode != null && !['configured', 'reverse'].includes(input.mode)) {
     throw new Error('mode must be configured or reverse');
   }
-  const timeoutMs = input.mode === 'configured' ? CONFIGURED_TIMEOUT_MS : REVERSE_TIMEOUT_MS;
   const results = new Array(input.targets.length);
   const record = (index, result) => {
     results[index] = result;
@@ -61,6 +61,8 @@ export async function collect(input, providers = null, onResult = null) {
         continue;
       }
       let provider = resolved.provider;
+      const timeoutMs = provider.id === 'search' && target.search?.method === 'linkedin'
+        ? LINKEDIN_TIMEOUT_MS : input.mode === 'configured' ? CONFIGURED_TIMEOUT_MS : REVERSE_TIMEOUT_MS;
       let warning = null;
       const startedAt = Date.now();
       try {

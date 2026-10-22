@@ -181,6 +181,9 @@ def validate_config(config: object, *, provider_ids: set[str] | None = None) -> 
                         _issue(errors, f"{base}.search.locations", "must be an array of non-empty strings")
                     if search.get("method") == "linkedin" and (sites != ["linkedin.com/jobs/view"] or not isinstance(locations, list) or len(locations) != 1):
                         _issue(errors, f"{base}.search", "LinkedIn requires one location and linkedin.com/jobs/view")
+                    if "posted_within_days" in search and (search.get("method") != "linkedin"
+                            or type(search["posted_within_days"]) is not int or not 1 <= search["posted_within_days"] <= 30):
+                        _issue(errors, f"{base}.search.posted_within_days", "must be an integer from 1 to 30 for LinkedIn")
                     limit = company.get("max_results", 50)
                     if type(limit) is not int or not 1 <= limit <= 500:
                         _issue(errors, f"{base}.max_results", "must be an integer from 1 to 500")

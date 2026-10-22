@@ -60,6 +60,17 @@ assert.equal(global.results[0].capped, true);
 const configured = await collect({ targets: [{ name: 'Configured', provider: 'fixture' }],
   since_ms: 123, mode: 'configured' }, providers);
 assert.ok(configured.results[0].deadline_ms > Date.now() + 5 * 60_000);
+const searchBudgets = new Map([['search', { id: 'search', async fetch(target, context) {
+  const budget = target.search.method === 'linkedin' ? 20 * 60_000 : 10 * 60_000;
+  assert.ok(context.deadlineMs - Date.now() > budget - 1000);
+  assert.ok(context.deadlineMs - Date.now() <= budget);
+  return [];
+} }]]);
+const sourceBudgets = await collect({ mode: 'configured', targets: [
+  { name: 'Xi’an', provider: 'search', search: { method: 'linkedin' } },
+  { name: 'Web search', provider: 'search', search: { method: 'web' } },
+] }, searchBudgets);
+assert.deepEqual(sourceBudgets.results.map(row => row.status), ['fetched', 'fetched']);
 await assert.rejects(collect({ targets: [], concurrency: 21 }, providers), /concurrency/);
 await assert.rejects(collect({ targets: [], mode: 'unknown' }, providers), /mode/);
 

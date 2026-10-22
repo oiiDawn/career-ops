@@ -12,9 +12,17 @@ from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
-from career_ops.discovery.configured import discover
+from career_ops.discovery.configured import collect_provider_results, discover
 from career_ops.discovery.dedup import database_snapshot
 from career_ops.discovery.store import DiscoveryStore
+
+def linkedin_budget(command, **kwargs):
+    assert kwargs["timeout"] > 20 * 60
+    Path(command[-1]).write_text(json.dumps({"results": [{"status": "fetched", "jobs": []}]}))
+    return subprocess.CompletedProcess(command, 0, stdout="", stderr="")
+
+with patch("career_ops.discovery.configured.subprocess.run", side_effect=linkedin_budget):
+    collect_provider_results([({"name": "Xi'an", "provider": "search", "search": {"method": "linkedin"}}, True)], None)
 
 with tempfile.TemporaryDirectory() as temporary:
     root = Path(temporary)

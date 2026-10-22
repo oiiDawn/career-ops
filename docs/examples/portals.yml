@@ -2085,6 +2085,17 @@ tracked_companies:
 # Same title/location filtering and dedup apply.
 
 job_boards:
+  - name: LinkedIn — Xi'an
+    provider: search
+    search:
+      method: linkedin
+      sites:
+      - linkedin.com/jobs/view
+      locations:
+      - Xi'an, Shaanxi, China
+      posted_within_days: 30
+    max_results: 200
+    enabled: false
   - name: wellfound.com search — remote
     provider: search
     search:

@@ -107,11 +107,19 @@ waiting 10 then 20 seconds. A longer `Retry-After` increases the wait; if it exc
 60 seconds, skip that request rather than retrying before the server allows it.
 Exhausting retries skips the failed detail or search keyword
 without clearing the other queued work. Waits, navigation pacing and browser
-reads share the source deadline: configured collection uses 525 seconds of its
-ten-minute budget, preserving the existing 75-second reserve. A retry that cannot
+reads share the source deadline: each LinkedIn source has a twenty-minute budget
+with 1,125 seconds available for collection and a 75-second reserve. Other
+configured providers keep their ten-minute budgets. Both the Node collector and
+the enclosing Python process allow the extended LinkedIn deadlines. A retry that cannot
 fit ends collection with partial results. For search providers, a detail HTTP403
 is reported and skipped without retrying or discarding other queued postings.
 HTTP401/405 still stop that source.
+
+The enabled `LinkedIn — Xi'an` job board searches `Xi'an, Shaanxi, China` across
+all employers, using the shared profile keywords and up to 200 complete postings.
+Its `search.posted_within_days: 30` selects the last thirty days; other LinkedIn
+sources default to seven days. This source uses no employer filter. Normal
+posting filters, deduplication and qualification checks still apply after collection.
 
 The ten-minute score schedule selects retained unscored postings as well as scores
 marked `needs_rescore` (待重新评分). `refresh_reasons` distinguishes changed scoring

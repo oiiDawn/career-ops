@@ -86,7 +86,9 @@ def collect_provider_results(targets: list[tuple[dict, bool]], since_ms: float |
         input_path, output_path = Path(temporary) / "input.json", Path(temporary) / "output.json"
         input_path.write_text(json.dumps({"targets": [entry for entry, _ in targets], "since_ms": since_ms,
                                           "mode": "configured", "search_keywords": search_keywords}, ensure_ascii=False))
-        collector_timeout = max(900, math.ceil(len(targets) / 10) * 600 + 60)
+        linkedin_sources = sum(entry.get("provider") == "search" and isinstance(entry.get("search"), dict)
+                               and entry["search"].get("method") == "linkedin" for entry, _ in targets)
+        collector_timeout = max(900, math.ceil(len(targets) / 10) * 600 + linkedin_sources * 600 + 60)
         try:
             result = subprocess.run(["node", str(ROOT / "adapters/node/providers/_collect.mjs"), str(input_path), str(output_path)],
                                     cwd=ROOT, text=True, capture_output=True, timeout=collector_timeout)

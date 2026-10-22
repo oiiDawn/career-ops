@@ -9,6 +9,14 @@ const linkedin = searchOptions({ search: { method: 'linkedin', sites: ['linkedin
 assert.equal(new URL(searchRequest(linkedin, '智能体 & AI')).searchParams.get('keywords'), '智能体 & AI');
 assert.equal(new URL(searchRequest(linkedin, 'AI', 1)).searchParams.get('start'), '25');
 assert.equal(new URL(searchRequest(linkedin, 'AI')).searchParams.get('f_TPR'), 'r604800');
+const xian = searchOptions({ search: { ...linkedin, locations: ["Xi'an, Shaanxi, China"], posted_within_days: 30 } });
+const xianQuery = new URL(searchRequest(xian, 'Backend'));
+assert.equal(xianQuery.searchParams.get('location'), "Xi'an, Shaanxi, China");
+assert.equal(xianQuery.searchParams.get('f_TPR'), 'r2592000');
+assert.equal(xianQuery.searchParams.has('f_C'), false);
+for (const days of [0, -1, 1.5, 31, '30', true, null]) {
+  assert.throws(() => searchOptions({ search: { ...linkedin, posted_within_days: days } }), /posted_within_days/);
+}
 for (const url of ['https://jobs.example.com.evil/roles/1', 'https://jobs.example.com/roles-other/1', 'http://jobs.example.com/roles/1', 'https://u:p@jobs.example.com/roles/1']) assert.equal(withinSites(url, options.sites), false);
 assert.throws(() => searchOptions({ ...entry, search: { ...entry.search, sites: ['127.0.0.1'] } }), /Invalid/);
 assert.throws(() => searchOptions({ ...entry, max_results: 0 }), /max_results/);
@@ -107,6 +115,21 @@ let now = realNow();
 Date.now = () => now;
 console.error = message => terminalWarnings.push(message);
 try {
+  const extendedStart = now;
+  const extended = await collectSearch({ name: 'Xi’an', search: xian, max_results: 70 }, {
+    searchKeywords: ['Backend'], maxPages: 1,
+  }, {
+    search: async () => Array.from({ length: 70 }, (_, index) => ({ url: `https://www.linkedin.com/jobs/view/${1000 + index}` })),
+    read: async address => {
+      now += 10_000;
+      const page = detail(address);
+      page.postings[0].hiringOrganization.name = Number(address.split('/').pop()) % 2 ? 'Employer A' : 'Employer B';
+      return page;
+    },
+  });
+  assert.equal(extended.length, 70, 'LinkedIn keeps collecting beyond the previous ten-minute deadline');
+  assert.ok(now - extendedStart > 600_000);
+  assert.deepEqual(new Set(extended.map(job => job.company)), new Set(['Employer A', 'Employer B']));
   const waits = [], attempts = new Map();
   const retryContext = { searchKeywords: ['AI', '智能体'], maxPages: 1, deadlineMs: now + 600_000,
     sleep: async ms => { waits.push(ms); now += ms; } };

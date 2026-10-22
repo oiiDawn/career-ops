@@ -61,3 +61,10 @@ for section in ("tracked_companies", "job_boards"):
         "method": "linkedin", "sites": ["linkedin.com/jobs/view"], "locations": None}, "max_results": 0}]}
     paths = {error["path"] for error in validate_config(config, provider_ids={"search"})["errors"]}
     assert f"{section}[0].search.locations" in paths and f"{section}[0].max_results" in paths
+
+for days in (0, -1, 1.5, 31, "30", True, None, 30):
+    config = {"job_boards": [{"name": "Xi'an", "provider": "search", "search": {
+        "method": "linkedin", "sites": ["linkedin.com/jobs/view"],
+        "locations": ["Xi'an, Shaanxi, China"], "posted_within_days": days}}]}
+    errors = validate_config(config, provider_ids={"search"})["errors"]
+    assert bool(errors) == (type(days) is not int or not 1 <= days <= 30), (days, errors)
