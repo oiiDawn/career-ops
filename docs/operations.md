@@ -102,6 +102,15 @@ score advances existing evaluation tasks and uses the previously authorized
 notification policy. Check `system doctor --json` and the offline suite before enabling
 changed wrappers. Neither doctor nor offline fixtures send candidate data.
 
+LinkedIn discovery uses the public `/jobs-guest/jobs/api/seeMoreJobPostings/search`
+list endpoint with ten-record offsets. Each keyword can read up to 25 pages
+(250 positions); health probes retain their one-page limit. The final list URL
+must preserve the endpoint and all query parameters. A successful empty fragment
+(whitespace, doctype or comments only) ends that list; unreadable shells and
+login/challenge responses remain failures. Repeated
+pages are detected by the same keyword's posting ID sets; cross-keyword job
+deduplication does not stop pagination.
+
 LinkedIn discovery retries a rate-limited search or detail request at most twice,
 waiting 10 then 20 seconds. A longer `Retry-After` increases the wait; if it exceeds
 60 seconds, skip that request rather than retrying before the server allows it.

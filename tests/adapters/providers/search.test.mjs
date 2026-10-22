@@ -7,7 +7,7 @@ const options = searchOptions(entry);
 assert.equal(searchRequest(options, '智能体 & AI'), 'site:jobs.example.com/roles "智能体 & AI" ("Hong Kong")');
 const linkedin = searchOptions({ search: { method: 'linkedin', sites: ['linkedin.com/jobs/view'], locations: ['Shanghai, China'] } });
 assert.equal(new URL(searchRequest(linkedin, '智能体 & AI')).searchParams.get('keywords'), '智能体 & AI');
-assert.equal(new URL(searchRequest(linkedin, 'AI', 1)).searchParams.get('start'), '25');
+assert.equal(new URL(searchRequest(linkedin, 'AI', 1)).searchParams.get('start'), '10');
 assert.equal(new URL(searchRequest(linkedin, 'AI')).searchParams.get('f_TPR'), 'r604800');
 const xian = searchOptions({ search: { ...linkedin, locations: ["Xi'an, Shaanxi, China"], posted_within_days: 30 } });
 const xianQuery = new URL(searchRequest(xian, 'Backend'));

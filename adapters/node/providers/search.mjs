@@ -72,15 +72,32 @@ export function withinSites(value, sites) {
 
 export function searchRequest(options, keyword, page = 0) {
   if (options.method === 'linkedin') {
-    const url = new URL('https://www.linkedin.com/jobs/search/');
+    const url = new URL('https://www.linkedin.com/jobs-guest/jobs/api/seeMoreJobPostings/search');
     url.search = new URLSearchParams({ keywords: keyword, location: options.locations[0],
-      f_TPR: `r${(options.posted_within_days ?? 7) * 86400}`, f_JT: 'F', sortBy: 'DD', start: String(page * 25) }).toString();
+      f_TPR: `r${(options.posted_within_days ?? 7) * 86400}`, f_JT: 'F', sortBy: 'DD', start: String(page * 10) }).toString();
     return url.href;
   }
   const quote = value => `"${value.replace(/["\\]/g, ' ')}"`;
   const scope = options.sites.map(site => `site:${site}`).join(' OR ');
   return `${options.sites.length === 1 ? scope : `(${scope})`} ${quote(keyword)}`
     + (options.locations.length ? ` (${options.locations.map(quote).join(' OR ')})` : '');
+}
+
+/** Require the requested list identity before accepting cards or a terminal empty response. */
+export function linkedInSearchRows(raw, request) {
+  const expected = new URL(request), actual = new URL(raw.url);
+  expected.searchParams.sort();
+  actual.searchParams.sort();
+  if (actual.href !== expected.href) throw new Error('LinkedIn search redirected');
+  const rows = raw.anchors.map(anchor => ({ url: new URL(anchor.href, raw.url).href }))
+    .filter(row => withinSites(row.url, ['linkedin.com/jobs/view']));
+  const emptyResponse = typeof raw.body === 'string' && !raw.text?.trim()
+    && !raw.body.replace(/<!doctype\s+html\s*>|<!--[\s\S]*?-->/gi, '').trim();
+  if (!rows.length && !emptyResponse
+      && !/no (?:matching )?(?:jobs|results)|0 jobs|未找到/i.test(raw.text)) {
+    throw new Error('LinkedIn returned no readable results or explicit empty state');
+  }
+  return rows;
 }
 
 /** Identify eFinancialCareers details independently of their changeable title slug. */
@@ -161,7 +178,8 @@ export function jobFromPage(raw, url) {
 export async function collectSearch(entry, context, { search, read }) {
   const options = searchOptions(entry);
   const keywords = providerKeywords(context);
-  const queues = keywords.map(keyword => ({ keyword, page: 0, rows: [], done: false }));
+  const queues = keywords.map(keyword => ({ keyword, page: 0, rows: [], done: false, pages: new Set() }));
+  const maxPages = context?.maxPages ?? (options.method === 'linkedin' ? 25 : 10);
   const seen = new Set(), jobs = [], warnings = [];
   const deadline = (context?.deadlineMs ?? Date.now() + (options.method === 'linkedin' ? LINKEDIN_TIMEOUT_MS : 600_000)) - 75_000;
   const queries = [];
@@ -194,13 +212,19 @@ export async function collectSearch(entry, context, { search, read }) {
           queue.rows = rows.filter(row => withinSites(row.url, options.sites));
           queue.request = request;
           queue.page++;
-          queue.done = options.method === 'web' || !rows.length || queue.page >= (context?.maxPages ?? 10);
-          if (options.method === 'web' && rows.length >= 20 || queue.page >= (context?.maxPages ?? 10)) bounded = true;
+          queue.done = options.method === 'web' || !rows.length || queue.page >= maxPages;
+          if (options.method === 'web' && rows.length >= 20 || rows.length && queue.page >= maxPages) bounded = true;
           if (rows.length && !queue.rows.length) warnings.push(`${queue.keyword}: results did not match source scope`);
           queue.rows = queue.rows.filter(row => !withinSites(row.url, ['efinancialcareers.hk']) || efinancialJobId(row.url));
-          if (queue.rows.length && queue.rows.every(row => seen.has(postingKey(row.url)))) {
-            queue.rows = [];
-            if (!queue.done) { queue.done = true; bounded = true; warnings.push(`${queue.keyword}: search repeated a page`); }
+          if (queue.rows.length) {
+            const pageKey = JSON.stringify([...new Set(queue.rows.map(row => postingKey(row.url)))].sort());
+            if (queue.pages.has(pageKey)) {
+              queue.rows = [];
+              queue.done = true;
+              bounded = true;
+              warnings.push(`${queue.keyword}: search repeated a page`);
+            }
+            queue.pages.add(pageKey);
           }
         } catch (error) {
           warnings.push(`${queue.keyword}: ${error.message}`);
@@ -258,22 +282,16 @@ export default {
           if (response && !response.ok()) throw Object.assign(new Error(`HTTP ${response.status()}`), {
             retryAfter: response.headers()['retry-after'],
           });
+          const body = mode === 'listing' && response ? await response.text() : undefined;
           const raw = await readPage(page, { mode, timeout: Math.min(10000, remainingSearchMs(deadline)) });
-          return { ...raw, url: page.url() };
+          return { ...raw, url: page.url(), body };
         } finally { await page.context().close(); }
       };
       return await collectSearch(entry, context, {
         read,
         search: async (request, method) => {
           if (method === 'web') return webSearch(request);
-          const raw = await read(request, 'listing');
-          if (new URL(raw.url).pathname !== '/jobs/search/') throw new Error('LinkedIn search redirected');
-          const rows = raw.anchors.map(anchor => ({ url: new URL(anchor.href, raw.url).href }))
-            .filter(row => withinSites(row.url, ['linkedin.com/jobs/view']));
-          if (!rows.length && !/no (?:matching )?(?:jobs|results)|0 jobs|未找到/i.test(raw.text)) {
-            throw new Error('LinkedIn returned no readable results or explicit empty state');
-          }
-          return rows;
+          return linkedInSearchRows(await read(request, 'listing'), request);
         },
       });
     } finally { await browser.close(); }
