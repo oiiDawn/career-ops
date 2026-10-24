@@ -35,8 +35,6 @@ def action_refusal(job: dict, action: str) -> str | None:
         return "该职位没有可用的 JD 扫描结果"
     if action == "prepare" and not job["scores"]:
         return "该职位还没有打分，请先打分"
-    if action == "prepare" and job["needs_rescore"]:
-        return "待重新评分（输入已变化或公司证据已过期），请先重新打分"
     return None
 
 

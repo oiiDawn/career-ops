@@ -384,11 +384,14 @@ def start_and_run(directory: Path, opportunity: str, module: str, input_text: st
         score = store.module_result(upstream, "score")
         if not scan or scan["outcome"] != "jd_report" or not score or score["outcome"] != "score":
             store.close()
-            raise ValueError("Missing current completed scan and score results")
-        if score_refresh_reasons(score_is_current(store.db, score["input_hash"], scan["artifact"]),
-                                 score.get("artifact", {}).get("company_profiles", {})):
+            raise ValueError("Missing completed scan and score results")
+        scored_inputs = store.db.execute(
+            "SELECT input_payload FROM tasks WHERE module='score' AND opportunity_id=? AND input_hash=? ORDER BY rowid DESC LIMIT 1",
+            (upstream, score["input_hash"]),
+        ).fetchone()
+        if not scored_inputs or digest(scored_inputs[0]) != score["input_hash"]:
             store.close()
-            raise ValueError("Current score is stale for the scan or candidate inputs")
+            raise ValueError("Retained score input integrity check failed")
         input_text = apply_inputs(scan["artifact"], score)
     elif module == "apply":
         store.close()

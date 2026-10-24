@@ -548,18 +548,17 @@ function actionButton(id, action, label, primary = true) {
 
 function actions(d) {
   const run = runs[d.id];
-  const task = d.apply_task;
   if (run?.status === "running") {
     return `<button class="primary" disabled>⏳ ${ACTION_TEXT[run.action].running}…</button><span class="sub">通常需要几分钟，可以关闭面板，完成后会自动刷新</span>`;
   }
   if (d.scan_outcome !== "jd_report") return `<span class="sub">没有可用的 JD 扫描结果，暂不能打分或生成材料</span>`;
   if (!d.scores) return `${actionButton(d.id, "rescore", "开始打分")}<span class="sub">打分后才能生成申请材料</span>`;
+  const label = d.materials.length ? "重新生成材料" : "生成申请材料";
   if (d.needs_rescore) {
     return `${pill("needs_rescore")} ${actionButton(d.id, "rescore", "重新打分")}
-      <button class="ghost" disabled title="待重新评分">生成申请材料</button>
-      <span class="sub">${esc(refreshReason(d))}</span>`;
+      ${actionButton(d.id, "prepare", label, false)}
+      <span class="sub">${esc(refreshReason(d))}；可使用现有评分生成材料，不会提交申请</span>`;
   }
-  const label = d.materials.length ? "重新生成材料" : "生成申请材料";
   return `${actionButton(d.id, "prepare", label)}<span class="sub">不会提交申请</span>`;
 }
 

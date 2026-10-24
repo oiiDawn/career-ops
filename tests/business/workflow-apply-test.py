@@ -109,9 +109,22 @@ with tempfile.TemporaryDirectory(prefix="career-ops-apply-") as temporary:
     first = source(root / "first.json", "job-1", "Build reviewed AI agents.")
     call(directory, inputs, "task", "start", "scan", "job-1", str(first))
     call(directory, inputs, "task", "start", "score", "job-1", "scan:job-1")
+    (inputs / "cv.md").write_text("Current verified candidate facts")
+    with sqlite3.connect(directory / "opportunities.db") as connection:
+        score_row = connection.execute("SELECT payload FROM results WHERE opportunity_id='job-1' AND module='score'").fetchone()
+        retained_score = json.loads(score_row[0])
+        retained_score["artifact"]["company_profiles"] = {"company": {"valid_until": "2000-01-01"}}
+        connection.execute("UPDATE results SET payload=? WHERE opportunity_id='job-1' AND module='score'", (json.dumps(retained_score),))
+    with sqlite3.connect(directory / "opportunities.db") as connection:
+        connection.execute("UPDATE tasks SET input_payload=input_payload || ' ' WHERE opportunity_id='job-1' AND module='score'")
+    call(directory, inputs, "task", "start", "apply", "job-1", "score:job-1", expected=1)
+    with sqlite3.connect(directory / "opportunities.db") as connection:
+        connection.execute("UPDATE tasks SET input_payload=substr(input_payload,1,length(input_payload)-1) WHERE opportunity_id='job-1' AND module='score'")
     package = call(directory, inputs, "task", "start", "apply", "job-1", "score:job-1")
     with sqlite3.connect(directory / "opportunities.db") as connection:
         stored_input = json.loads(connection.execute("SELECT input_payload FROM tasks WHERE task_id=?", (package["task_id"],)).fetchone()[0])
+    assert stored_input["cv"] == "Current verified candidate facts"
+    assert stored_input["score_result"] == retained_score
     assert stored_input["artifact_contract_version"] == 4
     assert stored_input["articles"] == "Approved article evidence"
     assert stored_input["voice"] == "Direct first-person voice"

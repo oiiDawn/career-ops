@@ -49,6 +49,10 @@ Daily commands derive inputs from the opportunity ID:
 .venv/bin/python -B -m career_ops task show TASK_ID
 ```
 
+Application materials use current candidate inputs and the latest retained JD and
+score. A pending re-score or expired company evidence remains visible as a warning
+and does not block material preparation; a completed JD scan and score are required.
+
 Discovery skips previously observed source posting URLs, including LinkedIn
 locale, slug and tracking-parameter variants of one numeric posting ID. New
 URLs reach a shared resolver inside the SQLite write transaction in both

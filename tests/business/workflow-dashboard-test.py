@@ -2,12 +2,14 @@
 
 import hashlib
 import json
+import os
 from http.server import ThreadingHTTPServer
 from pathlib import Path
 import sqlite3
 import sys
 import tempfile
 import threading
+from unittest.mock import patch
 from urllib.error import HTTPError
 import time
 from urllib.request import Request, urlopen
@@ -29,7 +31,7 @@ class StubRunner:
         return {"action": action, "status": "running"}
 
     def status(self, opportunity_id: int) -> dict | None:
-        return next(({"action": action, "status": "running"} for key, action in self.started if key == opportunity_id), None)
+        return next(({"action": action, "status": "running"} for key, action in reversed(self.started) if key == opportunity_id), None)
 
     def statuses(self) -> dict[int, dict]:
         return {key: {"action": action, "status": "running"} for key, action in self.started}
@@ -86,13 +88,16 @@ with tempfile.TemporaryDirectory() as temporary:
                 "company": "Example", "role": "Engineer", "jd": "JD text", "captured_at": "2026-10-01T00:00:00Z",
                 "location_evidence": "Shanghai", "liveness": "active", "prescreen": prescreen}
 
-    # Job 2 is scored against today's inputs; job 3's score predates an input change.
-    score_hashes = {"2": digest(score_inputs(jd_report("2"))), "3": "stale-inputs"}
+    score_payloads = {opportunity: score_inputs(jd_report(opportunity)) for opportunity in ("2", "3")}
+    previous_inputs = json.loads(score_payloads["3"])
+    previous_inputs["cv"] = "Previous candidate facts"
+    score_payloads["3"] = json.dumps(previous_inputs, ensure_ascii=False, sort_keys=True)
+    score_hashes = {opportunity: digest(payload) for opportunity, payload in score_payloads.items()}
     for opportunity in ("1", "2", "3"):
         scan = {"outcome": "jd_report", "input_hash": "h", "artifact": jd_report(opportunity)}
         db.execute("INSERT INTO results VALUES(?,?,?,?,?,?)", (f"scan-{opportunity}", f"scan-{opportunity}", opportunity, "scan", "h", json.dumps(scan)))
     for opportunity, input_hash in score_hashes.items():
-        db.execute("INSERT INTO tasks VALUES(?,?,?,?,?,?,?,?,?)", (f"score-{opportunity}", opportunity, "score", "completed", input_hash, 1, None, "v", score_inputs(jd_report(opportunity))))
+        db.execute("INSERT INTO tasks VALUES(?,?,?,?,?,?,?,?,?)", (f"score-{opportunity}", opportunity, "score", "completed", input_hash, 1, None, "v", score_payloads[opportunity]))
         scored = {"outcome": "score", "input_hash": input_hash, "artifact": {"report": "## A. 岗位概览\n\nGood fit", "score": score, "scoring_model": "attractiveness-v4", "dimensions": {"culture": {"score": None, "reason": "no_matching_valid_profile"}}, "company_profiles": {"company": {"profile_id": "company-x", "valid_until": "2000-01-01"}}}}
         db.execute("INSERT INTO results VALUES(?,?,?,?,?,?)", (f"score-{opportunity}", f"score-{opportunity}", opportunity, "score", input_hash, json.dumps(scored)))
         if opportunity == "2":
@@ -161,39 +166,42 @@ with tempfile.TemporaryDirectory() as temporary:
         fetch(base, "/api/jobs/2/prepare", 403, "POST", {**action, "Host": "evil.example"})
         fetch(base, "/api/jobs/2/unknown", 404, "POST", action)
         assert "还没有打分" in fetch(base, "/api/jobs/1/prepare", 409, "POST", action)["error"]
-        assert "过期" in fetch(base, "/api/jobs/3/prepare", 409, "POST", action)["error"]
         fetch(base, "/api/jobs/99/prepare", 404, "POST", action)
         assert runner.started == []
-        assert "待重新评分" in fetch(base, "/api/jobs/2/prepare", 409, "POST", action)["error"]
+        assert fetch(base, "/api/jobs/2/prepare", 202, "POST", action)["run"]["action"] == "prepare"
+        assert fetch(base, "/api/jobs/3/prepare", 202, "POST", action)["run"]["action"] == "prepare"
         origin = {**action, "Origin": base}
         assert fetch(base, "/api/jobs/2/rescore", 202, "POST", origin)["run"]["status"] == "running"
         assert fetch(base, "/api/jobs/1/rescore", 202, "POST", action)["run"]["action"] == "rescore"
-        assert runner.started == [(2, "rescore"), (1, "rescore")]
-        assert fetch(base, "/api/jobs/2/run")["run"]["action"] == "rescore" and fetch(base, "/api/jobs/3/run")["run"] is None
+        assert runner.started == [(2, "prepare"), (3, "prepare"), (2, "rescore"), (1, "rescore")]
+        assert fetch(base, "/api/jobs/2/run")["run"]["action"] == "rescore" and fetch(base, "/api/jobs/3/run")["run"]["action"] == "prepare"
         assert {job["id"]: job["run"] for job in fetch(base, "/api/jobs")} == {
-            1: {"action": "rescore", "status": "running"}, 2: {"action": "rescore", "status": "running"}, 3: None, 4: None}
+            1: {"action": "rescore", "status": "running"}, 2: {"action": "rescore", "status": "running"}, 3: {"action": "prepare", "status": "running"}, 4: None}
         assert fetch(base, "/api/jobs/3")["apply_task"] == {"task_id": "apply-3", "status": "completed", "reason": None}
     finally:
         server.shutdown()
         server.server_close()
     assert hashlib.sha256(database.read_bytes()).hexdigest() == before, "dashboard must not write the store"
 
-    # The real runner delegates to the CLI; job 3's score is stale, so the CLI refuses before any task or model call.
     real = ActionRunner(directory)
-    assert real.start(3, "prepare")["status"] == "running"
-    try:
-        real.start(3, "rescore")
-        raise AssertionError("duplicate preparation must be refused")
-    except RuntimeError:
-        pass
-    deadline = time.monotonic() + 60
-    while real.status(3)["status"] == "running" and time.monotonic() < deadline:
-        time.sleep(0.2)
+    with patch.dict(os.environ, {
+        "CAREER_OPS_MODEL_STUB": str(ROOT / "tests/fixtures/workflow-model-runner.py"),
+        "CAREER_OPS_RESUME_RENDERER": f"{sys.executable} {ROOT / 'tests/fixtures/workflow-resume-renderer.py'}",
+    }):
+        assert real.start(3, "prepare")["status"] == "running"
+        try:
+            real.start(3, "rescore")
+            raise AssertionError("duplicate preparation must be refused")
+        except RuntimeError:
+            pass
+        deadline = time.monotonic() + 60
+        while real.status(3)["status"] == "running" and time.monotonic() < deadline:
+            time.sleep(0.2)
     finished = real.status(3)
-    assert finished["status"] == "failed" and finished["finished_at"], finished
-    assert "Current score is stale" in finished["error"], finished["error"]
+    assert finished["status"] == "succeeded" and finished["finished_at"], finished
+    assert finished["task"]["status"] == "completed", finished
     with sqlite3.connect(database) as check:
-        assert check.execute("SELECT COUNT(*) FROM tasks WHERE opportunity_id='3' AND module='apply'").fetchone()[0] == 2
+        assert check.execute("SELECT COUNT(*) FROM tasks WHERE opportunity_id='3' AND module='apply'").fetchone()[0] == 3
 
     # Application records are written synchronously through the CLI with the page's idempotency key.
     server = ThreadingHTTPServer(("127.0.0.1", 0), handler_for(database, StubRunner()))

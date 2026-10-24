@@ -94,7 +94,7 @@ def parser() -> argparse.ArgumentParser:
 
     apply = commands.add_parser("apply", help="prepare materials and maintain application records")
     applications = apply.add_subparsers(dest="operation", required=True)
-    prepare = applications.add_parser("prepare", help="prepare materials from the current score")
+    prepare = applications.add_parser("prepare", help="prepare materials from current candidate inputs and the latest retained score")
     prepare.add_argument("opportunity")
     prepare.add_argument("--re-evaluate", action="store_true")
     application = applications.add_parser("record", help="record a user-confirmed application event")
