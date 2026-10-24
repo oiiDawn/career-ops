@@ -4,6 +4,27 @@ Install dependencies with `uv sync --locked` and `npm ci`. The root `.venv`
 is the Career Ops Python environment. Run `.venv/bin/python -B -m career_ops
 --help`; each command has its own `--help`.
 
+## Start local services
+
+Double-click `start.command` in the repository root, or run `./start.command`
+from a terminal. It starts Docker Desktop if needed, reuses the existing sibling
+checkouts `../reactive-resume` and `../langfuse` (including its local Compose
+override), and starts their database, cache and storage dependencies. Install
+dependencies and build/pull the Docker images once before using this launcher;
+it does not build, update images or recreate existing containers.
+
+The launcher waits for HTTP health checks and prints the addresses:
+
+- Career Ops Dashboard: <http://127.0.0.1:8765>
+- Reactive Resume: <http://127.0.0.1:3000>
+- Langfuse: <http://127.0.0.1:3001>
+
+Repeated runs reuse an existing Dashboard. Its background process logs to
+`local/dashboard.log` and continues after the terminal closes. To stop it, send
+`kill` to the PID reported by `lsof -tiTCP:8765 -sTCP:LISTEN`. Docker services
+keep their existing Compose port bindings and restart policies. This launcher
+does not start Hermes, run discovery/scoring, or send notifications.
+
 | Command | Purpose |
 | --- | --- |
 | `discover [global]` | Collect configured sources or sweep public ATS directories |
