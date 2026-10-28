@@ -35,7 +35,7 @@ with tempfile.TemporaryDirectory() as temporary:
         INSERT INTO opportunities(id,url,company,role,source,state,application_state) VALUES(42,'https://example.com/job/42','Example','Engineer','provider','discovered','none');
         INSERT INTO artifacts VALUES(1,42,'verified-application-pdf','/review/resume.pdf','sha-42');
         INSERT INTO tasks VALUES('apply-1','42','apply','completed','hash',1,NULL,'oii-333-v1','{}');
-        INSERT INTO results VALUES('apply-1','apply-1','42','apply','hash','{"outcome":"package","artifact":{"version":2,"package_hash":"package-42","files":{"resume_pdf":"/review/resume.pdf"},"file_hashes":{"resume_pdf":"sha-42"}}}');
+        INSERT INTO results VALUES('apply-1','apply-1','42','apply','hash','{"outcome":"package","artifact":{"package_hash":"package-42","files":{"resume_pdf":"/review/resume.pdf"},"file_hashes":{"resume_pdf":"sha-42"}}}');
         """
     )
     database.close()

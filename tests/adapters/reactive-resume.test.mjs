@@ -3,15 +3,15 @@
  */
 
 import assert from 'node:assert/strict';
-import { copyFile, mkdir, mkdtemp, readFile, rm } from 'node:fs/promises';
+import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { dirname, join } from 'node:path';
+import { join } from 'node:path';
 import { buildResumePatch, renderReactiveResume } from '../../adapters/node/resume.mjs';
 
 const root = await mkdtemp(join(tmpdir(), 'career-ops-reactive-resume-'));
 try {
   const metadataPath = join(root, 'output', '007-acme-role', 'cv', 'reactive-resume.json');
-  const outputPath = join(root, 'output', '007-acme-role', 'cv', 'tailored', 'v001', 'cv.pdf');
+  const outputPath = join(root, 'output', '007-acme-role', 'cv', 'cv.pdf');
   const payload = {
     page_format: 'a4',
     candidate: {
@@ -49,7 +49,7 @@ try {
     return new Response('unexpected request', { status: 500 });
   };
   const options = {
-    payload, outputPath, metadataPath, taskId: '123e4567-e89b-12d3-a456-426614174000', company: 'Acme', role: 'Role', version: 1,
+    payload, outputPath, metadataPath, taskId: '123e4567-e89b-12d3-a456-426614174000', company: 'Acme', role: 'Role',
     baseResumeId: 'base-id', apiBaseUrl: 'http://127.0.0.1:3000/api/openapi', apiKey: 'test-key', fetchImpl,
   };
   await renderReactiveResume(options);
@@ -82,13 +82,10 @@ try {
   });
   assert.equal(JSON.parse(await readFile(workflowOptions.metadataPath, 'utf8')).slug,
     'career-ops-workflow-123e4567-e89b-12d3-a456-426614174000');
-  const nextMetadata = join(root, 'workflow', 'v002', 'reactive-resume.json');
-  await mkdir(dirname(nextMetadata), { recursive: true });
-  await copyFile(workflowOptions.metadataPath, nextMetadata);
-  await renderReactiveResume({ ...workflowOptions, payload: { ...payload, projects_start_on_new_page: true }, metadataPath: nextMetadata, version: 2 });
+  await renderReactiveResume({ ...workflowOptions, payload: { ...payload, projects_start_on_new_page: true } });
   const lastTaskPatch = calls.filter((call) => call.method === 'PATCH' && call.path === '/resumes/resume-workflow').at(-1);
   assert.equal(lastTaskPatch.body.operations.find((op) => op.path === '/sections/projects/startOnNewPage').value, true);
-  assert.equal(calls.filter((call) => call.method === 'POST').length, 1, 'a new package version reuses the task copy');
+  assert.equal(calls.filter((call) => call.method === 'POST').length, 1, 'regeneration reuses the task copy');
   await assert.rejects(
     renderReactiveResume({ ...options, payload: { summary: '' }, fetchImpl: () => { throw new Error('must not call API'); } }),
     /candidate\.name is required/,

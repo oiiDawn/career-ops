@@ -51,7 +51,7 @@ def fetch(base: str, path: str, status: int = 200, method: str = "GET", headers:
 
 with tempfile.TemporaryDirectory() as temporary:
     directory = Path(temporary)
-    package = directory / "package-v001"
+    package = directory / "Example__AI-Engineer__1"
     package.mkdir()
     (package / "upskill.md").write_text("# Upskill\n\nLearn **evals**.")
     (package / "interview-prep.md").write_text("# Prep")

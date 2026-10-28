@@ -1,4 +1,4 @@
-"""Verify apply packages publish without review, supersede failures and migrate staged drafts."""
+"""Verify readable single-package publication, replacement and failure recovery."""
 
 import json
 import os
@@ -11,7 +11,7 @@ import tempfile
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
 from career_ops.db import BusinessStore
-from career_ops.input_contracts import digest, validate_resume_payload
+from career_ops.input_contracts import validate_resume_payload
 
 PYTHON = ROOT / ".venv" / "bin" / "python"
 RUNNER = str(ROOT / 'tests' / 'fixtures' / 'workflow-model-runner.py')
@@ -23,41 +23,6 @@ except ValueError as error:
     assert "projects_start_on_new_page" in str(error)
 else:
     raise AssertionError("Non-boolean layout instruction was accepted")
-
-with tempfile.TemporaryDirectory(prefix="career-ops-draft-migration-") as temporary:
-    database = Path(temporary) / "opportunities.db"
-    store = BusinessStore(database)
-    staged = store.start("legacy-draft", "apply", '{"feedback":["tighten"],"jd_report":{}}')["task_id"]
-    failed = store.start("legacy-failed", "apply", "{}")["task_id"]
-    abandoned = store.start("legacy-jd-change", "apply", "{}")["task_id"]
-    store.wait(staged, "user_review")
-    store.wait(failed, "failure:RuntimeError")
-    store.wait(abandoned, "jd_changed")
-    store.set_context(abandoned, "input_change", {"diff": "changed JD"})
-    store.db.executescript("""
-        CREATE TABLE drafts(task_id TEXT, version INTEGER, input_hash TEXT, package_hash TEXT, payload TEXT);
-        CREATE TABLE feedback(id INTEGER PRIMARY KEY, task_id TEXT, text TEXT);
-        CREATE TABLE confirmations(task_id TEXT PRIMARY KEY, input_hash TEXT, package_hash TEXT);
-    """)
-    for version, letter in ((1, "old"), (2, "current")):
-        store.db.execute("INSERT INTO drafts VALUES(?,?,?,?,?)",
-                         (staged, version, "stale", f"hash-{version}", json.dumps({"package": {"cover_letter": letter}})))
-    store.close()
-    store = BusinessStore(database)
-    published = store.result(staged)
-    assert published["outcome"] == "package" and published["material_hash"] == "hash-2"
-    assert published["artifact"] == {"package": {"cover_letter": "current"}}
-    task = store.task(staged)
-    assert task["status"] == "completed" and task["input_payload"] == '{"jd_report":{}}'
-    assert task["input_hash"] == published["input_hash"] == digest('{"jd_report":{}}')
-    assert store.task(failed)["waiting_reason"] == "failure:RuntimeError"
-    assert store.task(abandoned)["status"] == "cancelled"
-    assert not store.db.execute("SELECT 1 FROM task_context WHERE key='input_change'").fetchone()
-    assert not store.db.execute(
-        "SELECT 1 FROM sqlite_master WHERE type='table' AND name IN ('drafts','feedback','confirmations')"
-    ).fetchone()
-    store.close()
-    BusinessStore(database).close()
 
 
 def call(directory: Path, input_root: Path, *args: str, expected: int = 0,
@@ -137,6 +102,7 @@ with tempfile.TemporaryDirectory(prefix="career-ops-apply-") as temporary:
     assert set(files) == {"resume_payload", "changes", "cover_letter", "upskill", "interview_prep", "questions",
                           "resume_pdf", "resume_metadata"}
     assert all(Path(path).is_file() for path in files.values())
+    assert {Path(path).parent for path in files.values()} == {directory / "applications" / "Example__AI-Engineer__job-1"}
     assert Path(files["cover_letter"]).read_text() == "Grounded cover letter"
     assert package["artifact"]["artifact"]["pdf_receipt"]["pages"] == 1
 
@@ -145,9 +111,23 @@ with tempfile.TemporaryDirectory(prefix="career-ops-apply-") as temporary:
     assert call(directory, inputs, "task", "cancel", package["task_id"])["status"] == "completed"
     (inputs.parent / "rules" / "applications" / "workflow.md").write_text("Prepare materials; never submit or send.")
     call(directory, inputs, "task", "start", "apply", "job-1", "score:job-1", expected=1)
-    regenerated = call(directory, inputs, "task", "start", "apply", "job-1", "score:job-1", "--re-evaluate")
+    original_metadata = Path(files["resume_metadata"]).read_bytes()
+    call(directory, inputs, "task", "start", "apply", "job-1", "score:job-1", "--re-evaluate", expected=1,
+         extra_env={"CAREER_OPS_RESUME_FAIL_ONCE": str(root / "regeneration-failed")})
+    assert Path(files["resume_metadata"]).read_bytes() == original_metadata
+    with sqlite3.connect(directory / "opportunities.db") as connection:
+        assert connection.execute("SELECT task_id FROM results WHERE module='apply' AND opportunity_id='job-1'").fetchone()[0] == package["task_id"]
+    failed_regeneration = next(task for task in reversed(call(directory, inputs, "task", "list"))
+                               if task["opportunity_id"] == "job-1" and task["module"] == "apply")
+    regenerated = call(directory, inputs, "task", "resume", failed_regeneration["task_id"])
     assert regenerated["status"] == "completed" and regenerated["task_id"] != package["task_id"]
     assert all(Path(path).is_file() for path in files.values())
+    assert regenerated["artifact"]["artifact"]["files"] == files
+    assert Path(files["resume_metadata"]).read_bytes() != original_metadata
+    assert call(directory, inputs, "task", "show", package["task_id"])["status"] == "cancelled"
+    with sqlite3.connect(directory / "opportunities.db") as connection:
+        assert connection.execute("SELECT count(*) FROM results WHERE module='apply' AND opportunity_id='job-1'").fetchone()[0] == 1
+    assert not list((directory / ".staging" / "apply").iterdir())
 
     third = source(root / "third.json", "job-3", "Build reliable AI agents.")
     call(directory, inputs, "task", "start", "scan", "job-3", str(third))
@@ -183,4 +163,4 @@ with tempfile.TemporaryDirectory(prefix="career-ops-apply-") as temporary:
     assert superseding["status"] == "completed" and superseding["task_id"] != failed_task["task_id"]
     assert call(directory, inputs, "task", "show", failed_task["task_id"])["status"] == "cancelled"
 
-print("workflow apply: direct publication, regeneration, failure recovery and draft migration passed")
+print("workflow apply: readable publication, replacement and failure recovery passed")

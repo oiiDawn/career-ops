@@ -133,7 +133,6 @@ class BusinessStore:
                 COMMIT;
                 PRAGMA foreign_keys=ON;
             """)
-        self.publish_staged_packages()
         task_columns = {row[1] for row in self.db.execute("PRAGMA table_info(tasks)")}
         if "elapsed_seconds" not in task_columns:
             self.db.execute("ALTER TABLE tasks ADD COLUMN elapsed_seconds REAL NOT NULL DEFAULT 0")
@@ -152,49 +151,6 @@ class BusinessStore:
               WHERE status='running';
             """
         )
-
-    def publish_staged_packages(self) -> None:
-        """Retire the review step: staged apply drafts become published packages, then the review tables go."""
-        if not self.db.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='drafts'").fetchone():
-            return
-        self.db.execute("BEGIN IMMEDIATE")
-        try:
-            staged = self.db.execute(
-                "SELECT t.task_id,t.opportunity_id,t.input_payload,d.package_hash,d.payload FROM tasks t "
-                "JOIN drafts d ON d.task_id=t.task_id AND d.version=(SELECT MAX(version) FROM drafts WHERE task_id=t.task_id) "
-                "WHERE t.module='apply' AND t.status='waiting' AND t.waiting_reason NOT LIKE 'failure:%' ORDER BY t.rowid"
-            ).fetchall()
-            for row in staged:
-                # Feedback left the apply input contract; rehash so an unchanged package still reads as current.
-                inputs = {key: value for key, value in json.loads(row["input_payload"]).items() if key != "feedback"}
-                input_text = json.dumps(inputs, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
-                payload = {"module": "apply", "outcome": "package", "artifact": json.loads(row["payload"]),
-                           "input_hash": digest(input_text), "material_hash": row["package_hash"]}
-                published = self.db.execute(
-                    "INSERT OR IGNORE INTO results(result_key,task_id,opportunity_id,module,input_hash,payload) VALUES(?,?,?,?,?,?)",
-                    (row["task_id"], row["task_id"], row["opportunity_id"], "apply", payload["input_hash"],
-                     json.dumps(payload, sort_keys=True)),
-                ).rowcount
-                if published:
-                    self.db.execute(
-                        "UPDATE tasks SET status='completed',waiting_reason=NULL,input_hash=?,input_payload=? WHERE task_id=?",
-                        (payload["input_hash"], input_text, row["task_id"]),
-                    )
-            self.db.execute(
-                "UPDATE tasks SET status='cancelled',waiting_reason=NULL WHERE module='apply' AND status='waiting' "
-                "AND waiting_reason NOT LIKE 'failure:%'"
-            )
-            self.db.execute(
-                "UPDATE results SET payload=json_set(payload,'$.outcome','package') "
-                "WHERE module='apply' AND json_extract(payload,'$.outcome')='package_confirmed'"
-            )
-            self.db.execute("DELETE FROM task_context WHERE key='input_change'")
-            for table in ("drafts", "feedback", "confirmations"):
-                self.db.execute(f"DROP TABLE {table}")
-            self.db.execute("COMMIT")
-        except Exception:
-            self.db.execute("ROLLBACK")
-            raise
 
     def close(self) -> None:
         self.db.close()
@@ -460,6 +416,15 @@ class BusinessStore:
             require_open(self.db, current["opportunity_id"])
             if current["status"] != "running" or current["input_hash"] != state["input_hash"]:
                 raise ValueError("Task is no longer running with the current input")
+            if task["module"] == "apply":
+                self.db.execute(
+                    "UPDATE tasks SET status='cancelled',waiting_reason=NULL WHERE task_id IN "
+                    "(SELECT task_id FROM results WHERE opportunity_id=? AND module='apply')",
+                    (task["opportunity_id"],),
+                )
+                self.db.execute(
+                    "DELETE FROM results WHERE opportunity_id=? AND module='apply'", (task["opportunity_id"],),
+                )
             self.db.execute(
                 "INSERT INTO results(result_key,task_id,opportunity_id,module,input_hash,payload) VALUES(?,?,?,?,?,?) ON CONFLICT DO NOTHING",
                 (

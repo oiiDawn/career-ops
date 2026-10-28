@@ -113,13 +113,26 @@ business commits remain idempotent even if a process stops before checkpoint
 save. CV file application verifies the confirmed preview, locks updates, and
 recovers the same task after interruption.
 
-Reports, captured sources, frozen payloads, PDFs, package manifests, and stored
-absolute artifact references retain their existing physical locations and bytes.
-They are not moved into a cosmetic new layout. Historical working directories
-remain where referenced by checkpoint state or manifests. New operation paths
-must not overwrite those artifacts. Explicitly authorized closure maintenance
-removes exclusively owned artifacts of confirmed-closed, unsubmitted postings;
-shared evidence and candidate source documents remain protected.
+Reports, captured sources, frozen inputs, and scoring evidence retain their
+physical locations and bytes. Application materials live at
+`data/applications/<company>__<role>__<opportunity-id>/`; Unicode names are kept,
+unsafe characters become hyphens, and long company/role names are truncated.
+Each job has one current package. Generation and PDF validation run in
+`.staging/apply/<task-id>/package/` before replacing the published directory.
+Failed generation leaves the published package usable. Successful publication
+replaces the prior apply result and removes retired material files and completed
+apply checkpoints. Internal task identities, input fingerprints and file hashes
+remain integrity checks; they do not create browsable material versions.
+
+Run the authorized physical migration with
+`.venv/bin/python -B scripts/migrate-application-materials.py`. It backs
+up both SQLite databases in a temporary recovery directory, verifies retained
+files, moves packages into the readable layout, updates stored paths, and removes
+old task-owned material directories. Application facts, source captures,
+scoring evidence and unfinished drafting checkpoints remain intact. Explicitly
+authorized closure maintenance removes exclusively owned artifacts of
+confirmed-closed, unsubmitted postings; shared evidence and candidate source
+documents remain protected.
 
 Hermes invokes `scripts/career-ops-scan.sh` and `scripts/career-ops-score.sh`;
 installed copies under `~/.hermes/scripts/` must match. Scan collects discovery;

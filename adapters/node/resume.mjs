@@ -169,14 +169,13 @@ async function writeJsonAtomic(path, value) {
 
 export async function renderReactiveResume({
   payload, outputPath, metadataPath, taskId,
-  company, role, version = 1, baseResumeId, apiBaseUrl, apiKey, fetchImpl = fetch,
+  company, role, baseResumeId, apiBaseUrl, apiKey, fetchImpl = fetch,
 }) {
   if (!/^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/.test(taskId ?? ''))
     throw new Error('A UUID --task-id is required');
   if (!metadataPath) throw new Error('metadataPath is required');
   if (!baseResumeId) throw new Error('cv.reactive_resume.base_resume_id is required');
   if (!apiKey) throw new Error('REACTIVE_RESUME_API_KEY is required');
-  if (!/^\d+$/.test(String(version)) || Number(version) < 1) throw new Error('--version must be a positive integer');
   validatePayload(payload);
   const baseUrl = assertLocalApiBase(apiBaseUrl);
   const slug = `career-ops-workflow-${taskId}`;
@@ -204,7 +203,7 @@ export async function renderReactiveResume({
   metadata = {
     schema_version: 1, provider: PROVIDER, resume_id: resumeId, base_resume_id: baseResumeId,
     name: current.name ?? displayName, slug: current.slug ?? slug,
-    linked_at: linkedAt, updated_at: new Date().toISOString(), last_artifact_version: Number(version),
+    linked_at: linkedAt, updated_at: new Date().toISOString(),
   };
   const operations = buildResumePatch(payload);
   operations.push(
@@ -234,7 +233,7 @@ async function main() {
     allowPositionals: true,
     options: {
       'task-id': { type: 'string' }, 'artifact-root': { type: 'string' },
-      company: { type: 'string' }, role: { type: 'string' }, version: { type: 'string', default: '1' },
+      company: { type: 'string' }, role: { type: 'string' },
       metadata: { type: 'string' }, profile: { type: 'string', default: 'inputs/profile.yml' },
     },
   });
@@ -253,7 +252,7 @@ async function main() {
   const result = await renderReactiveResume({
     payload: JSON.parse(await readFile(inputPath, 'utf8')), outputPath,
     metadataPath, taskId: values['task-id'],
-    company: values.company, role: values.role, version: values.version,
+    company: values.company, role: values.role,
     baseResumeId: config.base_resume_id, apiBaseUrl: config.api_base_url, apiKey: process.env.REACTIVE_RESUME_API_KEY,
   });
   console.log(JSON.stringify(result));

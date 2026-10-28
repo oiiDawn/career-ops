@@ -9,7 +9,6 @@ import hashlib
 import json
 import os
 import re
-import shutil
 import sqlite3
 import time
 from pathlib import Path
@@ -21,6 +20,7 @@ from uuid import uuid4
 from career_ops.discovery.configured import capture_jd
 from career_ops.discovery.dedup import url_key
 from career_ops.applications.resume_renderer import render_resume
+from career_ops.applications.materials import discard_finished_work, publish_package
 from career_ops.applications.apply_graph import apply_evaluate as run_apply
 from career_ops.context import ATTEMPT_CALLS, ATTEMPT_SECONDS, INPUT_ROOT, ROOT, WORKFLOW_VERSION
 from career_ops.evaluation.scan_graph import run_scan
@@ -205,7 +205,8 @@ class Runtime:
                 temporary.replace(path)
                 artifact["path"] = str(path)
                 state = {**state, "draft": json.dumps(artifact, ensure_ascii=False, sort_keys=True)}
-            payload = self.store.publish(state)
+            payload = (publish_package(self.store, self.fault_dir, state)
+                       if state["module"] == "apply" else self.store.publish(state))
         self.crash_once(state, "publish")
         return {"waiting_reason": None}
 
@@ -222,7 +223,7 @@ class Runtime:
             if not isinstance(package[key], str) or not package[key].strip():
                 raise ValueError(f"Invalid application package: {key} must be a nonempty Markdown string")
         validate_resume_payload(package["resume_payload"])
-        root = self.fault_dir / "artifacts" / state["task_id"] / state["input_hash"] / "package"
+        root = self.fault_dir / ".staging" / "apply" / state["task_id"] / "package"
         root.mkdir(parents=True, exist_ok=True)
         names = {
             "resume_payload": "resume.json", "changes": "changes.md", "cover_letter": "cover-letter.md",
@@ -241,15 +242,11 @@ class Runtime:
         if remaining <= 0:
             raise TimeoutError("time_budget_exhausted")
         pdf_path = root / "resume.pdf"
-        metadata_path = root / "reactive-resume.json"
-        previous_metadata = root.parents[1] / "reactive-resume.json"
-        if not metadata_path.exists() and previous_metadata.is_file():
-            shutil.copyfile(previous_metadata, metadata_path)
         started = time.monotonic()
         try:
             inputs = json.loads(self.store.task(state["task_id"])["input_payload"])
             pdf_receipt = render_resume(
-                state["task_id"], root.parents[1], Path(files["resume_payload"]),
+                state["task_id"], root, Path(files["resume_payload"]),
                 pdf_path, INPUT_ROOT / "profile.yml",
                 package["resume_payload"]["candidate"]["name"],
                 inputs["jd_report"]["company"], inputs["jd_report"]["role"],
@@ -359,11 +356,20 @@ def run_task(
             raise ValueError(f"Task is already executing: {task_id}") from error
         store = BusinessStore(directory / "opportunities.db")
         try:
-            opportunity_id = store.task(task_id)["opportunity_id"]
+            task = store.task(task_id)
+            opportunity_id = task["opportunity_id"]
+            module = task["module"]
         finally:
             store.close()
         with execution_lock(directory, opportunity_id):
-            return _run_task(directory, task_id, start_state=start_state, crash_at=crash_at)
+            result = _run_task(directory, task_id, start_state=start_state, crash_at=crash_at)
+            if module == "apply" and result["status"] == "completed":
+                store = BusinessStore(directory / "opportunities.db")
+                try:
+                    discard_finished_work(store, opportunity_id)
+                finally:
+                    store.close()
+            return result
 
 
 def start_and_run(directory: Path, opportunity: str, module: str, input_text: str, crash_at: str | None, re_evaluate: bool = False) -> dict:
