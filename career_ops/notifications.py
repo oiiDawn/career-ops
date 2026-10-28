@@ -1,4 +1,4 @@
-"""Deliver reviewed score reports to the user's Discord with at-most-once attempts."""
+"""Deliver reviewed score reports to career run, at most once per report hash."""
 
 from __future__ import annotations
 
@@ -11,6 +11,8 @@ import sqlite3
 import subprocess
 import sys
 from typing import Callable, TypedDict
+from urllib.error import HTTPError
+from urllib.request import Request, urlopen
 
 from langgraph.checkpoint.sqlite import SqliteSaver
 from langgraph.graph import END, START, StateGraph
@@ -29,7 +31,7 @@ class DeliveryState(TypedDict):
 
 
 def thread_title(opportunity_id: str, report_hash: str, company: str, role: str, score: dict) -> str:
-    """Name the thread for reading; the trailing key keeps one thread per published report within Discord's 100 characters."""
+    """Heading for the delivered report. The role yields so scores and the report key fit in 100 characters."""
     suffix = (" · " + " ".join(f"{LABELS[name]}{score[name]:.1f}" for name in DIMENSIONS if score.get(name) is not None)
               + f" · #{opportunity_id}-{report_hash[:4]}")
     prefix = " ".join(company.split())[:35] + " · "
@@ -94,8 +96,48 @@ def init_delivery_table(db: sqlite3.Connection) -> None:
     )
 
 
+WEBHOOK_TIMEOUT_SECONDS = 40
+
+
+def webhook_report(payload: dict) -> dict:
+    """Fields career run needs to message the user without reading local files."""
+    return {
+        "opportunity_id": payload["opportunity_id"],
+        "report_hash": payload["report_hash"],
+        "title": payload["title"],
+        "report": payload["report"],
+        "scores": payload["scores"],
+    }
+
+
+def webhook_sender(payload: dict) -> None:
+    """POST one score report to the career-run webhook. Non-2xx and timeouts raise."""
+    url = os.environ.get("CAREER_OPS_GROKBOT_WEBHOOK_URL", "").strip()
+    if not url:
+        raise RuntimeError("CAREER_OPS_GROKBOT_WEBHOOK_URL is not set")
+    headers = {"Content-Type": "application/json"}
+    key = os.environ.get("CAREER_OPS_GROKBOT_WEBHOOK_SENDER_KEY", "").strip()
+    if key:
+        headers["Authorization"] = f"Bearer {key}"
+    request = Request(
+        url,
+        data=json.dumps(webhook_report(payload), ensure_ascii=False).encode(),
+        headers=headers,
+        method="POST",
+    )
+    try:
+        with urlopen(request, timeout=WEBHOOK_TIMEOUT_SECONDS) as response:
+            status = response.status
+            response.read()
+    except HTTPError as error:
+        error.close()
+        raise RuntimeError(f"webhook HTTP {error.code}") from error
+    if status < 200 or status >= 300:
+        raise RuntimeError(f"webhook HTTP {status}")
+
+
 def discord_sender(payload: dict) -> None:
-    """Use the existing delivery helper; a timeout is always an uncertain result."""
+    """Legacy Discord+Hermes delivery, used only when the transport is discord. A timeout stays uncertain."""
     channel = os.environ.get("CAREER_OPS_DISCORD_CHANNEL_ID", "1519136110515585184")
     script = ROOT / "adapters" / "discord.py"
     proxy_env = {key: value for key, value in os.environ.items()
@@ -183,6 +225,16 @@ def _deliver(directory: Path, opportunity_id: str, sender: Callable[[dict], None
         store.close()
 
 
+def notification_sender() -> Callable[[dict], None]:
+    """Select the score-report transport. Webhook is the default; discord is rollback."""
+    transport = os.environ.get("CAREER_OPS_NOTIFY_TRANSPORT", "webhook").strip().lower() or "webhook"
+    if transport == "webhook":
+        return webhook_sender
+    if transport == "discord":
+        return discord_sender
+    raise SystemExit(f"unsupported CAREER_OPS_NOTIFY_TRANSPORT={transport}")
+
+
 def deliver_next(directory: Path, sender: Callable[[dict], None]) -> dict:
     """Advance at most one eligible, never-attempted report per scheduled run."""
     store = BusinessStore(directory / "opportunities.db")
@@ -223,8 +275,12 @@ def main() -> None:
     else:
         if os.environ.get("CAREER_OPS_NOTIFICATIONS_ENABLED") != "1":
             raise SystemExit("Notifications disabled during migration acceptance")
+        sender = notification_sender()
+        # A missing URL is local configuration, so the report stays unclaimed for a later run.
+        if sender is webhook_sender and not os.environ.get("CAREER_OPS_GROKBOT_WEBHOOK_URL", "").strip():
+            raise SystemExit("CAREER_OPS_GROKBOT_WEBHOOK_URL is not set")
         if args.action == "send" and not args.opportunity_id:
             cli.error("send requires opportunity_id")
-        result = (deliver(args.directory, args.opportunity_id, discord_sender)
-                  if args.action == "send" else deliver_next(args.directory, discord_sender))
+        result = (deliver(args.directory, args.opportunity_id, sender)
+                  if args.action == "send" else deliver_next(args.directory, sender))
         print(json.dumps(result, ensure_ascii=False))

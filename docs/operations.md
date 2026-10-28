@@ -121,11 +121,49 @@ must not overwrite those artifacts. Explicitly authorized closure maintenance
 removes exclusively owned artifacts of confirmed-closed, unsubmitted postings;
 shared evidence and candidate source documents remain protected.
 
-Hermes invokes `scripts/career-ops-scan.sh` and `scripts/career-ops-score.sh`;
-installed copies under `~/.hermes/scripts/` must match. Scan collects discovery;
-score advances existing evaluation tasks and uses the previously authorized
-notification policy. Check `system doctor --json` and the offline suite before enabling
-changed wrappers. Neither doctor nor offline fixtures send candidate data.
+Hermes may still invoke `scripts/career-ops-scan.sh` and `scripts/career-ops-score.sh`;
+installed copies under `~/.hermes/scripts/` must match the repository scripts.
+Scan collects discovery. Score advances existing evaluation tasks, then
+`system notify cron` pushes at most one eligible score report. Check
+`system doctor --json` and the offline suite before enabling changed wrappers.
+Neither doctor nor offline fixtures send candidate data.
+
+Score-report push is owned by the Grok Bot teammate career run. Discord+Hermes
+delivery is legacy rollback. `CAREER_OPS_NOTIFY_TRANSPORT` defaults to
+`webhook`. Copy the career-run webhook routine's POST URL into
+`CAREER_OPS_GROKBOT_WEBHOOK_URL`. The routine panel also shows a sender key and
+the header `Authorization: Bearer <key>`. Put that key, not the full header, in
+`CAREER_OPS_GROKBOT_WEBHOOK_SENDER_KEY`. The sender adds the Bearer header when
+the key is set. The key is not stored in the repository. Leave the key unset
+only when the copied URL already carries whatever authentication Grok Bot
+expects. `CAREER_OPS_NOTIFY_TRANSPORT=discord` selects the legacy sender.
+`system notify` exits before claiming a delivery when the transport is webhook
+and the URL is unset.
+
+Career run owns the routine that receives the POST and messages the user. It
+stays quiet when idle: a manual test with nothing to report, or a wake that
+does not include a report, sends no user message. Local `system notify` does
+not POST when no eligible report is pending. The payload does not include a
+local `path`; the markdown is in `report`, so career run does not read this
+machine's files. Reports remain one-way projections: career run displays
+`report` and does not parse it for workflow state.
+
+```json
+{
+  "opportunity_id": "122",
+  "report_hash": "<sha256 of the report text>",
+  "title": "<short heading>",
+  "report": "<full score-report markdown>",
+  "scores": {"direction": 0, "company": 0, "culture": 0, "compensation": 0}
+}
+```
+
+The score numbers above are the object shape. A live payload carries the published dimension scores.
+
+`notification_deliveries` stays authoritative. HTTP 2xx marks that row
+`delivered`. Grok Bot's 200 means the routine run started, not that the chat
+message has already been posted. A non-2xx response or a timeout marks
+`uncertain` and is not sent again.
 
 LinkedIn discovery uses the public `/jobs-guest/jobs/api/seeMoreJobPostings/search`
 list endpoint with ten-record offsets. Each keyword can read up to 25 pages

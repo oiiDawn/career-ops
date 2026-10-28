@@ -2,8 +2,8 @@
 
 Personal, local-first job-search operations for OII: discover roles, preserve
 evidence, score fit with the configured model, prepare a Reactive Resume application, and
-maintain interview context. It never submits an application or contacts an employer. Discord reports
-follow the user-authorized notification policy.
+maintain interview context. It never submits an application or contacts an employer. Score reports
+are pushed to the career-run webhook under the user-authorized notification policy.
 
 ## Runtime
 

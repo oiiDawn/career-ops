@@ -23,5 +23,6 @@ Candidate claims must trace to `inputs/cv.md`, `inputs/profile.yml`, and
 Run business commands through `.venv/bin/python -B -m career_ops`.
 Use `--help` and `docs/operations.md` for current command routing. Frozen policy
 text contains historical command labels; it is retained for input fingerprints,
-not for choosing executable paths. Hermes may run the repository cron scripts,
-but never decides or advances workflow state itself.
+not for choosing executable paths. Hermes may still run the repository cron
+scripts, but never decides or advances workflow state itself. Score-report
+push is the career-run webhook; Discord delivery is legacy rollback.
