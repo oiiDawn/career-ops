@@ -24,7 +24,6 @@ from career_ops.context import RULES_ROOT, INPUT_ROOT, ROOT
 from career_ops.input_contracts import digest, score_inputs, score_is_current
 from career_ops.llm import DEADLINE, complete_json, load_stub
 from career_ops.model import parse_object
-from career_ops.tracing import traced
 
 
 class DraftState(TypedDict):
@@ -325,8 +324,7 @@ def _prepare(directory: Path, opportunity_id: str, statement: str | None = None)
                     "draft": draft, "review": review, "reused": True}
         with SqliteSaver.from_conn_string(str(directory / "workflow-checkpoints.db")) as saver:
             compiled = graph(saver)
-            config = traced({"configurable": {"thread_id": f"communications:{opportunity_id}:{input_hash}"}},
-                            "communications", str(opportunity_id))
+            config = {"configurable": {"thread_id": f"communications:{opportunity_id}:{input_hash}"}}
             snapshot = compiled.get_state(config)
             if snapshot.next:
                 final = compiled.invoke(None, config)

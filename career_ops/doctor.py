@@ -8,11 +8,9 @@ import os
 import shutil
 import subprocess
 import sys
-from urllib.request import urlopen
 
 import yaml
 
-from career_ops import tracing
 from career_ops.context import INPUT_ROOT, ROOT
 from career_ops.web_search import tavily_keys
 from career_ops.evaluation.codex_research import executable
@@ -53,30 +51,14 @@ def checks() -> dict[str, bool]:
     return result
 
 
-def optional_checks() -> dict[str, bool]:
-    """Report configured observability without making it a workflow prerequisite."""
-    if not tracing.enabled():
-        return {}
-    try:
-        from langfuse.langchain import CallbackHandler
-
-        with urlopen(f"{os.environ['LANGFUSE_HOST'].rstrip('/')}/api/public/health", timeout=3) as response:
-            return {"langfuse": response.status == 200}
-    except (ImportError, OSError):
-        return {"langfuse": False}
-
-
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--json", action="store_true")
     args = parser.parse_args()
     result = checks()
-    optional = optional_checks()
     if args.json:
-        print(json.dumps({**result, **optional}, sort_keys=True))
+        print(json.dumps(result, sort_keys=True))
     else:
         for name, available in result.items():
             print(f'{"OK" if available else "MISSING"} {name}')
-        for name, available in optional.items():
-            print(f'OK {name}' if available else f'WARN {name} offline; traces are dropped')
     return int(not all(result.values()))

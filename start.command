@@ -27,10 +27,7 @@ done
 [[ -x .venv/bin/python ]] || fail "Missing .venv; run uv sync --locked first."
 [[ -f data/opportunities.db ]] || fail "Missing data/opportunities.db"
 resume_dir="$(dirname "$PWD")/reactive-resume"
-langfuse_dir="$(dirname "$PWD")/langfuse"
 [[ -f "$resume_dir/compose.yml" ]] || fail "Missing $resume_dir/compose.yml"
-[[ -f "$langfuse_dir/docker-compose.yml" ]] || fail "Missing $langfuse_dir/docker-compose.yml"
-[[ -f "$langfuse_dir/docker-compose.override.yml" ]] || fail "Missing local Langfuse port overrides."
 
 if ! docker info >/dev/null 2>&1; then
   echo "Starting Docker Desktop..."
@@ -42,9 +39,6 @@ if ! docker info >/dev/null 2>&1; then
   docker info >/dev/null 2>&1 || fail "Docker is unavailable; check Docker Desktop."
 fi
 
-docker compose --project-directory "$langfuse_dir" \
-  -f "$langfuse_dir/docker-compose.yml" -f "$langfuse_dir/docker-compose.override.yml" \
-  up -d --no-build --pull never --no-recreate --wait --wait-timeout 180
 docker compose --project-directory "$resume_dir" -f "$resume_dir/compose.yml" \
   up -d --no-build --pull never --no-recreate --wait --wait-timeout 180
 
@@ -67,9 +61,7 @@ fi
 
 wait_url "Career Ops Dashboard" http://127.0.0.1:8765/api/jobs
 wait_url "Reactive Resume" http://127.0.0.1:3000/api/health
-wait_url "Langfuse" http://127.0.0.1:3001/api/public/health
 echo
 echo "Career Ops Dashboard: http://127.0.0.1:8765"
 echo "Reactive Resume:      http://127.0.0.1:3000"
-echo "Langfuse:             http://127.0.0.1:3001"
 echo "Dashboard log:        $PWD/local/dashboard.log"

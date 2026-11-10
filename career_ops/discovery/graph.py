@@ -10,7 +10,6 @@ from langgraph.checkpoint.sqlite import SqliteSaver
 from langgraph.graph import END, START, StateGraph
 
 from career_ops.artifacts import cached_artifact, load_artifact, save_artifact
-from career_ops.tracing import traced
 
 
 class DiscoveryState(TypedDict, total=False):
@@ -78,7 +77,7 @@ def run_discovery_graph(directory: Path, inputs_hash: str, cutoffs: dict, *, res
                                 {"done": END, "decide": "decide"})
     graph.add_edge("decide", "publish")
     graph.add_edge("publish", END)
-    config = traced({"configurable": {"thread_id": run_id}}, "discovery", run_id)
+    config = {"configurable": {"thread_id": run_id}}
     cache.mkdir(parents=True, exist_ok=True)
     with SqliteSaver.from_conn_string(str(cache / "checkpoints.db")) as saver:
         compiled = graph.compile(checkpointer=saver)

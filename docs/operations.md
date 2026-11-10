@@ -7,9 +7,8 @@ is the Career Ops Python environment. Run `.venv/bin/python -B -m career_ops
 ## Start local services
 
 Double-click `start.command` in the repository root, or run `./start.command`
-from a terminal. It starts Docker Desktop if needed, reuses the existing sibling
-checkouts `../reactive-resume` and `../langfuse` (including its local Compose
-override), and starts their database, cache and storage dependencies. Install
+from a terminal. It starts Docker Desktop if needed, then starts Reactive Resume
+from the sibling checkout `../reactive-resume` with its database, cache and storage. Install
 dependencies and build/pull the Docker images once before using this launcher;
 it does not build, update images or recreate existing containers.
 
@@ -17,7 +16,6 @@ The launcher waits for HTTP health checks and prints the addresses:
 
 - Career Ops Dashboard: <http://127.0.0.1:8765>
 - Reactive Resume: <http://127.0.0.1:3000>
-- Langfuse: <http://127.0.0.1:3001>
 
 Repeated runs reuse an existing Dashboard. Its background process logs to
 `local/dashboard.log` and continues after the terminal closes. To stop it, send
@@ -188,18 +186,12 @@ retained evidence becomes available. Failed application preparation does not blo
 independent evaluation. `idle / no_runnable_evaluations` means no task can currently
 advance, including when unresolved waits remain; it does not mean every job is scored.
 
-`evaluate ID` and `system advance` trace one opportunity as `job-evaluation`,
-with `prescreen` and `score` stages under the same root. A scheduled run continues
-from a completed prescreen into scoring; exclusions or waiting conditions stop it.
+`evaluate ID` and `system advance` continue from a completed prescreen into
+scoring; exclusions or waiting conditions stop the evaluation.
 The persisted task module `scan` identifies the prescreen stage and retains its
 existing checkpoint and evidence keys. Batch source collection is `discovery`.
 
-Model calls run inside the LangGraph nodes with settings from `.env`. When the
-Langfuse settings are present, every top-level graph run becomes one trace in the
-local Langfuse (`~/dev/langfuse`, http://localhost:3001) with full node inputs,
-outputs and model prompts; nested scan/score/apply graphs appear inside their
-task's trace. `scripts/check.py` disables tracing; an offline Langfuse never
-blocks a workflow.
+Model calls run inside the LangGraph nodes with settings from `.env`.
 
 JD capture cache lives at `data/cache/scan-jds/` and is reused for at most 24 hours.
 Intact identity-bound retained JD evidence is reused by evaluation regardless of age; the cache expiry does not trigger a liveness recheck.
@@ -239,16 +231,8 @@ and citations are source references, not guaranteed complete webpage-body captur
 runs retain diagnostics, produce no new fact archive and have no model fallback. A later workflow
 attempt starts a new isolated Codex task; completed evidence and Jev ratings are reused.
 
-Local Langfuse records the Codex task as one aggregate generation with its public prompt, final output
-and reported token usage. Each dispatched Jev HTTP attempt has its own generation with the request,
-validated response or error, and provider-reported input/output token usage. Jev requests use the
-official TypeSafe Python SDK with its internal retries disabled; the retained workflow owns the
-single retry and captures every raw HTTP response through the SDK's HTTP client. Codex cache reads and
-writes are separate input categories; its multi-turn aggregate cannot establish per-request long-context
-pricing, so its cost is a Standard API equivalent estimate, not a subscription charge. These inherit the owning score graph's
-trace. Cached results create no model generation. The callback requires the explicit `langchain`
-dependency; `system doctor` checks its import as well as local server health. Codex's individual web
-tool calls remain in the retained CLI events rather than separate Langfuse observations.
+Jev requests use the TypeSafe Python SDK with its internal retries disabled.
+The workflow owns the single retry and retains each raw HTTP response.
 
 The local project's model prices were verified on 2026-10-09 (USD per million tokens):
 
@@ -262,12 +246,8 @@ Sources: [TypeSafe](https://docs.typesafe.ai/models) and
 [DeepSeek](https://api-docs.deepseek.com/quick_start/pricing/).
 DeepSeek off-peak rates are half the configured peak rates; peak hours are weekdays
 01:00–04:00 and 06:00–10:00 UTC, excluding Chinese public holidays. The current model
-definition uses peak rates, so off-peak observations need a separate cost reconciliation.
-OpenAI's long-context premium is based on each request's input, not Codex's cumulative
-CLI total. The custom Codex aggregate definition uses Standard API prices only; it cannot
-infer long-context premiums, service-tier premiums, tool fees, or subscription billing.
-Langfuse v4 observations are immutable after ingestion. Historical corrections are attached
-as annotations and audit spans; they do not replace the original dashboard totals.
+definition uses peak rates. Codex CLI token totals do not establish per-request
+long-context pricing or subscription cost.
 
 Run `.venv/bin/python -B scripts/eval-company-research.py --output /tmp/company-research-eval`
 to exercise the actual macOS sandbox with synthetic files. Add `--live` to research Microsoft and

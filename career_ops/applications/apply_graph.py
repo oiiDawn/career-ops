@@ -11,7 +11,6 @@ from langgraph.checkpoint.sqlite import SqliteSaver
 from langgraph.graph import END, START, StateGraph
 
 from career_ops import model as model_adapter
-from career_ops.tracing import traced
 
 
 def normalize_resume_payload(resume: dict) -> dict:
@@ -154,7 +153,7 @@ def apply_evaluate(payload: dict, draft_root: Path) -> dict:
                                 {"repair": "repair", "finish": "finish"})
     graph.add_edge("repair", "finish")
     graph.add_edge("finish", END)
-    config = traced({"configurable": {"thread_id": key}}, "apply-graph", key)
+    config = {"configurable": {"thread_id": key}}
     with SqliteSaver.from_conn_string(str(directory / "apply-checkpoints.db")) as saver:
         compiled = graph.compile(checkpointer=saver)
         checkpoint = compiled.get_state(config)

@@ -12,7 +12,6 @@ from urllib.parse import urlsplit
 
 from career_ops.evaluation import jev
 from career_ops.model import record_call
-from career_ops.tracing import model_generation
 
 FACT_FORMAT = """Return {profiles:[{profile_id,facts:[{claim,date,kind,applicability,limitations,source_url}],
 gaps:[string],conflicts:[string]}]}. Copy supplied profile_id strings; include every requested profile.
@@ -138,7 +137,7 @@ def rule_digest():
 
 
 def run(company, postings, output):
-    """Trace one public research task without forwarding tracing credentials to the CLI."""
+    """Validate public inputs and run one isolated research task."""
     from career_ops.evaluation.company_pipeline import scope_key
     validate_public(company)
     payload = {'public_company': company, 'profiles': [
@@ -146,18 +145,7 @@ def run(company, postings, output):
         'public_postings': [{k: p[k] for k in ('url', 'company', 'role', 'jd', 'captured_at')
                              if isinstance(p.get(k), str)} for p in postings]}
     prompt = 'Research date: ' + date.today().isoformat() + '\n' + instructions() + '\nPUBLIC INPUT:\n' + json.dumps(payload, ensure_ascii=False)
-    with model_generation('codex-company-research', MODEL, prompt) as observation:
-        answer = _run(company, output, payload, prompt)
-        metrics = json.loads((output / 'result.json').read_text())
-        usage = metrics['usage']
-        observation['output'] = {'profiles': answer['profiles'], 'research': metrics}
-        if usage:
-            observation['usage'] = {'prompt_tokens': sum(u.get('input_tokens', 0) for u in usage),
-                                    'completion_tokens': sum(u.get('output_tokens', 0) for u in usage),
-                                    'input_token_details': {
-                                        'cache_read': sum(u.get('cached_input_tokens', 0) for u in usage),
-                                        'cache_write': sum(u.get('cache_write_input_tokens', 0) for u in usage)}}
-        return answer
+    return _run(company, output, payload, prompt)
 
 
 def _run(company, output, payload, prompt):

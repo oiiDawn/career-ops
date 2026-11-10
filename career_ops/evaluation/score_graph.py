@@ -20,7 +20,6 @@ from career_ops.db import BusinessStore
 from career_ops.evaluation import company_pipeline as pipeline
 from career_ops.evaluation.report import (LIST_SECTIONS, TEXT_SECTIONS, advertised_compensation, conflicting_sections,
                                           render_report, section_value)
-from career_ops.tracing import traced
 
 
 class ScoreState(TypedDict, total=False):
@@ -323,7 +322,7 @@ def run_score(inputs: dict, draft_root: Path, root: Path) -> dict:
     graph.add_conditional_edges('prescreen', lambda s: s['outcome'], {'exclude': END, 'score': 'lookup'})
     for a,b in [('lookup','score'),('score','sections'),('sections','render'),('render',END)]:
         graph.add_edge(a,b)
-    config = traced({'configurable': {'thread_id': key}}, 'score-graph', key)
+    config = {'configurable': {'thread_id': key}}
     capture = model_adapter.llm.CAPTURE.set(directory/'model-calls')
     try:
         with SqliteSaver.from_conn_string(str(directory/'score-checkpoints.db')) as saver:

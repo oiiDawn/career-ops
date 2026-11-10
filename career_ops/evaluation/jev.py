@@ -15,7 +15,6 @@ from typesafe_sdk import (RetryPolicy, TypeSafeClient, TypeSafeError,
 
 from dotenv import dotenv_values
 from career_ops.model import record_call
-from career_ops.tracing import model_generation
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -114,20 +113,13 @@ def call(name: str, request: dict, output: Path, key: str) -> dict:
         raw_path = output / f"{name}.attempt-{len(attempts) + 1}.raw.txt"
         try:
             record_call()
-            names = sorted({n.split('-')[0] for n in request['questions'] if not n.endswith('_evidence')})
-            with model_generation('jev-' + '-'.join(names), MODEL, json.dumps(request, ensure_ascii=False)) as observation:
-                with TypeSafeClient(api_key=key, base_url="https://api.typesafe.ai", timeout=60,
-                        retry=RetryPolicy(max_retries=0), http_client=httpx2.Client(event_hooks={
-                            'response': [lambda reply: raw_path.write_bytes(reply.read())]})) as client:
-                    reply = client.system_one(state=request['state'], questions=request['questions'], model=request['model'])
-                    raw = reply.raw_http_response.content
-                response = json.loads(raw)
-                validate(request, response)
-                observation['output'] = response
-                usage = response.get('usage', {})
-                if usage:
-                    observation['usage'] = {'prompt_tokens': usage['input_tokens'],
-                                            'completion_tokens': usage['output_tokens']}
+            with TypeSafeClient(api_key=key, base_url="https://api.typesafe.ai", timeout=60,
+                    retry=RetryPolicy(max_retries=0), http_client=httpx2.Client(event_hooks={
+                        'response': [lambda reply: raw_path.write_bytes(reply.read())]})) as client:
+                reply = client.system_one(state=request['state'], questions=request['questions'], model=request['model'])
+                raw = reply.raw_http_response.content
+            response = json.loads(raw)
+            validate(request, response)
         except (TypeSafeError, ValueError) as error:
             status = getattr(error, "status", None)
             attempts.append({"error": type(error).__name__, "http_status": status,

@@ -16,11 +16,8 @@ with tempfile.TemporaryDirectory() as temporary:
     for relative in (".venv/bin", "data", "bin"):
         (repo / relative).mkdir(parents=True)
     (repo / "data/opportunities.db").touch()
-    for directory, files in (("reactive-resume", ["compose.yml"]),
-                             ("langfuse", ["docker-compose.yml", "docker-compose.override.yml"])):
-        (base / directory).mkdir()
-        for name in files:
-            (base / directory / name).touch()
+    (base / "reactive-resume").mkdir()
+    (base / "reactive-resume/compose.yml").touch()
     log = base / "commands.log"
 
     def stub(name: str, body: str) -> None:
@@ -47,9 +44,9 @@ echo "${PAGE:-<title>Career Ops Dashboard</title>}"''')
     result = run()
     assert result.returncode == 0, result.stderr
     commands = log.read_text()
-    assert commands.count("up -d --no-build --pull never --no-recreate --wait") == 2, commands
+    assert commands.count("up -d --no-build --pull never --no-recreate --wait") == 1, commands
     assert '"career_ops", "dashboard"' in commands and "start_new_session=True" in commands
-    assert "/api/jobs" in commands and "/api/public/health" in commands
+    assert "/api/jobs" in commands and "127.0.0.1:3000/api/health" in commands
     assert "http://127.0.0.1:3000" in result.stdout
 
     result = run(LISTENING="1")
